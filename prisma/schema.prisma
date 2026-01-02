@@ -1,15 +1,56 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
-generator client {
-  provider = "prisma-client"
-  output   = "../app/generated/prisma"
-}
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  name          String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  watchlistEntries WatchlistEntry[]
+
+  @@map("users")
+}
+
+model Movie {
+  id            Int       @id
+  title         String
+  posterPath    String?   @map("poster_path")
+  releaseDate   String?   @map("release_date")
+  overview      String?
+  genres        Json?
+  lastFetched   DateTime  @default(now()) @map("last_fetched")
+
+  watchlistEntries WatchlistEntry[]
+
+  @@map("movies")
+}
+
+model WatchlistEntry {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  movieId     Int      @map("movie_id")
+  status      WatchStatus  @default(WANT_TO_WATCH)
+  addedAt     DateTime @default(now()) @map("added_at")
+  watchedAt   DateTime? @map("watched_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  movie       Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, movieId])
+  @@index([userId])
+  @@map("watchlist_entries")
+}
+
+enum WatchStatus {
+  WANT_TO_WATCH
+  WATCHED
 }
