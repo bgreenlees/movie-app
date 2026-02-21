@@ -76,9 +76,13 @@ function SearchPageInner() {
           // Shuffle so order differs each load too
           const shuffled = (data.results || []).sort(() => Math.random() - 0.5);
           setMovies(shuffled);
+        } else {
+          const err = await response.json().catch(() => ({}));
+          toast.error(`Movies failed: ${response.status} ${err.error || ""}`);
         }
       } catch (error) {
         console.error("Failed to load popular movies:", error);
+        toast.error("Movies failed to load");
       } finally {
         setIsLoading(false);
       }
