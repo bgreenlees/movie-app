@@ -44,7 +44,7 @@ export default function RegisterForm() {
         toast.error("Account created but login failed. Please try logging in.");
         router.push("/login");
       } else {
-        router.push("/watchlist");
+        router.push("/search");
         router.refresh();
       }
     } catch (error) {
@@ -65,7 +65,8 @@ export default function RegisterForm() {
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--card-bg)]"
+          style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
           placeholder="Your name"
         />
       </div>
@@ -80,7 +81,8 @@ export default function RegisterForm() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--card-bg)]"
+          style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
           placeholder="you@example.com"
         />
       </div>
@@ -96,7 +98,8 @@ export default function RegisterForm() {
           onChange={(e) => setPassword(e.target.value)}
           required
           minLength={6}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--card-bg)]"
+          style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
           placeholder="••••••••"
         />
       </div>

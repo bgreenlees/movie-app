@@ -5,6 +5,9 @@ interface TMDBMovie {
   release_date: string;
   overview: string;
   genre_ids: number[];
+  popularity: number;
+  vote_average: number;
+  vote_count: number;
 }
 
 interface TMDBSearchResponse {
@@ -12,6 +15,22 @@ interface TMDBSearchResponse {
   page: number;
   total_pages: number;
   total_results: number;
+}
+
+interface TMDBWatchProvider {
+  provider_id: number;
+  provider_name: string;
+  logo_path: string;
+}
+
+interface TMDBWatchProvidersResponse {
+  results: {
+    US?: {
+      flatrate?: TMDBWatchProvider[];
+      rent?: TMDBWatchProvider[];
+      buy?: TMDBWatchProvider[];
+    };
+  };
 }
 
 interface TMDBMovieDetails {
@@ -66,6 +85,61 @@ class TMDBClient {
     return response.json();
   }
 
+  async getPopularMovies(page = 1): Promise<TMDBSearchResponse> {
+    if (!this.apiKey) {
+      throw new Error("TMDB API key is not configured");
+    }
+
+    const url = `${this.baseUrl}/movie/popular?page=${page}&api_key=${this.apiKey}`;
+
+    const response = await fetch(url, { next: { revalidate: 3600 } });
+
+    if (!response.ok) {
+      throw new Error("TMDB API error");
+    }
+
+    return response.json();
+  }
+
+  async getMovieVideos(movieId: number): Promise<{ results: Array<{ key: string; site: string; type: string; official: boolean }> }> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url = `${this.baseUrl}/movie/${movieId}/videos?api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 86400 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
+  async getAvailableProviders(): Promise<TMDBWatchProvider[]> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+
+    // Curated list of popular US streaming service IDs
+    const POPULAR_IDS = new Set([8, 9, 15, 337, 350, 386, 531, 1899]);
+
+    const url = `${this.baseUrl}/watch/providers/movie?watch_region=US&api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 86400 } });
+
+    if (!response.ok) throw new Error("TMDB API error");
+
+    const data = await response.json();
+    return (data.results as TMDBWatchProvider[]).filter((p) => POPULAR_IDS.has(p.provider_id));
+  }
+
+  async getWatchProviders(movieId: number): Promise<TMDBWatchProvidersResponse> {
+    if (!this.apiKey) {
+      throw new Error("TMDB API key is not configured");
+    }
+
+    const url = `${this.baseUrl}/movie/${movieId}/watch/providers?api_key=${this.apiKey}`;
+
+    const response = await fetch(url, { next: { revalidate: 86400 } });
+
+    if (!response.ok) {
+      throw new Error("TMDB API error");
+    }
+
+    return response.json();
+  }
+
   getPosterUrl(posterPath: string | null, size: "w500" | "original" = "w500"): string | null {
     if (!posterPath) return null;
     return `https://image.tmdb.org/t/p/${size}${posterPath}`;
@@ -73,4 +147,4 @@ class TMDBClient {
 }
 
 export const tmdb = new TMDBClient();
-export type { TMDBMovie, TMDBSearchResponse, TMDBMovieDetails };
+export type { TMDBMovie, TMDBSearchResponse, TMDBMovieDetails, TMDBWatchProvider };

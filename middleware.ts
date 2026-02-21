@@ -12,9 +12,9 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  // Redirect to watchlist if already logged in and trying to access auth pages
-  if (isLoggedIn && isAuthPage) {
-    return NextResponse.redirect(new URL("/watchlist", req.url));
+  // Redirect to search if already logged in and trying to access auth pages or homepage
+  if (isLoggedIn && (isAuthPage || req.nextUrl.pathname === "/")) {
+    return NextResponse.redirect(new URL("/search", req.url));
   }
 
   return NextResponse.next();

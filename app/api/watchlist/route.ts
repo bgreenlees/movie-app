@@ -45,11 +45,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { movieId } = await req.json();
+    const { movieId, status, platform, watchType, rating, review } = await req.json();
 
     if (!movieId) {
       return NextResponse.json(
         { error: "Movie ID is required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate rating if provided
+    if (rating !== undefined && rating !== null && (rating < 1 || rating > 5)) {
+      return NextResponse.json(
+        { error: "Rating must be between 1 and 5" },
         { status: 400 }
       );
     }
@@ -93,7 +101,12 @@ export async function POST(req: NextRequest) {
       data: {
         userId: session.user.id,
         movieId: movieId,
-        status: "WANT_TO_WATCH",
+        status: status || "WANT_TO_WATCH",
+        platform: platform || null,
+        watchType: watchType || null,
+        rating: rating || null,
+        review: review || null,
+        watchedAt: status === "WATCHED" ? new Date() : null,
       },
       include: {
         movie: true,

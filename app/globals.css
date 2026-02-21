@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 :root {
   --background: #ffffff;
@@ -10,6 +8,20 @@
   --accent: #00635D;
   --border: #D8D8D8;
   --text-muted: #767676;
+  --card-bg: #ffffff;
+  --hover-bg: #f3f4f6;
+}
+
+[data-theme="dark"] {
+  --background: #1a1a1a;
+  --foreground: #e8e6e1;
+  --secondary-bg: #141414;
+  --primary: #d4a574;
+  --accent: #1ab5ad;
+  --border: #383838;
+  --text-muted: #9a9a9a;
+  --card-bg: #242424;
+  --hover-bg: #333333;
 }
 
 body {

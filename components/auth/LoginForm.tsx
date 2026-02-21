@@ -26,7 +26,7 @@ export default function LoginForm() {
         toast.error("Invalid email or password");
       } else {
         toast.success("Logged in successfully!");
-        router.push("/watchlist");
+        router.push("/search");
         router.refresh();
       }
     } catch (error) {
@@ -48,7 +48,8 @@ export default function LoginForm() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--card-bg)]"
+          style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
           placeholder="you@example.com"
         />
       </div>
@@ -63,7 +64,8 @@ export default function LoginForm() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--card-bg)]"
+          style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
           placeholder="••••••••"
         />
       </div>

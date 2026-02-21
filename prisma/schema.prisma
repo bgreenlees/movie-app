@@ -15,7 +15,8 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  watchlistEntries WatchlistEntry[]
+  streamingServices Int[]            @default([]) @map("streaming_services")
+  watchlistEntries  WatchlistEntry[]
 
   @@map("users")
 }
@@ -41,6 +42,10 @@ model WatchlistEntry {
   status      WatchStatus  @default(WANT_TO_WATCH)
   addedAt     DateTime @default(now()) @map("added_at")
   watchedAt   DateTime? @map("watched_at")
+  platform    String?
+  watchType   String?   @map("watch_type")
+  rating      Int?
+  review      String?   @db.Text
 
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   movie       Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import MovieCard from "@/components/movies/MovieCard";
+import AddMovieModal from "@/components/movies/AddMovieModal";
+import ThumbRating from "@/components/ui/ThumbRating";
 import toast from "react-hot-toast";
 
 interface WatchlistEntry {
@@ -10,6 +12,10 @@ interface WatchlistEntry {
   status: string;
   addedAt: string;
   watchedAt: string | null;
+  platform?: string | null;
+  watchType?: string | null;
+  rating?: number | null;
+  review?: string | null;
   movie: {
     id: number;
     title: string;
@@ -22,6 +28,7 @@ interface WatchlistEntry {
 export default function WatchedPage() {
   const [entries, setEntries] = useState<WatchlistEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedEntry, setSelectedEntry] = useState<WatchlistEntry | null>(null);
 
   const fetchWatched = async () => {
     try {
@@ -42,38 +49,20 @@ export default function WatchedPage() {
     fetchWatched();
   }, []);
 
-  const handleMoveBackToWatchlist = async (entryId: string) => {
+  const handleRating = async (entryId: string, rating: number) => {
+    setEntries((prev) =>
+      prev.map((e) => (e.id === entryId ? { ...e, rating: rating || null } : e))
+    );
     try {
       const response = await fetch(`/api/watchlist/${entryId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "WANT_TO_WATCH",
-          watchedAt: null,
-        }),
+        body: JSON.stringify({ rating: rating || null }),
       });
-
-      if (!response.ok) throw new Error("Failed to update");
-
-      toast.success("Moved back to watchlist!");
+      if (!response.ok) throw new Error();
+    } catch {
+      toast.error("Failed to save rating");
       fetchWatched();
-    } catch (error) {
-      toast.error("Failed to update movie");
-    }
-  };
-
-  const handleRemove = async (entryId: string) => {
-    try {
-      const response = await fetch(`/api/watchlist/${entryId}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) throw new Error("Failed to delete");
-
-      toast.success("Removed from watched");
-      fetchWatched();
-    } catch (error) {
-      toast.error("Failed to remove movie");
     }
   };
 
@@ -98,7 +87,7 @@ export default function WatchedPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {entries.map((entry) => (
             <MovieCard
               key={entry.id}
@@ -106,27 +95,61 @@ export default function WatchedPage() {
               title={entry.movie.title}
               posterPath={entry.movie.posterPath}
               releaseDate={entry.movie.releaseDate || undefined}
-              overview={entry.movie.overview || undefined}
             >
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <button
-                  onClick={() => handleMoveBackToWatchlist(entry.id)}
-                  className="w-full px-4 py-2 text-white rounded-md transition-colors text-sm"
-                  style={{ backgroundColor: "var(--accent)" }}
+                  onClick={() => setSelectedEntry(entry)}
+                  className="w-full px-3 py-1.5 text-white rounded-md transition-all duration-200 text-xs cursor-pointer hover:opacity-90 hover:scale-105"
+                  style={{ backgroundColor: "var(--primary)" }}
                 >
-                  Move to Watchlist
+                  Update
                 </button>
                 <button
-                  onClick={() => handleRemove(entry.id)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md transition-colors text-sm hover:bg-gray-50"
-                  style={{ color: "var(--foreground)" }}
+                  onClick={async () => {
+                    try {
+                      const response = await fetch(`/api/watchlist/${entry.id}`, { method: "DELETE" });
+                      if (!response.ok) throw new Error();
+                      toast.success("Removed from watched");
+                      fetchWatched();
+                    } catch {
+                      toast.error("Failed to remove movie");
+                    }
+                  }}
+                  className="w-full px-3 py-1.5 border rounded-md transition-all duration-200 text-xs cursor-pointer hover:bg-[var(--hover-bg)] hover:scale-105"
+                  style={{ color: "var(--foreground)", borderColor: "var(--border)" }}
                 >
                   Remove
                 </button>
+                <ThumbRating
+                  rating={entry.rating || 0}
+                  onChange={(r) => handleRating(entry.id, r)}
+                  showLabels={false}
+                />
               </div>
             </MovieCard>
           ))}
         </div>
+      )}
+
+      {selectedEntry && (
+        <AddMovieModal
+          isOpen={!!selectedEntry}
+          onClose={() => setSelectedEntry(null)}
+          movieId={selectedEntry.movieId}
+          movieTitle={selectedEntry.movie.title}
+          existingEntry={{
+            id: selectedEntry.id,
+            status: selectedEntry.status,
+            platform: selectedEntry.platform,
+            watchType: selectedEntry.watchType,
+            rating: selectedEntry.rating,
+            review: selectedEntry.review,
+          }}
+          onSuccess={() => {
+            setSelectedEntry(null);
+            fetchWatched();
+          }}
+        />
       )}
     </div>
   );
