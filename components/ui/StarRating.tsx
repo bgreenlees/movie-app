@@ -24,7 +24,7 @@ export default function StarRating({ rating, onChange }: StarRatingProps) {
           className="text-3xl transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 rounded"
           style={{
             color: star <= displayRating ? "var(--accent)" : "var(--border)",
-            focusRingColor: "var(--accent)",
+
           }}
           aria-label={`Rate ${star} star${star > 1 ? "s" : ""}`}
         >

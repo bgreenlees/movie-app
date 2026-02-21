@@ -351,7 +351,7 @@ export default function AddMovieModal({
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2"
                 style={{
                   borderColor: "var(--border)",
-                  focusRingColor: "var(--accent)",
+
                 }}
               >
                 <option value="">Select platform (optional)</option>
@@ -456,7 +456,7 @@ export default function AddMovieModal({
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 resize-y"
                 style={{
                   borderColor: "var(--border)",
-                  focusRingColor: "var(--accent)",
+
                 }}
                 placeholder="Share your thoughts about this movie (optional)"
                 maxLength={2000}
