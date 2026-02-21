@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import MovieCard from "@/components/movies/MovieCard";
 import AddMovieModal from "@/components/movies/AddMovieModal";
@@ -28,6 +28,8 @@ function DiscoverPageInner() {
   const [selectedMovie, setSelectedMovie] = useState<{ id: number; title: string } | null>(null);
   const [watchlistEntries, setWatchlistEntries] = useState<Record<number, WatchlistEntry>>({});
   const [trailerMovie, setTrailerMovie] = useState<{ id: number; title: string } | null>(null);
+  const [columns, setColumns] = useState(6);
+  const gridRef = useRef<HTMLDivElement>(null);
 
   const fetchWatchlist = useCallback(async () => {
     try {
@@ -87,14 +89,18 @@ function DiscoverPageInner() {
       const loadPopular = async () => {
         setIsLoading(true);
         try {
-          const randomPage = Math.floor(Math.random() * 5) + 1;
-          const response = await fetch(`/api/movies/popular?page=${randomPage}`);
-          if (response.ok) {
-            const data = await response.json();
-            setMovies((data.results || []).sort(() => Math.random() - 0.5));
+          const p1 = Math.floor(Math.random() * 5) + 1;
+          const p2 = p1 < 5 ? p1 + 1 : 1;
+          const [r1, r2] = await Promise.all([
+            fetch(`/api/movies/popular?page=${p1}`),
+            fetch(`/api/movies/popular?page=${p2}`),
+          ]);
+          if (r1.ok && r2.ok) {
+            const [d1, d2] = await Promise.all([r1.json(), r2.json()]);
+            const combined = [...(d1.results || []), ...(d2.results || [])];
+            setMovies(combined.sort(() => Math.random() - 0.5));
           } else {
-            const err = await response.json().catch(() => ({}));
-            toast.error(`Failed to load movies: ${response.status} ${err.error || ""}`);
+            toast.error("Failed to load movies");
           }
         } catch {
           toast.error("Failed to load movies");
@@ -105,6 +111,18 @@ function DiscoverPageInner() {
       loadPopular();
     }
   }, [urlQuery]);
+
+  useEffect(() => {
+    if (!gridRef.current) return;
+    const obs = new ResizeObserver(() => {
+      if (gridRef.current) {
+        const cols = getComputedStyle(gridRef.current).gridTemplateColumns.split(" ").length;
+        setColumns(cols);
+      }
+    });
+    obs.observe(gridRef.current);
+    return () => obs.disconnect();
+  }, [movies]);
 
   const handleRating = async (movieId: number, rating: number) => {
     const entry = watchlistEntries[movieId];
@@ -139,6 +157,13 @@ function DiscoverPageInner() {
     }
   };
 
+  const filteredMovies = movies.filter((movie) =>
+    urlQuery ? true : !watchlistEntries[movie.id]
+  );
+  const displayMovies = urlQuery
+    ? filteredMovies
+    : filteredMovies.slice(0, Math.floor(filteredMovies.length / columns) * columns || filteredMovies.length);
+
   return (
     <div className="max-w-7xl mx-auto p-6">
       <h1 className="text-3xl font-bold mb-6" style={{ color: "var(--primary)" }}>
@@ -151,10 +176,13 @@ function DiscoverPageInner() {
         </div>
       )}
 
-      {!isLoading && movies.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {movies
-            .filter((movie) => urlQuery ? true : !watchlistEntries[movie.id])
+      {!isLoading && displayMovies.length > 0 && (
+        <div
+          ref={gridRef}
+          className="grid gap-4"
+          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}
+        >
+          {displayMovies
             .map((movie) => {
               const existingEntry = watchlistEntries[movie.id];
               return (
@@ -167,28 +195,28 @@ function DiscoverPageInner() {
                   overview={movie.overview}
                   rating={movie.vote_average}
                   onPlayTrailer={(id) => setTrailerMovie({ id, title: movie.title })}
-                >
-                  <div className="space-y-1.5">
-                    <button
-                      onClick={() => setSelectedMovie({ id: movie.id, title: movie.title })}
-                      className="w-full px-3 py-1.5 text-white rounded-md transition-all duration-200 text-xs cursor-pointer hover:opacity-90 hover:scale-105"
-                      style={{ backgroundColor: existingEntry ? "var(--primary)" : "var(--accent)" }}
-                    >
-                      {existingEntry ? "Update" : "Add"}
-                    </button>
+                  thumbRating={
                     <ThumbRating
                       rating={existingEntry?.rating || 0}
                       onChange={(r) => handleRating(movie.id, r)}
                       showLabels={false}
                     />
-                  </div>
+                  }
+                >
+                  <button
+                    onClick={() => setSelectedMovie({ id: movie.id, title: movie.title })}
+                    className="w-full px-3 py-1.5 text-white rounded-md transition-all duration-200 text-xs cursor-pointer hover:opacity-90 hover:scale-105"
+                    style={{ backgroundColor: existingEntry ? "var(--primary)" : "var(--accent)" }}
+                  >
+                    {existingEntry ? "Update" : "Add"}
+                  </button>
                 </MovieCard>
               );
             })}
         </div>
       )}
 
-      {!isLoading && movies.length === 0 && (
+      {!isLoading && displayMovies.length === 0 && (
         <div className="text-center py-12">
           <p style={{ color: "var(--text-muted)" }}>
             {urlQuery ? "No results found. Try a different search term." : "No movies available."}

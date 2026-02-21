@@ -87,7 +87,7 @@ export default function WatchedPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}>
           {entries.map((entry) => (
             <MovieCard
               key={entry.id}
@@ -95,6 +95,13 @@ export default function WatchedPage() {
               title={entry.movie.title}
               posterPath={entry.movie.posterPath}
               releaseDate={entry.movie.releaseDate || undefined}
+              thumbRating={
+                <ThumbRating
+                  rating={entry.rating || 0}
+                  onChange={(r) => handleRating(entry.id, r)}
+                  showLabels={false}
+                />
+              }
             >
               <div className="space-y-1.5">
                 <button
@@ -120,11 +127,6 @@ export default function WatchedPage() {
                 >
                   Remove
                 </button>
-                <ThumbRating
-                  rating={entry.rating || 0}
-                  onChange={(r) => handleRating(entry.id, r)}
-                  showLabels={false}
-                />
               </div>
             </MovieCard>
           ))}

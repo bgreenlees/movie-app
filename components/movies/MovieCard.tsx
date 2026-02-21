@@ -11,6 +11,7 @@ interface MovieCardProps {
   overview?: string;
   rating?: number;
   onPlayTrailer?: (id: number) => void;
+  thumbRating?: React.ReactNode;
   children?: React.ReactNode;
 }
 
@@ -22,6 +23,7 @@ export default function MovieCard({
   overview,
   rating,
   onPlayTrailer,
+  thumbRating,
   children,
 }: MovieCardProps) {
   const posterUrl = tmdb.getPosterUrl(posterPath);
@@ -43,11 +45,6 @@ export default function MovieCard({
             No Image
           </div>
         )}
-        {rating !== undefined && rating > 0 && (
-          <div className="absolute top-2 right-2 bg-black/75 text-white px-2 py-1 rounded text-sm font-semibold">
-            ⭐ {rating.toFixed(1)}
-          </div>
-        )}
         {onPlayTrailer && (
           <button
             onClick={() => onPlayTrailer(id)}
@@ -63,13 +60,8 @@ export default function MovieCard({
           </button>
         )}
       </div>
-      <div className="p-3 flex flex-col">
-        <h3 className="font-semibold text-base mb-1 line-clamp-2 h-12" style={{ color: "var(--primary)" }}>
-          {title}
-        </h3>
-        <p className="text-xs mb-2 h-4" style={{ color: "var(--text-muted)" }}>
-          {year || "\u00A0"}
-        </p>
+      <div className="p-3 flex flex-col gap-2">
+        {thumbRating && <div className="flex justify-end">{thumbRating}</div>}
         {children}
       </div>
     </div>
