@@ -1,5 +1,8 @@
-import { auth } from "@/lib/auth";
+import NextAuth from "next-auth";
+import { authConfig } from "@/lib/auth.config";
 import { NextResponse } from "next/server";
+
+const { auth } = NextAuth(authConfig);
 
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
@@ -7,12 +10,10 @@ export default auth((req) => {
     req.nextUrl.pathname.startsWith("/login") ||
     req.nextUrl.pathname.startsWith("/register");
 
-  // Redirect to login if not authenticated and trying to access protected pages
   if (!isLoggedIn && !isAuthPage && req.nextUrl.pathname !== "/") {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  // Redirect to search if already logged in and trying to access auth pages or homepage
   if (isLoggedIn && (isAuthPage || req.nextUrl.pathname === "/")) {
     return NextResponse.redirect(new URL("/search", req.url));
   }
