@@ -13,6 +13,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userId = session.user.id as string;
     const { id } = await params;
 
     // Verify the entry belongs to the user
@@ -20,7 +21,7 @@ export async function PATCH(
       where: { id },
     });
 
-    if (!existingEntry || existingEntry.userId !== session.user.id) {
+    if (!existingEntry || existingEntry.userId !== userId) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
@@ -65,6 +66,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userId = session.user.id as string;
     const { id } = await params;
 
     // Verify the entry belongs to the user
@@ -72,7 +74,7 @@ export async function DELETE(
       where: { id },
     });
 
-    if (!existingEntry || existingEntry.userId !== session.user.id) {
+    if (!existingEntry || existingEntry.userId !== userId) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 

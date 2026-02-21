@@ -11,12 +11,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userId = session.user.id as string;
     const searchParams = req.nextUrl.searchParams;
     const status = searchParams.get("status") || "WANT_TO_WATCH";
 
     const entries = await prisma.watchlistEntry.findMany({
       where: {
-        userId: session.user.id,
+        userId,
         status: status as any,
       },
       include: {
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userId = session.user.id as string;
     const { movieId, status, platform, watchType, rating, review } = await req.json();
 
     if (!movieId) {
@@ -66,7 +68,7 @@ export async function POST(req: NextRequest) {
     const existingEntry = await prisma.watchlistEntry.findUnique({
       where: {
         userId_movieId: {
-          userId: session.user.id,
+          userId,
           movieId: movieId,
         },
       },
@@ -99,7 +101,7 @@ export async function POST(req: NextRequest) {
     // Create watchlist entry
     const entry = await prisma.watchlistEntry.create({
       data: {
-        userId: session.user.id,
+        userId,
         movieId: movieId,
         status: status || "WANT_TO_WATCH",
         platform: platform || null,
