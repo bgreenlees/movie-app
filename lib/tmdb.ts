@@ -101,6 +101,58 @@ class TMDBClient {
     return response.json();
   }
 
+  async getTrending(): Promise<TMDBSearchResponse> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url = `${this.baseUrl}/trending/movie/week?api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 3600 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
+  async getNowPlaying(): Promise<TMDBSearchResponse> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url = `${this.baseUrl}/movie/now_playing?region=US&api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 3600 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
+  async getUpcoming(): Promise<TMDBSearchResponse> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url = `${this.baseUrl}/movie/upcoming?region=US&api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 3600 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
+  async getNewOnStreaming(providerIds?: number[]): Promise<TMDBSearchResponse> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
+    const providerParam =
+      providerIds && providerIds.length > 0
+        ? `&with_watch_providers=${providerIds.join("|")}`
+        : "";
+    const url =
+      `${this.baseUrl}/discover/movie?sort_by=primary_release_date.desc` +
+      `&with_watch_monetization_types=flatrate&watch_region=US` +
+      `&primary_release_date.gte=${ninetyDaysAgo}` +
+      `&with_original_language=en` +
+      `${providerParam}&api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 3600 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
+  async getMovieRecommendations(movieId: number): Promise<TMDBSearchResponse> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url = `${this.baseUrl}/movie/${movieId}/recommendations?api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 86400 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
   async getMovieVideos(movieId: number): Promise<{ results: Array<{ key: string; site: string; type: string; official: boolean }> }> {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
     const url = `${this.baseUrl}/movie/${movieId}/videos?api_key=${this.apiKey}`;

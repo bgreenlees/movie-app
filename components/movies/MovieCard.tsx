@@ -31,7 +31,7 @@ export default function MovieCard({
 
   return (
     <div className="bg-[var(--card-bg)] rounded-lg shadow-sm overflow-hidden border border-[var(--border)] hover:shadow-md transition-shadow">
-      <div className="relative w-full aspect-[2/3] bg-[var(--border)] group" style={{ maxHeight: "300px" }}>
+      <div className="relative w-full aspect-[2/3] bg-[var(--border)] group" style={{ maxHeight: "420px" }}>
         {posterUrl ? (
           <Image
             src={posterUrl}
@@ -48,7 +48,7 @@ export default function MovieCard({
         {onPlayTrailer && (
           <button
             onClick={() => onPlayTrailer(id)}
-            className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 py-1.5 bg-black/40 group-hover:bg-black/65 transition-all"
+            className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 py-1.5 bg-black/40 group-hover:bg-black/65 transition-all cursor-pointer"
             aria-label={`Play trailer for ${title}`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-white/80 group-hover:text-white transition-colors">

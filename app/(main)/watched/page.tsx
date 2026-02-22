@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import MovieCard from "@/components/movies/MovieCard";
 import AddMovieModal from "@/components/movies/AddMovieModal";
+import TrailerModal from "@/components/movies/TrailerModal";
 import ThumbRating from "@/components/ui/ThumbRating";
 import toast from "react-hot-toast";
 
@@ -29,6 +30,7 @@ export default function WatchedPage() {
   const [entries, setEntries] = useState<WatchlistEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedEntry, setSelectedEntry] = useState<WatchlistEntry | null>(null);
+  const [trailerMovie, setTrailerMovie] = useState<{ id: number; title: string } | null>(null);
 
   const fetchWatched = async () => {
     try {
@@ -87,7 +89,7 @@ export default function WatchedPage() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}>
+        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
           {entries.map((entry) => (
             <MovieCard
               key={entry.id}
@@ -95,6 +97,7 @@ export default function WatchedPage() {
               title={entry.movie.title}
               posterPath={entry.movie.posterPath}
               releaseDate={entry.movie.releaseDate || undefined}
+              onPlayTrailer={(id) => setTrailerMovie({ id, title: entry.movie.title })}
               thumbRating={
                 <ThumbRating
                   rating={entry.rating || 0}
@@ -107,7 +110,7 @@ export default function WatchedPage() {
                 <button
                   onClick={() => setSelectedEntry(entry)}
                   className="w-full px-3 py-1.5 text-white rounded-md transition-all duration-200 text-xs cursor-pointer hover:opacity-90 hover:scale-105"
-                  style={{ backgroundColor: "var(--primary)" }}
+                  style={{ backgroundColor: "var(--accent)" }}
                 >
                   Update
                 </button>
@@ -132,6 +135,12 @@ export default function WatchedPage() {
           ))}
         </div>
       )}
+
+      <TrailerModal
+        movieId={trailerMovie?.id ?? null}
+        movieTitle={trailerMovie?.title ?? ""}
+        onClose={() => setTrailerMovie(null)}
+      />
 
       {selectedEntry && (
         <AddMovieModal

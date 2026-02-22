@@ -58,6 +58,8 @@ export default function Navbar() {
 
   const navLinks = [
     { href: "/search", label: "Discover" },
+    { href: "/new-releases", label: "New Releases" },
+    { href: "/news", label: "News" },
     { href: "/watchlist", label: "Want to Watch" },
     { href: "/watched", label: "Watched" },
     { href: "/profile", label: "Profile" },
@@ -141,7 +143,7 @@ export default function Navbar() {
             <button
               onClick={handleSignOut}
               className="px-4 py-1.5 text-sm rounded-md transition-colors hover:opacity-80"
-              style={{ backgroundColor: "var(--primary)", color: "white" }}
+              style={{ backgroundColor: "var(--accent)", color: "white" }}
             >
               Sign Out
             </button>

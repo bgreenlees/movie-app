@@ -183,52 +183,30 @@ export default function AddMovieModal({
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Status */}
         <div>
-          <label className="block text-sm font-medium mb-2">Status</label>
-          <div className="flex flex-wrap gap-4">
-            <label className="flex items-center cursor-pointer">
-              <input
-                type="radio"
-                name="status"
-                value="WANT_TO_WATCH"
-                checked={formData.status === "WANT_TO_WATCH"}
-                onChange={(e) =>
-                  setFormData({ ...formData, status: e.target.value })
-                }
-                className="mr-2"
-                style={{ accentColor: "var(--accent)" }}
-              />
-              <span className="text-sm">Want to Watch</span>
-            </label>
-            <label className="flex items-center cursor-pointer">
-              <input
-                type="radio"
-                name="status"
-                value="WATCHED"
-                checked={formData.status === "WATCHED"}
-                onChange={(e) =>
-                  setFormData({ ...formData, status: e.target.value })
-                }
-                className="mr-2"
-                style={{ accentColor: "var(--accent)" }}
-              />
-              <span className="text-sm">Watched</span>
-            </label>
-            {existingEntry && (
-              <label className="flex items-center cursor-pointer">
-                <input
-                  type="radio"
-                  name="status"
-                  value="REMOVE"
-                  checked={formData.status === "REMOVE"}
-                  onChange={(e) =>
-                    setFormData({ ...formData, status: e.target.value })
-                  }
-                  className="mr-2"
-                  style={{ accentColor: "#ef4444" }}
-                />
-                <span className="text-sm text-red-500">Remove from Lists</span>
-              </label>
-            )}
+          <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>Status</label>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: "WANT_TO_WATCH", label: "Want to Watch" },
+              { value: "WATCHED", label: "Watched" },
+              ...(existingEntry ? [{ value: "REMOVE", label: "Remove" }] : []),
+            ].map(({ value, label }) => {
+              const active = formData.status === value;
+              const isRed = value === "REMOVE";
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, status: value })}
+                  className="px-4 py-1.5 rounded-full text-sm font-medium transition-all"
+                  style={{
+                    backgroundColor: active ? (isRed ? "#ef4444" : "var(--accent)") : "var(--border)",
+                    color: active ? "white" : "var(--foreground)",
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -337,134 +315,99 @@ export default function AddMovieModal({
               <div className="flex-1 h-px" style={{ backgroundColor: "var(--border)" }} />
             </div>
 
-            {/* Platform */}
-            <div>
-              <label htmlFor="platform" className="block text-sm font-medium mb-2">
-                Platform (optional)
-              </label>
-              <select
-                id="platform"
-                value={formData.platform}
-                onChange={(e) =>
-                  setFormData({ ...formData, platform: e.target.value })
-                }
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2"
-                style={{
-                  borderColor: "var(--border)",
-
-                }}
-              >
-                <option value="">Select platform (optional)</option>
-                <option value="Netflix">Netflix</option>
-                <option value="Amazon Prime">Amazon Prime</option>
-                <option value="Disney+">Disney+</option>
-                <option value="Hulu">Hulu</option>
-                <option value="Apple TV+">Apple TV+</option>
-                <option value="HBO Max">HBO Max</option>
-                <option value="Paramount+">Paramount+</option>
-              </select>
-            </div>
-
-            {/* Watch Type */}
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Watch Type (optional)
-              </label>
-              <div className="flex gap-4">
-                <label className="flex items-center cursor-pointer">
-                  <input
-                    type="radio"
-                    name="watchType"
-                    value=""
-                    checked={formData.watchType === ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, watchType: e.target.value })
-                    }
-                    className="mr-2"
-                    style={{ accentColor: "var(--accent)" }}
-                  />
-                  <span className="text-sm">None</span>
+            {/* Rating + Review side by side */}
+            <div className="flex gap-4 items-start">
+              <div style={{ width: "220px", shrink: 0 }}>
+                <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
+                  Rating (optional)
                 </label>
-                <label className="flex items-center cursor-pointer">
-                  <input
-                    type="radio"
-                    name="watchType"
-                    value="Rented"
-                    checked={formData.watchType === "Rented"}
-                    onChange={(e) =>
-                      setFormData({ ...formData, watchType: e.target.value })
-                    }
-                    className="mr-2"
-                    style={{ accentColor: "var(--accent)" }}
-                  />
-                  <span className="text-sm">Rented</span>
+                <ThumbRating
+                  rating={formData.rating}
+                  onChange={(rating) => setFormData({ ...formData, rating })}
+                />
+              </div>
+              <div className="flex-1" style={{ marginRight: "1.5rem" }}>
+                <label htmlFor="review" className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
+                  Review (optional)
                 </label>
-                <label className="flex items-center cursor-pointer">
-                  <input
-                    type="radio"
-                    name="watchType"
-                    value="Purchased"
-                    checked={formData.watchType === "Purchased"}
-                    onChange={(e) =>
-                      setFormData({ ...formData, watchType: e.target.value })
-                    }
-                    className="mr-2"
-                    style={{ accentColor: "var(--accent)" }}
-                  />
-                  <span className="text-sm">Purchased</span>
-                </label>
-                <label className="flex items-center cursor-pointer">
-                  <input
-                    type="radio"
-                    name="watchType"
-                    value="Subscription"
-                    checked={formData.watchType === "Subscription"}
-                    onChange={(e) =>
-                      setFormData({ ...formData, watchType: e.target.value })
-                    }
-                    className="mr-2"
-                    style={{ accentColor: "var(--accent)" }}
-                  />
-                  <span className="text-sm">Subscription</span>
-                </label>
+                <textarea
+                  id="review"
+                  value={formData.review}
+                  onChange={(e) =>
+                    setFormData({ ...formData, review: e.target.value })
+                  }
+                  rows={3}
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 resize-y"
+                  style={{
+                    borderColor: "var(--border)",
+                    backgroundColor: "var(--background)",
+                    color: "var(--foreground)",
+                  }}
+                  placeholder="Share your thoughts about this movie (optional)"
+                  maxLength={2000}
+                />
+                <div className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                  {formData.review.length}/2000 characters
+                </div>
               </div>
             </div>
 
-            {/* Rating */}
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Rating (optional)
-              </label>
-              <ThumbRating
-                rating={formData.rating}
-                onChange={(rating) => setFormData({ ...formData, rating })}
-              />
-            </div>
-
-            {/* Review */}
-            <div>
-              <label htmlFor="review" className="block text-sm font-medium mb-2">
-                Review (optional)
-              </label>
-              <textarea
-                id="review"
-                value={formData.review}
-                onChange={(e) =>
-                  setFormData({ ...formData, review: e.target.value })
-                }
-                rows={4}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 resize-y"
-                style={{
-                  borderColor: "var(--border)",
-
-                }}
-                placeholder="Share your thoughts about this movie (optional)"
-                maxLength={2000}
-              />
-              <div className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-                {formData.review.length}/2000 characters
+            {/* Platform + Watch Type */}
+            <div className="flex gap-4 items-start">
+              <div className="flex-1">
+                <label htmlFor="platform" className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
+                  Platform (optional)
+                </label>
+                <select
+                  id="platform"
+                  value={formData.platform}
+                  onChange={(e) =>
+                    setFormData({ ...formData, platform: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 appearance-none"
+                  style={{
+                    borderColor: "var(--border)",
+                    backgroundColor: "var(--background)",
+                    color: "var(--foreground)",
+                  }}
+                >
+                  <option value="">Select platform</option>
+                  <option value="Netflix">Netflix</option>
+                  <option value="Amazon Prime">Amazon Prime</option>
+                  <option value="Disney+">Disney+</option>
+                  <option value="Hulu">Hulu</option>
+                  <option value="Apple TV+">Apple TV+</option>
+                  <option value="HBO Max">HBO Max</option>
+                  <option value="Paramount+">Paramount+</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
+                  Watch Type (optional)
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {["None", "Rented", "Purchased", "Subscription"].map((type) => {
+                    const value = type === "None" ? "" : type;
+                    const active = formData.watchType === value;
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, watchType: value })}
+                        className="px-4 py-1.5 rounded-full text-sm font-medium transition-all"
+                        style={{
+                          backgroundColor: active ? "var(--accent)" : "var(--border)",
+                          color: active ? "white" : "var(--foreground)",
+                        }}
+                      >
+                        {type}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
+
           </>
         )}
 

@@ -1,7 +1,20 @@
 @import "tailwindcss";
 
-/* Light mode — warm parchment / Criterion-style */
+/* Dark mode — cinematic olive / film-noir (default) */
 :root {
+  --background: #131a0e;
+  --foreground: #ffffff;
+  --secondary-bg: #0e1209;
+  --primary: #ffffff;
+  --accent: #e07820;
+  --border: #2d3828;
+  --text-muted: #7a8870;
+  --card-bg: #1a2415;
+  --hover-bg: #243020;
+}
+
+/* Light mode — warm parchment / Criterion-style */
+[data-theme="light"] {
   --background: #f0ebe0;
   --foreground: #2a2015;
   --secondary-bg: #e4ddd0;
@@ -13,17 +26,8 @@
   --hover-bg: #e8e0d0;
 }
 
-/* Dark mode — cinematic olive / film-noir */
-[data-theme="dark"] {
-  --background: #131a0e;
-  --foreground: #d8d0b8;
-  --secondary-bg: #0e1209;
-  --primary: #c8b898;
-  --accent: #e07820;
-  --border: #2d3828;
-  --text-muted: #7a8870;
-  --card-bg: #1a2415;
-  --hover-bg: #243020;
+html {
+  font-size: 18px;
 }
 
 body {
@@ -33,5 +37,9 @@ body {
 }
 
 h1, h2, h3 {
-  font-family: var(--font-display), Georgia, serif;
+  font-family: var(--font-body), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+input, select, textarea {
+  color: #1a1a1a;
 }

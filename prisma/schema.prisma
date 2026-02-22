@@ -15,10 +15,31 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  streamingServices Int[]            @default([]) @map("streaming_services")
-  watchlistEntries  WatchlistEntry[]
+  streamingServices   Int[]            @default([]) @map("streaming_services")
+  watchlistEntries    WatchlistEntry[]
+  sentConnections     UserConnection[] @relation("ConnectionRequests")
+  receivedConnections UserConnection[] @relation("ConnectionAddressees")
 
   @@map("users")
+}
+
+model UserConnection {
+  id          String           @id @default(cuid())
+  requesterId String           @map("requester_id")
+  addresseeId String           @map("addressee_id")
+  status      ConnectionStatus @default(PENDING)
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  requester   User @relation("ConnectionRequests",  fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee   User @relation("ConnectionAddressees", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, addresseeId])
+  @@map("user_connections")
+}
+
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
 }
 
 model Movie {

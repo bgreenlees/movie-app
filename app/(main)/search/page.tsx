@@ -24,6 +24,7 @@ function DiscoverPageInner() {
   const urlQuery = searchParams.get("q") || "";
 
   const [movies, setMovies] = useState<TMDBMovie[]>([]);
+  const [isPersonalized, setIsPersonalized] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState<{ id: number; title: string } | null>(null);
   const [watchlistEntries, setWatchlistEntries] = useState<Record<number, WatchlistEntry>>({});
@@ -86,9 +87,22 @@ function DiscoverPageInner() {
       };
       fetchResults();
     } else {
-      const loadPopular = async () => {
+      const loadMovies = async () => {
         setIsLoading(true);
         try {
+          // Try personalized recommendations first
+          const recRes = await fetch("/api/movies/recommended");
+          if (recRes.ok) {
+            const recData = await recRes.json();
+            if (recData.personalized && recData.results.length >= 6) {
+              setMovies(recData.results);
+              setIsPersonalized(true);
+              setIsLoading(false);
+              return;
+            }
+          }
+          // Fall back to popular
+          setIsPersonalized(false);
           const p1 = Math.floor(Math.random() * 5) + 1;
           const p2 = p1 < 5 ? p1 + 1 : 1;
           const [r1, r2] = await Promise.all([
@@ -108,7 +122,7 @@ function DiscoverPageInner() {
           setIsLoading(false);
         }
       };
-      loadPopular();
+      loadMovies();
     }
   }, [urlQuery]);
 
@@ -167,7 +181,7 @@ function DiscoverPageInner() {
   return (
     <div className="max-w-7xl mx-auto p-6">
       <h1 className="text-3xl font-bold mb-6" style={{ color: "var(--primary)" }}>
-        {urlQuery ? `Results for "${urlQuery}"` : "Discover"}
+        {urlQuery ? `Results for "${urlQuery}"` : isPersonalized ? "Recommended for You" : "Discover"}
       </h1>
 
       {isLoading && (
@@ -180,7 +194,7 @@ function DiscoverPageInner() {
         <div
           ref={gridRef}
           className="grid gap-4"
-          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}
+          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}
         >
           {displayMovies
             .map((movie) => {
@@ -206,7 +220,7 @@ function DiscoverPageInner() {
                   <button
                     onClick={() => setSelectedMovie({ id: movie.id, title: movie.title })}
                     className="w-full px-3 py-1.5 text-white rounded-md transition-all duration-200 text-xs cursor-pointer hover:opacity-90 hover:scale-105"
-                    style={{ backgroundColor: existingEntry ? "var(--primary)" : "var(--accent)" }}
+                    style={{ backgroundColor: "var(--accent)" }}
                   >
                     {existingEntry ? "Update" : "Add"}
                   </button>

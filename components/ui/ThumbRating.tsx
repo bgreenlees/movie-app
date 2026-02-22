@@ -6,37 +6,44 @@ interface ThumbRatingProps {
   showLabels?: boolean;
 }
 
+const THUMB_PATH = "M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z";
+const HEART_PATH = "M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z";
+
 const RATINGS = [
-  { value: 1, icon: "👎", label: "Didn't like" },
-  { value: 2, icon: "👍", label: "Like" },
-  { value: 3, icon: "❤️", label: "Love" },
+  { value: 1, label: "Didn't like", path: THUMB_PATH, flip: true },
+  { value: 2, label: "Like",        path: THUMB_PATH, flip: false },
+  { value: 3, label: "Love",        path: HEART_PATH, flip: false },
 ];
 
 export default function ThumbRating({ rating, onChange, showLabels = true }: ThumbRatingProps) {
   return (
     <div className="flex gap-1.5 w-full">
-      {RATINGS.map(({ value, icon, label }) => {
+      {RATINGS.map(({ value, label, path, flip }) => {
         const isSelected = rating === value;
         return (
           <button
             key={value}
             type="button"
             onClick={() => onChange(isSelected ? 0 : value)}
-            className="flex flex-col items-center gap-1 flex-1 py-2 rounded-lg border-2 transition-all hover:opacity-80"
-            style={{
-              borderColor: isSelected ? "var(--accent)" : "var(--border)",
-              backgroundColor: isSelected
-                ? "color-mix(in srgb, var(--accent) 12%, var(--card-bg))"
-                : "transparent",
-            }}
+            className="flex flex-col items-center gap-1 flex-1 py-2 rounded-lg transition-all hover:opacity-70"
             aria-label={label}
             title={label}
           >
-            <span className="text-xl leading-none">{icon}</span>
+            <svg
+              viewBox="0 0 24 24"
+              className="w-6 h-6"
+              style={flip ? { transform: "rotate(180deg)" } : undefined}
+            >
+              {isSelected ? (
+                <path d={path} fill="#ffffff" />
+              ) : (
+                <path d={path} fill="none" stroke="currentColor" strokeWidth="1" />
+              )}
+            </svg>
             {showLabels && (
               <span
                 className="text-xs leading-none"
-                style={{ color: isSelected ? "var(--accent)" : "var(--text-muted)" }}
+                style={{ color: "var(--text-muted)" }}
               >
                 {label}
               </span>
