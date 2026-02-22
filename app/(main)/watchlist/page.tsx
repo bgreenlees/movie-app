@@ -67,6 +67,21 @@ export default function WatchlistPage() {
     }
   };
 
+  const handleNotInterested = async (entryId: string) => {
+    setEntries((prev) => prev.filter((e) => e.id !== entryId));
+    try {
+      const response = await fetch(`/api/watchlist/${entryId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "NOT_INTERESTED" }),
+      });
+      if (!response.ok) throw new Error();
+    } catch {
+      toast.error("Failed to update");
+      fetchWatchlist();
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="max-w-7xl mx-auto p-6">
@@ -102,6 +117,7 @@ export default function WatchlistPage() {
                   rating={entry.rating || 0}
                   onChange={(r) => handleRating(entry.id, r)}
                   showLabels={false}
+                  onNotInterested={() => handleNotInterested(entry.id)}
                 />
               }
             >
