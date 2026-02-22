@@ -34,14 +34,21 @@ function DiscoverPageInner() {
 
   const fetchWatchlist = useCallback(async () => {
     try {
-      const [wantRes, watchedRes] = await Promise.all([
+      const [wantRes, watchedRes, notInterestedRes] = await Promise.all([
         fetch("/api/watchlist?status=WANT_TO_WATCH"),
         fetch("/api/watchlist?status=WATCHED"),
+        fetch("/api/watchlist?status=NOT_INTERESTED"),
       ]);
-      if (wantRes.ok && watchedRes.ok) {
-        const [wantData, watchedData] = await Promise.all([wantRes.json(), watchedRes.json()]);
+      if (wantRes.ok && watchedRes.ok && notInterestedRes.ok) {
+        const [wantData, watchedData, notInterestedData] = await Promise.all([
+          wantRes.json(), watchedRes.json(), notInterestedRes.json(),
+        ]);
         const entries: Record<number, WatchlistEntry> = {};
-        [...(wantData.entries || []), ...(watchedData.entries || [])].forEach((entry: any) => {
+        [
+          ...(wantData.entries || []),
+          ...(watchedData.entries || []),
+          ...(notInterestedData.entries || []),
+        ].forEach((entry: any) => {
           entries[entry.movieId] = {
             id: entry.id,
             movieId: entry.movieId,
@@ -171,6 +178,32 @@ function DiscoverPageInner() {
     }
   };
 
+  const handleNotInterested = async (movieId: number) => {
+    const entry = watchlistEntries[movieId];
+    if (entry?.status === "NOT_INTERESTED") {
+      // Toggle off — remove the entry
+      try {
+        await fetch(`/api/watchlist/${entry.id}`, { method: "DELETE" });
+        fetchWatchlist();
+      } catch {
+        toast.error("Failed to update");
+      }
+    } else if (!entry) {
+      // Mark as not interested
+      try {
+        const response = await fetch("/api/watchlist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ movieId, status: "NOT_INTERESTED" }),
+        });
+        if (!response.ok) throw new Error();
+        fetchWatchlist();
+      } catch {
+        toast.error("Failed to update");
+      }
+    }
+  };
+
   const filteredMovies = movies.filter((movie) =>
     urlQuery ? true : !watchlistEntries[movie.id]
   );
@@ -214,6 +247,8 @@ function DiscoverPageInner() {
                       rating={existingEntry?.rating || 0}
                       onChange={(r) => handleRating(movie.id, r)}
                       showLabels={false}
+                      notInterested={existingEntry?.status === "NOT_INTERESTED"}
+                      onNotInterested={() => handleNotInterested(movie.id)}
                     />
                   }
                 >

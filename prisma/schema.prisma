@@ -79,4 +79,5 @@ model WatchlistEntry {
 enum WatchStatus {
   WANT_TO_WATCH
   WATCHED
+  NOT_INTERESTED
 }
