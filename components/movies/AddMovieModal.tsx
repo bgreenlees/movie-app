@@ -317,7 +317,7 @@ export default function AddMovieModal({
 
             {/* Rating + Review side by side */}
             <div className="flex gap-4 items-start">
-              <div style={{ width: "220px", shrink: 0 }}>
+              <div style={{ width: "220px", flexShrink: 0 }}>
                 <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
                   Rating (optional)
                 </label>
