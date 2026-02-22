@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { signOut } from "next-auth/react";
 import toast from "react-hot-toast";
 import type { TMDBWatchProvider } from "@/lib/tmdb";
 
@@ -21,6 +22,10 @@ export default function ProfilePage() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Account deletion state
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Friends state
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -135,6 +140,20 @@ export default function ProfilePage() {
       loadConnections();
     } catch {
       toast.error("Failed to decline request");
+    }
+  };
+
+  const deleteAccount = async () => {
+    setIsDeleting(true);
+    try {
+      const res = await fetch("/api/user", { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      await signOut({ redirect: false });
+      window.location.href = "/login";
+    } catch {
+      toast.error("Failed to delete account");
+      setIsDeleting(false);
+      setConfirmDelete(false);
     }
   };
 
@@ -337,6 +356,59 @@ export default function ProfilePage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      </div>
+      {/* Danger Zone */}
+      <div>
+        <h2 className="text-2xl font-bold mb-6" style={{ color: "#ef4444" }}>
+          Danger Zone
+        </h2>
+        <div
+          className="p-4 rounded-lg border"
+          style={{ borderColor: "#ef444466", backgroundColor: "#ef444411" }}
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
+                Delete Account
+              </p>
+              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                Permanently deletes your account, watchlist, ratings, and all connections. This cannot be undone.
+              </p>
+            </div>
+            {!confirmDelete && (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="shrink-0 px-4 py-2 text-sm rounded-md border transition-all hover:opacity-80"
+                style={{ color: "#ef4444", borderColor: "#ef4444" }}
+              >
+                Delete Account
+              </button>
+            )}
+          </div>
+
+          {confirmDelete && (
+            <div className="mt-4 pt-4 border-t flex items-center gap-3" style={{ borderColor: "#ef444466" }}>
+              <p className="text-sm flex-1" style={{ color: "#ef4444" }}>
+                Are you sure? This is permanent and immediate.
+              </p>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="px-3 py-1.5 text-sm rounded-md border hover:bg-[var(--hover-bg)] transition-all"
+                style={{ color: "var(--foreground)", borderColor: "var(--border)" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={deleteAccount}
+                disabled={isDeleting}
+                className="px-3 py-1.5 text-sm text-white rounded-md transition-all hover:opacity-80 disabled:opacity-50"
+                style={{ backgroundColor: "#ef4444" }}
+              >
+                {isDeleting ? "Deleting…" : "Yes, delete everything"}
+              </button>
             </div>
           )}
         </div>
