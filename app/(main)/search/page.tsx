@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import MovieCard from "@/components/movies/MovieCard";
 import AddMovieModal from "@/components/movies/AddMovieModal";
 import TrailerModal from "@/components/movies/TrailerModal";
@@ -21,11 +22,14 @@ interface WatchlistEntry {
 
 function DiscoverPageInner() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const urlQuery = searchParams.get("q") || "";
 
   const [movies, setMovies] = useState<TMDBMovie[]>([]);
   const [isPersonalized, setIsPersonalized] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showNudge, setShowNudge] = useState(false);
+  const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState<{ id: number; title: string } | null>(null);
   const [watchlistEntries, setWatchlistEntries] = useState<Record<number, WatchlistEntry>>({});
   const [trailerMovie, setTrailerMovie] = useState<{ id: number; title: string } | null>(null);
@@ -70,6 +74,16 @@ function DiscoverPageInner() {
     fetchWatchlist();
   }, [fetchWatchlist]);
 
+  // Onboarding gate — redirect new users before they see Discover
+  useEffect(() => {
+    fetch("/api/user")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.hasCompletedOnboarding) router.push("/onboarding");
+      })
+      .catch(() => {});
+  }, [router]);
+
   // React to URL query changes — search or load popular
   useEffect(() => {
     if (urlQuery) {
@@ -108,18 +122,14 @@ function DiscoverPageInner() {
               return;
             }
           }
-          // Fall back to popular
+          // Fall back to contextual (time-of-day genre feed)
           setIsPersonalized(false);
-          const p1 = Math.floor(Math.random() * 5) + 1;
-          const p2 = p1 < 5 ? p1 + 1 : 1;
-          const [r1, r2] = await Promise.all([
-            fetch(`/api/movies/popular?page=${p1}`),
-            fetch(`/api/movies/popular?page=${p2}`),
-          ]);
-          if (r1.ok && r2.ok) {
-            const [d1, d2] = await Promise.all([r1.json(), r2.json()]);
-            const combined = [...(d1.results || []), ...(d2.results || [])];
-            setMovies(combined.sort(() => Math.random() - 0.5));
+          const ctxRes = await fetch("/api/movies/contextual");
+          if (ctxRes.ok) {
+            const ctxData = await ctxRes.json();
+            setMovies((ctxData.results || []).sort(() => Math.random() - 0.5));
+            // Show nudge if user has no watchlist entries (they skipped onboarding)
+            setShowNudge(true);
           } else {
             toast.error("Failed to load movies");
           }
@@ -216,6 +226,21 @@ function DiscoverPageInner() {
       <h1 className="text-3xl font-bold mb-6" style={{ color: "var(--primary)" }}>
         {urlQuery ? `Results for "${urlQuery}"` : isPersonalized ? "Recommended for You" : "Discover"}
       </h1>
+
+      {showNudge && !nudgeDismissed && !urlQuery && (
+        <div
+          className="flex items-center justify-between gap-4 px-4 py-3 mb-6 rounded-lg border text-sm"
+          style={{ borderColor: "var(--accent)", backgroundColor: "color-mix(in srgb, var(--accent) 10%, var(--card-bg))" }}
+        >
+          <span style={{ color: "var(--foreground)" }}>
+            ✨ Get personalised picks —{" "}
+            <Link href="/onboarding" className="font-semibold underline" style={{ color: "var(--accent)" }}>
+              tell us what you love
+            </Link>
+          </span>
+          <button onClick={() => setNudgeDismissed(true)} style={{ color: "var(--text-muted)" }} aria-label="Dismiss">✕</button>
+        </div>
+      )}
 
       {isLoading && (
         <div className="text-center py-12">

@@ -125,6 +125,16 @@ class TMDBClient {
     return response.json();
   }
 
+  async getByGenre(genreIds: number[]): Promise<TMDBSearchResponse> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url =
+      `${this.baseUrl}/discover/movie?with_genres=${genreIds.join(",")}&sort_by=popularity.desc` +
+      `&vote_count.gte=500&api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 3600 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
   async getNewOnStreaming(providerIds?: number[]): Promise<TMDBSearchResponse> {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)

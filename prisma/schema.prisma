@@ -15,7 +15,8 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  streamingServices   Int[]            @default([]) @map("streaming_services")
+  streamingServices          Int[]     @default([]) @map("streaming_services")
+  hasCompletedOnboarding     Boolean   @default(false) @map("has_completed_onboarding")
   watchlistEntries    WatchlistEntry[]
   sentConnections     UserConnection[] @relation("ConnectionRequests")
   receivedConnections UserConnection[] @relation("ConnectionAddressees")
