@@ -115,8 +115,9 @@ export default function Navbar() {
             ))}
           </div>
 
-          {/* Search bar */}
-          <div className="flex-1 max-w-sm relative">
+          {/* Search bar + profile grouped right */}
+          <div className="ml-auto flex items-center gap-2">
+          <div className="relative w-64">
             <form onSubmit={handleSearch}>
               <div className="flex">
                 <input
@@ -162,7 +163,7 @@ export default function Navbar() {
           </div>
 
           {/* Profile icon + dropdown */}
-          <div className="relative shrink-0 ml-auto" ref={profileRef}>
+          <div className="relative shrink-0" ref={profileRef}>
             <button
               onClick={() => setShowProfileMenu((prev) => !prev)}
               className="p-2 rounded-full transition-colors hover:bg-[var(--hover-bg)]"
@@ -240,6 +241,7 @@ export default function Navbar() {
               </div>
             )}
           </div>
+          </div>{/* end search+profile wrapper */}
         </div>
 
         {/* Mobile nav */}
