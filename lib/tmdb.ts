@@ -155,6 +155,26 @@ class TMDBClient {
     return response.json();
   }
 
+  async getSimilarMovies(movieId: number): Promise<TMDBSearchResponse> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url = `${this.baseUrl}/movie/${movieId}/similar?api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 86400 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
+  async discoverHiddenGems(genreIds: number[]): Promise<TMDBSearchResponse> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    // OR-joined genres, quality floor, low vote count = hidden gems
+    const url =
+      `${this.baseUrl}/discover/movie?with_genres=${genreIds.join("|")}` +
+      `&vote_average.gte=6.8&vote_count.gte=150&vote_count.lte=4000` +
+      `&sort_by=vote_average.desc&api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 3600 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
   async getMovieRecommendations(movieId: number): Promise<TMDBSearchResponse> {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
     const url = `${this.baseUrl}/movie/${movieId}/recommendations?api_key=${this.apiKey}`;
