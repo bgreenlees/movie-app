@@ -122,7 +122,7 @@ export default function OnboardingModal({ onClose }: OnboardingModalProps) {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
-      } else if (next.size < 5) {
+      } else {
         next.add(id);
       }
       return next;
@@ -144,7 +144,7 @@ export default function OnboardingModal({ onClose }: OnboardingModalProps) {
   };
 
   const count = selected.size;
-  const canSubmit = count >= 3 && count <= 5;
+  const canSubmit = count >= 3;
 
   return (
     <div
@@ -175,7 +175,7 @@ export default function OnboardingModal({ onClose }: OnboardingModalProps) {
                 color: canSubmit ? "var(--accent)" : "var(--text-muted)",
               }}
             >
-              {count} / 5 selected
+              {count} selected{count < 3 ? ` (pick ${3 - count} more)` : ""}
             </span>
             <button
               onClick={() => submit(false)}
@@ -216,13 +216,13 @@ export default function OnboardingModal({ onClose }: OnboardingModalProps) {
                     <button
                       key={movie.id}
                       onClick={() => toggle(movie.id)}
-                      disabled={!isSelected && count >= 5}
+                      disabled={false}
                       className="relative rounded-lg overflow-hidden group transition-all duration-200 focus:outline-none"
                       style={{
                         boxShadow: isSelected
                           ? `0 0 0 3px var(--accent), 0 0 24px color-mix(in srgb, var(--accent) 50%, transparent)`
                           : "none",
-                        opacity: !isSelected && count >= 5 ? 0.35 : 1,
+                        opacity: 1,
                         transform: isSelected ? "scale(1.03)" : "scale(1)",
                         transition: "transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease",
                       }}

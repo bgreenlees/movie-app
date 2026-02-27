@@ -15,7 +15,7 @@ export async function GET() {
   const ratedEntries = await prisma.watchlistEntry.findMany({
     where: { userId, rating: { gte: 2 } }, // 2 = like, 3 = love
     orderBy: { rating: "desc" },
-    take: 10, // cap at 10 source movies to avoid too many TMDB calls
+    take: 20, // use up to 20 rated movies as recommendation seeds
   });
 
   if (ratedEntries.length === 0) {
