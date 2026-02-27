@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import type { TMDBWatchProvider } from "@/lib/tmdb";
 
 interface CastMember {
   id: number;
@@ -42,15 +43,25 @@ export default function MovieDetailModal({
 }: MovieDetailModalProps) {
   const [details, setDetails] = useState<MovieDetails | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [providers, setProviders] = useState<{ flatrate: TMDBWatchProvider[]; rent: TMDBWatchProvider[] }>({ flatrate: [], rent: [] });
+  const [userServices, setUserServices] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (!movieId) return;
     setDetails(null);
+    setProviders({ flatrate: [], rent: [] });
     setIsLoading(true);
 
-    fetch(`/api/movies/${movieId}/credits`)
-      .then((r) => r.json())
-      .then((data) => setDetails(data))
+    Promise.all([
+      fetch(`/api/movies/${movieId}/credits`).then((r) => r.json()),
+      fetch(`/api/movies/${movieId}/providers`).then((r) => r.json()),
+      fetch("/api/user/streaming").then((r) => r.json()),
+    ])
+      .then(([creditsData, providerData, userData]) => {
+        setDetails(creditsData);
+        setProviders({ flatrate: providerData.flatrate || [], rent: providerData.rent || [] });
+        setUserServices(new Set(userData.streamingServices || []));
+      })
       .catch(() => setDetails(null))
       .finally(() => setIsLoading(false));
   }, [movieId]);
@@ -172,6 +183,99 @@ export default function MovieDetailModal({
                   </div>
                 </div>
               </div>
+
+              {/* Streaming availability */}
+              {(providers.flatrate.length > 0 || providers.rent.length > 0) && (
+                <div className="mt-5">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
+                    Where to Watch
+                  </h3>
+                  {providers.flatrate.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs mb-1.5" style={{ color: "var(--text-muted)" }}>Stream</p>
+                      <div className="flex flex-wrap gap-2">
+                        {providers.flatrate.map((p) => {
+                          const have = userServices.has(p.provider_id);
+                          return (
+                            <div
+                              key={p.provider_id}
+                              className="flex items-center gap-1.5 px-2 py-1 rounded-md"
+                              style={{
+                                backgroundColor: have ? "color-mix(in srgb, var(--accent) 12%, var(--card-bg))" : "transparent",
+                                border: `1px solid ${have ? "var(--accent)" : "var(--border)"}`,
+                              }}
+                              title={p.provider_name}
+                            >
+                              <div className="relative">
+                                <Image
+                                  src={`https://image.tmdb.org/t/p/w92${p.logo_path}`}
+                                  alt={p.provider_name}
+                                  width={20}
+                                  height={20}
+                                  className="rounded"
+                                />
+                                {have && (
+                                  <div
+                                    className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center text-white"
+                                    style={{ backgroundColor: "var(--accent)", fontSize: "8px" }}
+                                  >
+                                    ✓
+                                  </div>
+                                )}
+                              </div>
+                              <span className="text-xs" style={{ color: have ? "var(--accent)" : "var(--foreground)", fontWeight: have ? 600 : 400 }}>
+                                {p.provider_name}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {providers.rent.length > 0 && (
+                    <div>
+                      <p className="text-xs mb-1.5" style={{ color: "var(--text-muted)" }}>Rent / Buy</p>
+                      <div className="flex flex-wrap gap-2">
+                        {providers.rent.map((p) => {
+                          const have = userServices.has(p.provider_id);
+                          return (
+                            <div
+                              key={p.provider_id}
+                              className="flex items-center gap-1.5 px-2 py-1 rounded-md"
+                              style={{
+                                backgroundColor: have ? "color-mix(in srgb, var(--accent) 12%, var(--card-bg))" : "transparent",
+                                border: `1px solid ${have ? "var(--accent)" : "var(--border)"}`,
+                              }}
+                              title={p.provider_name}
+                            >
+                              <div className="relative">
+                                <Image
+                                  src={`https://image.tmdb.org/t/p/w92${p.logo_path}`}
+                                  alt={p.provider_name}
+                                  width={20}
+                                  height={20}
+                                  className="rounded"
+                                />
+                                {have && (
+                                  <div
+                                    className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center text-white"
+                                    style={{ backgroundColor: "var(--accent)", fontSize: "8px" }}
+                                  >
+                                    ✓
+                                  </div>
+                                )}
+                              </div>
+                              <span className="text-xs" style={{ color: have ? "var(--accent)" : "var(--foreground)", fontWeight: have ? 600 : 400 }}>
+                                {p.provider_name}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Cast */}
               {cast.length > 0 && (
