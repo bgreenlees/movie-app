@@ -162,7 +162,7 @@ export default function Navbar() {
           </div>
 
           {/* Profile icon + dropdown */}
-          <div className="relative shrink-0" ref={profileRef}>
+          <div className="relative shrink-0 ml-auto" ref={profileRef}>
             <button
               onClick={() => setShowProfileMenu((prev) => !prev)}
               className="p-2 rounded-full transition-colors hover:bg-[var(--hover-bg)]"
