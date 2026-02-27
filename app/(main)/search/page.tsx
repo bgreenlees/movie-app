@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import MovieCard from "@/components/movies/MovieCard";
 import AddMovieModal from "@/components/movies/AddMovieModal";
 import TrailerModal from "@/components/movies/TrailerModal";
+import OnboardingModal from "@/components/movies/OnboardingModal";
 import ThumbRating from "@/components/ui/ThumbRating";
 import type { TMDBMovie } from "@/lib/tmdb";
 import toast from "react-hot-toast";
@@ -30,6 +30,7 @@ function DiscoverPageInner() {
   const [isLoading, setIsLoading] = useState(false);
   const [showNudge, setShowNudge] = useState(false);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState<{ id: number; title: string } | null>(null);
   const [watchlistEntries, setWatchlistEntries] = useState<Record<number, WatchlistEntry>>({});
   const [trailerMovie, setTrailerMovie] = useState<{ id: number; title: string } | null>(null);
@@ -74,15 +75,15 @@ function DiscoverPageInner() {
     fetchWatchlist();
   }, [fetchWatchlist]);
 
-  // Onboarding gate — redirect new users before they see Discover
+  // Onboarding gate — show modal for new users
   useEffect(() => {
     fetch("/api/user")
       .then((r) => r.json())
       .then((d) => {
-        if (!d.hasCompletedOnboarding) router.push("/onboarding");
+        if (!d.hasCompletedOnboarding) setShowOnboarding(true);
       })
       .catch(() => {});
-  }, [router]);
+  }, []);
 
   // React to URL query changes — search or load popular
   useEffect(() => {
@@ -234,9 +235,13 @@ function DiscoverPageInner() {
         >
           <span style={{ color: "var(--foreground)" }}>
             ✨ Get personalised picks —{" "}
-            <Link href="/onboarding" className="font-semibold underline" style={{ color: "var(--accent)" }}>
+            <button
+              onClick={() => setShowOnboarding(true)}
+              className="font-semibold underline"
+              style={{ color: "var(--accent)" }}
+            >
               tell us what you love
-            </Link>
+            </button>
           </span>
           <button onClick={() => setNudgeDismissed(true)} style={{ color: "var(--text-muted)" }} aria-label="Dismiss">✕</button>
         </div>
@@ -303,6 +308,25 @@ function DiscoverPageInner() {
         movieTitle={trailerMovie?.title ?? ""}
         onClose={() => setTrailerMovie(null)}
       />
+
+      {showOnboarding && (
+        <OnboardingModal
+          onClose={() => {
+            setShowOnboarding(false);
+            setShowNudge(false);
+            // Reload movies now that onboarding is done
+            fetch("/api/movies/recommended")
+              .then((r) => r.json())
+              .then((d) => {
+                if (d.personalized && d.results.length >= 6) {
+                  setMovies(d.results);
+                  setIsPersonalized(true);
+                }
+              })
+              .catch(() => {});
+          }}
+        />
+      )}
 
       {selectedMovie && (
         <AddMovieModal
