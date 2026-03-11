@@ -14,8 +14,10 @@ export default function Navbar() {
   const [suggestions, setSuggestions] = useState<TMDBMovie[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showTVMenu, setShowTVMenu] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const profileRef = useRef<HTMLDivElement>(null);
+  const tvRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const current = document.documentElement.getAttribute("data-theme") as "light" | "dark";
@@ -26,6 +28,9 @@ export default function Navbar() {
     const handleClickOutside = (e: MouseEvent) => {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
         setShowProfileMenu(false);
+      }
+      if (tvRef.current && !tvRef.current.contains(e.target as Node)) {
+        setShowTVMenu(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -89,6 +94,12 @@ export default function Navbar() {
     { href: "/watched", label: "Watched" },
   ];
 
+  const tvLinks = [
+    { href: "/tv", label: "Discover TV" },
+    { href: "/tv/watching", label: "Watching" },
+    { href: "/tv/watchlist", label: "TV Watchlist" },
+  ];
+
   return (
     <nav className="border-b border-[var(--border)] bg-[var(--card-bg)]">
       <div className="max-w-7xl mx-auto px-6 py-3">
@@ -99,7 +110,7 @@ export default function Navbar() {
           </Link>
 
           {/* Nav links */}
-          <div className="hidden md:flex gap-1 shrink-0">
+          <div className="hidden md:flex gap-1 shrink-0 items-center">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
@@ -113,6 +124,41 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
+
+            {/* TV Shows dropdown */}
+            <div className="relative" ref={tvRef}>
+              <button
+                onClick={() => setShowTVMenu((prev) => !prev)}
+                className={`transition-all px-3 py-1.5 rounded-md text-sm flex items-center gap-1 ${tvLinks.some((l) => pathname === l.href) ? "font-semibold" : ""}`}
+                style={{
+                  color: tvLinks.some((l) => pathname === l.href) ? "white" : "var(--foreground)",
+                  backgroundColor: tvLinks.some((l) => pathname === l.href) ? "var(--accent)" : "transparent",
+                }}
+              >
+                TV Shows
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showTVMenu && (
+                <div
+                  className="absolute left-0 top-full mt-1 w-40 rounded-lg shadow-lg overflow-hidden z-50"
+                  style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--border)" }}
+                >
+                  {tvLinks.map((link) => (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      onClick={() => setShowTVMenu(false)}
+                      className="block px-4 py-2.5 text-sm hover:bg-[var(--hover-bg)] transition-colors"
+                      style={{ color: pathname === link.href ? "var(--accent)" : "var(--foreground)", fontWeight: pathname === link.href ? 600 : 400 }}
+                    >
+                      {link.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Search bar + profile grouped right */}
@@ -246,7 +292,7 @@ export default function Navbar() {
 
         {/* Mobile nav */}
         <div className="md:hidden flex gap-2 mt-3 overflow-x-auto">
-          {[...navLinks, { href: "/profile", label: "Profile" }].map((link) => (
+          {[...navLinks, ...tvLinks, { href: "/profile", label: "Profile" }].map((link) => (
             <Link
               key={link.href}
               href={link.href}

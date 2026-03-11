@@ -18,6 +18,7 @@ model User {
   streamingServices          Int[]     @default([]) @map("streaming_services")
   hasCompletedOnboarding     Boolean   @default(false) @map("has_completed_onboarding")
   watchlistEntries    WatchlistEntry[]
+  tvWatchlistEntries  TVWatchlistEntry[]
   sentConnections     UserConnection[] @relation("ConnectionRequests")
   receivedConnections UserConnection[] @relation("ConnectionAddressees")
 
@@ -79,6 +80,48 @@ model WatchlistEntry {
 
 enum WatchStatus {
   WANT_TO_WATCH
+  WATCHED
+  NOT_INTERESTED
+}
+
+model TVShow {
+  id              Int       @id
+  name            String
+  posterPath      String?   @map("poster_path")
+  firstAirDate    String?   @map("first_air_date")
+  overview        String?
+  genres          Json?
+  lastFetched     DateTime  @default(now()) @map("last_fetched")
+
+  watchlistEntries TVWatchlistEntry[]
+
+  @@map("tv_shows")
+}
+
+model TVWatchlistEntry {
+  id              String        @id @default(cuid())
+  userId          String        @map("user_id")
+  tvShowId        Int           @map("tv_show_id")
+  status          TVWatchStatus @default(WANT_TO_WATCH)
+  rating          Int?
+  review          String?       @db.Text
+  platform        String?
+  currentSeason   Int?          @map("current_season")
+  currentEpisode  Int?          @map("current_episode")
+  addedAt         DateTime      @default(now()) @map("added_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tvShow  TVShow @relation(fields: [tvShowId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tvShowId])
+  @@index([userId])
+  @@map("tv_watchlist_entries")
+}
+
+enum TVWatchStatus {
+  WANT_TO_WATCH
+  WATCHING
   WATCHED
   NOT_INTERESTED
 }
