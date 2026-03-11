@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import TVShowCard from "@/components/tv/TVShowCard";
+import TVShowCard, { type TVSeasonBanner } from "@/components/tv/TVShowCard";
 import AddTVModal from "@/components/tv/AddTVModal";
 import ThumbRating from "@/components/ui/ThumbRating";
 import type { TMDBTVShow } from "@/lib/tmdb";
@@ -29,8 +29,30 @@ function TVDiscoverInner() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedShow, setSelectedShow] = useState<{ id: number; name: string } | null>(null);
   const [tvEntries, setTVEntries] = useState<Record<number, TVEntry>>({});
+  const [seasonBanners, setSeasonBanners] = useState<Record<number, TVSeasonBanner>>({});
   const [columns, setColumns] = useState(6);
   const gridRef = useRef<HTMLDivElement>(null);
+
+  const fetchSeasonBanners = useCallback(async (shows: TMDBTVShow[]) => {
+    const toFetch = shows.slice(0, 24);
+    const results = await Promise.allSettled(
+      toFetch.map((s) =>
+        fetch(`/api/tv/${s.id}/info`).then((r) => r.json()).then((d) => ({
+          id: s.id,
+          banner: d.latestSeason
+            ? { number: d.latestSeason.number, premiereDate: d.latestSeason.premiereDate, lastAirDate: d.lastAirDate, status: d.status }
+            : null,
+        }))
+      )
+    );
+    const map: Record<number, TVSeasonBanner> = {};
+    results.forEach((r) => {
+      if (r.status === "fulfilled" && r.value.banner) {
+        map[r.value.id] = r.value.banner;
+      }
+    });
+    setSeasonBanners((prev) => ({ ...prev, ...map }));
+  }, []);
 
   const fetchTVEntries = useCallback(async () => {
     try {
@@ -67,12 +89,12 @@ function TVDiscoverInner() {
           const res = await fetch(`/api/tv/search?q=${encodeURIComponent(urlQuery)}`);
           if (res.ok) {
             const data = await res.json();
-            setShows(
-              (data.results || [])
-                .filter((s: TMDBTVShow) => s.poster_path)
-                .sort((a: TMDBTVShow, b: TMDBTVShow) => b.popularity - a.popularity)
-            );
-            if (!data.results?.length) toast.error("No TV shows found");
+            const results: TMDBTVShow[] = (data.results || [])
+              .filter((s: TMDBTVShow) => s.poster_path)
+              .sort((a: TMDBTVShow, b: TMDBTVShow) => b.popularity - a.popularity);
+            setShows(results);
+            if (!results.length) toast.error("No TV shows found");
+            fetchSeasonBanners(results);
           } else {
             toast.error("Search failed");
           }
@@ -90,8 +112,10 @@ function TVDiscoverInner() {
           const recRes = await fetch("/api/tv/recommended");
           if (recRes.ok) {
             const recData = await recRes.json();
-            setShows(recData.results || []);
+            const results: TMDBTVShow[] = recData.results || [];
+            setShows(results);
             setIsPersonalized(recData.personalized);
+            fetchSeasonBanners(results);
           } else {
             toast.error("Failed to load TV shows");
           }
@@ -184,6 +208,7 @@ function TVDiscoverInner() {
                 overview={show.overview}
                 rating={show.vote_average}
                 watchingStatus={existingEntry?.status}
+                seasonBanner={seasonBanners[show.id] ?? null}
                 thumbRating={
                   <ThumbRating
                     rating={existingEntry?.rating || 0}

@@ -6,7 +6,7 @@ import MovieCard from "@/components/movies/MovieCard";
 import AddMovieModal from "@/components/movies/AddMovieModal";
 import TrailerModal from "@/components/movies/TrailerModal";
 import OnboardingModal from "@/components/movies/OnboardingModal";
-import TVShowCard from "@/components/tv/TVShowCard";
+import TVShowCard, { type TVSeasonBanner } from "@/components/tv/TVShowCard";
 import AddTVModal from "@/components/tv/AddTVModal";
 import ThumbRating from "@/components/ui/ThumbRating";
 import type { TMDBMovie, TMDBTVShow } from "@/lib/tmdb";
@@ -54,6 +54,7 @@ function DiscoverPageInner() {
   const [tvPersonalized, setTVPersonalized] = useState(false);
   const [selectedShow, setSelectedShow] = useState<{ id: number; name: string } | null>(null);
   const [tvEntries, setTVEntries] = useState<Record<number, TVEntry>>({});
+  const [seasonBanners, setSeasonBanners] = useState<Record<number, TVSeasonBanner>>({});
 
   const [isLoading, setIsLoading] = useState(false);
   const [columns, setColumns] = useState(6);
@@ -106,6 +107,29 @@ function DiscoverPageInner() {
     }).catch(() => {});
   }, []);
 
+  // ── Season banner fetch ───────────────────────────────────────────────────
+
+  const fetchSeasonBanners = useCallback(async (shows: TMDBTVShow[]) => {
+    const toFetch = shows.slice(0, 24); // cap at 24 to avoid hammering API
+    const results = await Promise.allSettled(
+      toFetch.map((s) =>
+        fetch(`/api/tv/${s.id}/info`).then((r) => r.json()).then((d) => ({
+          id: s.id,
+          banner: d.latestSeason
+            ? { number: d.latestSeason.number, premiereDate: d.latestSeason.premiereDate, lastAirDate: d.lastAirDate, status: d.status }
+            : null,
+        }))
+      )
+    );
+    const map: Record<number, TVSeasonBanner> = {};
+    results.forEach((r) => {
+      if (r.status === "fulfilled" && r.value.banner) {
+        map[r.value.id] = r.value.banner;
+      }
+    });
+    setSeasonBanners((prev) => ({ ...prev, ...map }));
+  }, []);
+
   // ── Content loading ───────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -147,12 +171,12 @@ function DiscoverPageInner() {
         fetch(`/api/tv/search?q=${encodeURIComponent(urlQuery)}`)
           .then((r) => r.json())
           .then((data) => {
-            setTVShows(
-              (data.results || [])
-                .filter((s: TMDBTVShow) => s.poster_path)
-                .sort((a: TMDBTVShow, b: TMDBTVShow) => b.popularity - a.popularity)
-            );
-            if (!data.results?.length) toast.error("No TV shows found");
+            const results: TMDBTVShow[] = (data.results || [])
+              .filter((s: TMDBTVShow) => s.poster_path)
+              .sort((a: TMDBTVShow, b: TMDBTVShow) => b.popularity - a.popularity);
+            setTVShows(results);
+            if (!results.length) toast.error("No TV shows found");
+            fetchSeasonBanners(results);
           })
           .catch(() => toast.error("Search failed"))
           .finally(() => setIsLoading(false));
@@ -161,8 +185,10 @@ function DiscoverPageInner() {
         fetch("/api/tv/recommended")
           .then((r) => r.json())
           .then((data) => {
-            setTVShows(data.results || []);
+            const results: TMDBTVShow[] = data.results || [];
+            setTVShows(results);
             setTVPersonalized(data.personalized);
+            fetchSeasonBanners(results);
           })
           .catch(() => toast.error("Failed to load TV shows"))
           .finally(() => setIsLoading(false));
@@ -366,6 +392,7 @@ function DiscoverPageInner() {
                 overview={show.overview}
                 rating={show.vote_average}
                 watchingStatus={existingEntry?.status}
+                seasonBanner={seasonBanners[show.id] ?? null}
                 thumbRating={
                   <ThumbRating
                     rating={existingEntry?.rating || 0}

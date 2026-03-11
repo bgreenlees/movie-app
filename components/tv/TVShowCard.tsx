@@ -5,6 +5,13 @@ import { useState } from "react";
 import { tmdb } from "@/lib/tmdb";
 import TVShowDetailModal from "./TVShowDetailModal";
 
+export interface TVSeasonBanner {
+  number: number;
+  premiereDate: string | null;
+  lastAirDate: string | null;
+  status: string;
+}
+
 interface TVShowCardProps {
   id: number;
   name: string;
@@ -13,8 +20,15 @@ interface TVShowCardProps {
   overview?: string;
   rating?: number;
   watchingStatus?: string | null;
+  seasonBanner?: TVSeasonBanner | null;
   thumbRating?: React.ReactNode;
   children?: React.ReactNode;
+}
+
+function formatBannerDate(dateStr: string | null): string {
+  if (!dateStr) return "?";
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 export default function TVShowCard({
@@ -25,6 +39,7 @@ export default function TVShowCard({
   overview,
   rating,
   watchingStatus,
+  seasonBanner,
   thumbRating,
   children,
 }: TVShowCardProps) {
@@ -70,6 +85,25 @@ export default function TVShowCard({
             ⓘ
           </button>
         </div>
+        {/* Season date banner */}
+        {seasonBanner && (
+          <div
+            className="px-3 py-1.5 text-center"
+            style={{ backgroundColor: "var(--border)", borderTop: "1px solid var(--border)" }}
+          >
+            <p className="text-xs font-medium truncate" style={{ color: "var(--text-muted)" }}>
+              S{seasonBanner.number}
+              {" · "}
+              {formatBannerDate(seasonBanner.premiereDate)}
+              {" – "}
+              {seasonBanner.status === "Returning Series" || seasonBanner.status === "In Production"
+                ? <span style={{ color: "var(--accent)" }}>now</span>
+                : formatBannerDate(seasonBanner.lastAirDate)
+              }
+            </p>
+          </div>
+        )}
+
         <div className="p-3 flex flex-col gap-2">
           {thumbRating && <div className="flex justify-end">{thumbRating}</div>}
           {children}
