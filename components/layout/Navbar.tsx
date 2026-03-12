@@ -6,6 +6,7 @@ import { signOut } from "next-auth/react";
 import { useState, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
 import type { TMDBMovie } from "@/lib/tmdb";
+import FeedbackModal from "@/components/ui/FeedbackModal";
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -14,6 +15,7 @@ export default function Navbar() {
   const [suggestions, setSuggestions] = useState<TMDBMovie[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const profileRef = useRef<HTMLDivElement>(null);
 
@@ -163,6 +165,19 @@ export default function Navbar() {
             )}
           </div>
 
+          {/* Feedback icon */}
+          <button
+            onClick={() => setShowFeedback(true)}
+            className="p-2 rounded-full transition-colors hover:bg-[var(--hover-bg)] shrink-0"
+            style={{ color: "var(--foreground)" }}
+            aria-label="Suggest a feature"
+            title="Suggest a feature"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m1.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          </button>
+
           {/* Profile icon + dropdown */}
           <div className="relative shrink-0" ref={profileRef}>
             <button
@@ -243,6 +258,8 @@ export default function Navbar() {
             )}
           </div>
           </div>{/* end search+profile wrapper */}
+
+          {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
         </div>
 
         {/* Mobile nav */}
