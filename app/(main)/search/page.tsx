@@ -281,10 +281,10 @@ function DiscoverPageInner() {
   const isEmpty = mediaType === "movie" ? displayMovies.length === 0 : displayTV.length === 0;
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
+    <div className="max-w-7xl mx-auto p-4 sm:p-6">
       {/* Title + toggle */}
-      <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
-        <h1 className="text-3xl font-bold" style={{ color: "var(--primary)" }}>
+      <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
+        <h1 className="text-2xl sm:text-3xl font-bold" style={{ color: "var(--primary)" }}>
           {heading}
         </h1>
 
@@ -295,7 +295,7 @@ function DiscoverPageInner() {
         >
           <button
             onClick={() => setMediaType("movie")}
-            className="px-4 py-1.5 text-sm font-medium transition-all"
+            className="px-4 py-2.5 text-sm font-medium transition-all"
             style={{
               backgroundColor: mediaType === "movie" ? "var(--accent)" : "transparent",
               color: mediaType === "movie" ? "white" : "var(--foreground)",
@@ -305,7 +305,7 @@ function DiscoverPageInner() {
           </button>
           <button
             onClick={() => setMediaType("tv")}
-            className="px-4 py-1.5 text-sm font-medium transition-all"
+            className="px-4 py-2.5 text-sm font-medium transition-all"
             style={{
               backgroundColor: mediaType === "tv" ? "var(--accent)" : "transparent",
               color: mediaType === "tv" ? "white" : "var(--foreground)",
@@ -334,14 +334,22 @@ function DiscoverPageInner() {
       )}
 
       {isLoading && (
-        <div className="text-center py-12">
-          <p style={{ color: "var(--text-muted)" }}>Loading...</p>
+        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))" }}>
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div key={i} className="rounded-lg overflow-hidden" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--border)" }}>
+              <div className="w-full aspect-[2/3] animate-pulse" style={{ backgroundColor: "var(--border)" }} />
+              <div className="p-3 flex flex-col gap-2">
+                <div className="h-8 rounded animate-pulse" style={{ backgroundColor: "var(--border)" }} />
+                <div className="h-7 rounded animate-pulse" style={{ backgroundColor: "var(--border)" }} />
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
       {/* Movies grid */}
       {!isLoading && mediaType === "movie" && displayMovies.length > 0 && (
-        <div ref={gridRef} className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
+        <div ref={gridRef} className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))" }}>
           {displayMovies.map((movie) => {
             const existingEntry = watchlistEntries[movie.id];
             return (
@@ -366,7 +374,7 @@ function DiscoverPageInner() {
               >
                 <button
                   onClick={() => setSelectedMovie({ id: movie.id, title: movie.title })}
-                  className="w-full px-3 py-1.5 text-white rounded-md transition-all duration-200 text-xs cursor-pointer hover:opacity-90 hover:scale-105"
+                  className="w-full px-3 py-2.5 text-white rounded-md transition-all duration-200 text-sm cursor-pointer hover:opacity-90 hover:scale-105"
                   style={{ backgroundColor: "var(--accent)" }}
                 >
                   {existingEntry ? "Update" : "Add"}
@@ -379,7 +387,7 @@ function DiscoverPageInner() {
 
       {/* TV grid */}
       {!isLoading && mediaType === "tv" && displayTV.length > 0 && (
-        <div ref={gridRef} className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
+        <div ref={gridRef} className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))" }}>
           {displayTV.map((show) => {
             const existingEntry = tvEntries[show.id];
             return (
@@ -403,7 +411,7 @@ function DiscoverPageInner() {
               >
                 <button
                   onClick={() => setSelectedShow({ id: show.id, name: show.name })}
-                  className="w-full px-3 py-1.5 text-white rounded-md transition-all duration-200 text-xs cursor-pointer hover:opacity-90 hover:scale-105"
+                  className="w-full px-3 py-2.5 text-white rounded-md transition-all duration-200 text-sm cursor-pointer hover:opacity-90 hover:scale-105"
                   style={{ backgroundColor: "var(--accent)" }}
                 >
                   {existingEntry ? "Update" : "Add"}
@@ -415,12 +423,18 @@ function DiscoverPageInner() {
       )}
 
       {!isLoading && isEmpty && (
-        <div className="text-center py-12">
-          <p style={{ color: "var(--text-muted)" }}>
+        <div className="text-center py-16 flex flex-col items-center gap-3">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: "var(--text-muted)" }}>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <p className="text-base" style={{ color: "var(--text-muted)" }}>
             {urlQuery
-              ? `No ${mediaType === "tv" ? "TV shows" : "movies"} found. Try a different search term.`
+              ? `No ${mediaType === "tv" ? "TV shows" : "movies"} found for "${urlQuery}"`
               : `No ${mediaType === "tv" ? "TV shows" : "movies"} available.`}
           </p>
+          {urlQuery && (
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>Try a different search term</p>
+          )}
         </div>
       )}
 

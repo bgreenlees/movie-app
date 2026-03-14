@@ -42,17 +42,17 @@ export default function MovieCard({
               alt={title}
               fill
               className="object-cover"
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              sizes="(max-width: 640px) 50vw, (max-width: 1200px) 33vw, 20vw"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-[var(--text-muted)]">
               No Image
             </div>
           )}
-          {/* Info button — appears on hover */}
+          {/* Info button — always visible on touch, hover-only on desktop */}
           <button
             onClick={(e) => { e.stopPropagation(); setIsDetailOpen(true); }}
-            className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold leading-none"
+            className="absolute top-1.5 right-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold leading-none"
             style={{ backgroundColor: "rgba(0,0,0,0.55)", color: "rgba(255,255,255,0.85)" }}
             aria-label={`Info for ${title}`}
           >
@@ -61,7 +61,7 @@ export default function MovieCard({
           {onPlayTrailer && (
             <button
               onClick={() => onPlayTrailer(id)}
-              className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 py-1.5 bg-black/40 group-hover:bg-black/65 transition-all cursor-pointer"
+              className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 py-2 bg-black/50 sm:bg-black/40 sm:group-hover:bg-black/65 transition-all cursor-pointer"
               aria-label={`Play trailer for ${title}`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-white/80 group-hover:text-white transition-colors">
