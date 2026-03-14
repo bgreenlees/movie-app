@@ -311,7 +311,7 @@ export default function Navbar() {
 
         {/* Mobile nav links */}
         <div className="md:hidden flex gap-2 mt-2 overflow-x-auto pb-1">
-          {[...navLinks, { href: "/profile", label: "Profile" }].map((link) => (
+          {navLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
