@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import Image from "next/image";
 import MovieCard from "@/components/movies/MovieCard";
 import AddMovieModal from "@/components/movies/AddMovieModal";
 import TrailerModal from "@/components/movies/TrailerModal";
@@ -11,6 +12,17 @@ import AddTVModal from "@/components/tv/AddTVModal";
 import ThumbRating from "@/components/ui/ThumbRating";
 import type { TMDBMovie, TMDBTVShow } from "@/lib/tmdb";
 import toast from "react-hot-toast";
+
+interface PersonData {
+  id: number;
+  name: string;
+  profilePath: string | null;
+  knownFor: string | null;
+  movieCast: TMDBMovie[];
+  movieCrewDirected: TMDBMovie[];
+  tvCast: TMDBTVShow[];
+  tvCrewDirected: TMDBTVShow[];
+}
 
 interface WatchlistEntry {
   id: string;
@@ -36,8 +48,14 @@ interface TVEntry {
 function DiscoverPageInner() {
   const searchParams = useSearchParams();
   const urlQuery = searchParams.get("q") || "";
+  const personId = searchParams.get("personId");
+  const personNameParam = searchParams.get("name") || "";
+  const genreId = searchParams.get("genreId");
+  const genreName = searchParams.get("genreName") || "";
+  const genreMedia = (searchParams.get("genreMedia") as "movie" | "tv" | null) || null;
 
-  const [mediaType, setMediaType] = useState<"movie" | "tv">("movie");
+  const [mediaType, setMediaType] = useState<"movie" | "tv">(genreMedia || "movie");
+  const [personData, setPersonData] = useState<PersonData | null>(null);
 
   // Movie state
   const [movies, setMovies] = useState<TMDBMovie[]>([]);
@@ -133,6 +151,46 @@ function DiscoverPageInner() {
   // ── Content loading ───────────────────────────────────────────────────────
 
   useEffect(() => {
+    // Person mode
+    if (personId) {
+      setIsLoading(true);
+      setPersonData(null);
+      fetch(`/api/person/${personId}`)
+        .then((r) => r.json())
+        .then((data: PersonData) => {
+          setPersonData(data);
+          fetchSeasonBanners([...(data.tvCast || []), ...(data.tvCrewDirected || [])]);
+        })
+        .catch(() => toast.error("Failed to load person"))
+        .finally(() => setIsLoading(false));
+      return;
+    }
+
+    // Genre mode
+    if (genreId) {
+      const media = genreMedia || "movie";
+      setIsLoading(true);
+      const endpoint =
+        media === "movie"
+          ? `/api/discover/movie?genreId=${genreId}`
+          : `/api/discover/tv?genreId=${genreId}`;
+      fetch(endpoint)
+        .then((r) => r.json())
+        .then((data) => {
+          if (media === "movie") {
+            setMovies((data.results || []).sort((a: TMDBMovie, b: TMDBMovie) => b.popularity - a.popularity));
+          } else {
+            const results: TMDBTVShow[] = (data.results || [])
+              .sort((a: TMDBTVShow, b: TMDBTVShow) => b.popularity - a.popularity);
+            setTVShows(results);
+            fetchSeasonBanners(results);
+          }
+        })
+        .catch(() => toast.error("Failed to load genre results"))
+        .finally(() => setIsLoading(false));
+      return;
+    }
+
     if (mediaType === "movie") {
       if (urlQuery) {
         setIsLoading(true);
@@ -194,7 +252,7 @@ function DiscoverPageInner() {
           .finally(() => setIsLoading(false));
       }
     }
-  }, [urlQuery, mediaType]);
+  }, [urlQuery, mediaType, personId, genreId, genreMedia, fetchSeasonBanners]);
 
   useEffect(() => {
     if (!gridRef.current) return;
@@ -262,31 +320,151 @@ function DiscoverPageInner() {
 
   // ── Display calculations ──────────────────────────────────────────────────
 
-  const filteredMovies = movies.filter((m) => urlQuery ? true : !watchlistEntries[m.id]);
-  const displayMovies = urlQuery
+  const isPersonMode = !!personId;
+  const isGenreMode = !!genreId;
+  const suppressWatchlistFilter = !!urlQuery || isPersonMode || isGenreMode;
+
+  const filteredMovies = movies.filter((m) => (suppressWatchlistFilter ? true : !watchlistEntries[m.id]));
+  const displayMovies = suppressWatchlistFilter
     ? filteredMovies
     : filteredMovies.slice(0, Math.floor(filteredMovies.length / columns) * columns || filteredMovies.length);
 
-  const filteredTV = tvShows.filter((s) => urlQuery ? true : !tvEntries[s.id]);
-  const displayTV = urlQuery
+  const filteredTV = tvShows.filter((s) => (suppressWatchlistFilter ? true : !tvEntries[s.id]));
+  const displayTV = suppressWatchlistFilter
     ? filteredTV
     : filteredTV.slice(0, Math.floor(filteredTV.length / columns) * columns || filteredTV.length);
 
-  const heading = urlQuery
-    ? `Results for "${urlQuery}"`
-    : mediaType === "movie"
-      ? isPersonalized ? "Recommended for You" : "Discover"
-      : tvPersonalized ? "TV Recommended for You" : "Discover TV Shows";
+  const heading = isPersonMode
+    ? personData?.name || personNameParam || "Person"
+    : isGenreMode
+      ? `${genreName || "Genre"}`
+      : urlQuery
+        ? `Results for "${urlQuery}"`
+        : mediaType === "movie"
+          ? isPersonalized ? "Recommended for You" : "Discover"
+          : tvPersonalized ? "TV Recommended for You" : "Discover TV Shows";
 
-  const isEmpty = mediaType === "movie" ? displayMovies.length === 0 : displayTV.length === 0;
+  const personMovieCast = personData?.movieCast ?? [];
+  const personMovieDirected = personData?.movieCrewDirected ?? [];
+  const personTVCast = personData?.tvCast ?? [];
+  const personTVDirected = personData?.tvCrewDirected ?? [];
+
+  const isEmpty = isPersonMode
+    ? mediaType === "movie"
+      ? personMovieCast.length + personMovieDirected.length === 0
+      : personTVCast.length + personTVDirected.length === 0
+    : mediaType === "movie"
+      ? displayMovies.length === 0
+      : displayTV.length === 0;
+
+  const renderMovieGrid = (arr: TMDBMovie[], key: string) => (
+    <div key={key} className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))" }}>
+      {arr.map((movie) => {
+        const existingEntry = watchlistEntries[movie.id];
+        return (
+          <MovieCard
+            key={movie.id}
+            id={movie.id}
+            title={movie.title}
+            posterPath={movie.poster_path}
+            releaseDate={movie.release_date}
+            overview={movie.overview}
+            rating={movie.vote_average}
+            onPlayTrailer={(id) => setTrailerMovie({ id, title: movie.title })}
+            thumbRating={
+              <ThumbRating
+                rating={existingEntry?.rating || 0}
+                onChange={(r) => handleMovieRating(movie.id, r)}
+                showLabels={false}
+                notInterested={existingEntry?.status === "NOT_INTERESTED"}
+                onNotInterested={() => handleNotInterested(movie.id)}
+              />
+            }
+          >
+            <button
+              onClick={() => setSelectedMovie({ id: movie.id, title: movie.title })}
+              className="w-full px-3 py-2.5 text-white rounded-md transition-all duration-200 text-sm cursor-pointer hover:opacity-90 hover:scale-105"
+              style={{ backgroundColor: "var(--accent)" }}
+            >
+              {existingEntry ? "Update" : "Add"}
+            </button>
+          </MovieCard>
+        );
+      })}
+    </div>
+  );
+
+  const renderTVGrid = (arr: TMDBTVShow[], key: string) => (
+    <div key={key} className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))" }}>
+      {arr.map((show) => {
+        const existingEntry = tvEntries[show.id];
+        return (
+          <TVShowCard
+            key={show.id}
+            id={show.id}
+            name={show.name}
+            posterPath={show.poster_path}
+            firstAirDate={show.first_air_date}
+            overview={show.overview}
+            rating={show.vote_average}
+            watchingStatus={existingEntry?.status}
+            seasonBanner={seasonBanners[show.id] ?? null}
+            thumbRating={
+              <ThumbRating
+                rating={existingEntry?.rating || 0}
+                onChange={(r) => handleTVRating(show.id, r)}
+                showLabels={false}
+              />
+            }
+          >
+            <button
+              onClick={() => setSelectedShow({ id: show.id, name: show.name })}
+              className="w-full px-3 py-2.5 text-white rounded-md transition-all duration-200 text-sm cursor-pointer hover:opacity-90 hover:scale-105"
+              style={{ backgroundColor: "var(--accent)" }}
+            >
+              {existingEntry ? "Update" : "Add"}
+            </button>
+          </TVShowCard>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6">
       {/* Title + toggle */}
       <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
-        <h1 className="text-2xl sm:text-3xl font-bold" style={{ color: "var(--primary)" }}>
-          {heading}
-        </h1>
+        <div className="flex items-center gap-3 min-w-0">
+          {isPersonMode && personData?.profilePath && (
+            <div
+              className="shrink-0 rounded-full overflow-hidden"
+              style={{ width: 56, height: 56, backgroundColor: "var(--border)" }}
+            >
+              <Image
+                src={`https://image.tmdb.org/t/p/w185${personData.profilePath}`}
+                alt={personData.name}
+                width={56}
+                height={56}
+                className="object-cover w-full h-full"
+              />
+            </div>
+          )}
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold" style={{ color: "var(--primary)" }}>
+              {heading}
+            </h1>
+            {isPersonMode && personData?.knownFor && (
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                {personData.knownFor === "Directing" ? "Director" : personData.knownFor === "Acting" ? "Actor" : personData.knownFor}
+              </p>
+            )}
+            {isGenreMode && (
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                {genreMedia === "tv" ? "TV shows" : "Movies"}
+              </p>
+            )}
+          </div>
+        </div>
 
         {/* Movies / TV toggle */}
         <div
@@ -318,7 +496,7 @@ function DiscoverPageInner() {
       </div>
 
       {/* Nudge (movies only) */}
-      {mediaType === "movie" && showNudge && !nudgeDismissed && !urlQuery && (
+      {mediaType === "movie" && showNudge && !nudgeDismissed && !urlQuery && !isPersonMode && !isGenreMode && (
         <div
           className="flex items-center justify-between gap-4 px-4 py-3 mb-6 rounded-lg border text-sm"
           style={{ borderColor: "var(--accent)", backgroundColor: "color-mix(in srgb, var(--accent) 10%, var(--card-bg))" }}
@@ -347,79 +525,57 @@ function DiscoverPageInner() {
         </div>
       )}
 
-      {/* Movies grid */}
-      {!isLoading && mediaType === "movie" && displayMovies.length > 0 && (
-        <div ref={gridRef} className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))" }}>
-          {displayMovies.map((movie) => {
-            const existingEntry = watchlistEntries[movie.id];
-            return (
-              <MovieCard
-                key={movie.id}
-                id={movie.id}
-                title={movie.title}
-                posterPath={movie.poster_path}
-                releaseDate={movie.release_date}
-                overview={movie.overview}
-                rating={movie.vote_average}
-                onPlayTrailer={(id) => setTrailerMovie({ id, title: movie.title })}
-                thumbRating={
-                  <ThumbRating
-                    rating={existingEntry?.rating || 0}
-                    onChange={(r) => handleMovieRating(movie.id, r)}
-                    showLabels={false}
-                    notInterested={existingEntry?.status === "NOT_INTERESTED"}
-                    onNotInterested={() => handleNotInterested(movie.id)}
-                  />
-                }
-              >
-                <button
-                  onClick={() => setSelectedMovie({ id: movie.id, title: movie.title })}
-                  className="w-full px-3 py-2.5 text-white rounded-md transition-all duration-200 text-sm cursor-pointer hover:opacity-90 hover:scale-105"
-                  style={{ backgroundColor: "var(--accent)" }}
-                >
-                  {existingEntry ? "Update" : "Add"}
-                </button>
-              </MovieCard>
-            );
-          })}
+      {/* Person mode: sections */}
+      {!isLoading && isPersonMode && mediaType === "movie" && (
+        <div ref={gridRef} className="space-y-8">
+          {personMovieCast.length > 0 && (
+            <div>
+              <h2 className="text-lg font-semibold mb-3" style={{ color: "var(--foreground)" }}>
+                Movies with {personData?.name || personNameParam}
+              </h2>
+              {renderMovieGrid(personMovieCast, "movie-cast")}
+            </div>
+          )}
+          {personMovieDirected.length > 0 && (
+            <div>
+              <h2 className="text-lg font-semibold mb-3" style={{ color: "var(--foreground)" }}>
+                Movies directed by {personData?.name || personNameParam}
+              </h2>
+              {renderMovieGrid(personMovieDirected, "movie-directed")}
+            </div>
+          )}
         </div>
       )}
 
-      {/* TV grid */}
-      {!isLoading && mediaType === "tv" && displayTV.length > 0 && (
-        <div ref={gridRef} className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))" }}>
-          {displayTV.map((show) => {
-            const existingEntry = tvEntries[show.id];
-            return (
-              <TVShowCard
-                key={show.id}
-                id={show.id}
-                name={show.name}
-                posterPath={show.poster_path}
-                firstAirDate={show.first_air_date}
-                overview={show.overview}
-                rating={show.vote_average}
-                watchingStatus={existingEntry?.status}
-                seasonBanner={seasonBanners[show.id] ?? null}
-                thumbRating={
-                  <ThumbRating
-                    rating={existingEntry?.rating || 0}
-                    onChange={(r) => handleTVRating(show.id, r)}
-                    showLabels={false}
-                  />
-                }
-              >
-                <button
-                  onClick={() => setSelectedShow({ id: show.id, name: show.name })}
-                  className="w-full px-3 py-2.5 text-white rounded-md transition-all duration-200 text-sm cursor-pointer hover:opacity-90 hover:scale-105"
-                  style={{ backgroundColor: "var(--accent)" }}
-                >
-                  {existingEntry ? "Update" : "Add"}
-                </button>
-              </TVShowCard>
-            );
-          })}
+      {!isLoading && isPersonMode && mediaType === "tv" && (
+        <div ref={gridRef} className="space-y-8">
+          {personTVCast.length > 0 && (
+            <div>
+              <h2 className="text-lg font-semibold mb-3" style={{ color: "var(--foreground)" }}>
+                TV shows with {personData?.name || personNameParam}
+              </h2>
+              {renderTVGrid(personTVCast, "tv-cast")}
+            </div>
+          )}
+          {personTVDirected.length > 0 && (
+            <div>
+              <h2 className="text-lg font-semibold mb-3" style={{ color: "var(--foreground)" }}>
+                TV shows directed by {personData?.name || personNameParam}
+              </h2>
+              {renderTVGrid(personTVDirected, "tv-directed")}
+            </div>
+          )}
         </div>
+      )}
+
+      {/* Movies grid (normal / genre / query mode) */}
+      {!isLoading && !isPersonMode && mediaType === "movie" && displayMovies.length > 0 && (
+        <div ref={gridRef}>{renderMovieGrid(displayMovies, "movies")}</div>
+      )}
+
+      {/* TV grid (normal / genre / query mode) */}
+      {!isLoading && !isPersonMode && mediaType === "tv" && displayTV.length > 0 && (
+        <div ref={gridRef}>{renderTVGrid(displayTV, "tvshows")}</div>
       )}
 
       {!isLoading && isEmpty && (
@@ -428,11 +584,15 @@ function DiscoverPageInner() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <p className="text-base" style={{ color: "var(--text-muted)" }}>
-            {urlQuery
-              ? `No ${mediaType === "tv" ? "TV shows" : "movies"} found for "${urlQuery}"`
-              : `No ${mediaType === "tv" ? "TV shows" : "movies"} available.`}
+            {isPersonMode
+              ? `No ${mediaType === "tv" ? "TV credits" : "movie credits"} for ${personData?.name || personNameParam}`
+              : isGenreMode
+                ? `No ${mediaType === "tv" ? "TV shows" : "movies"} found for ${genreName}`
+                : urlQuery
+                  ? `No ${mediaType === "tv" ? "TV shows" : "movies"} found for "${urlQuery}"`
+                  : `No ${mediaType === "tv" ? "TV shows" : "movies"} available.`}
           </p>
-          {urlQuery && (
+          {urlQuery && !isPersonMode && !isGenreMode && (
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>Try a different search term</p>
           )}
         </div>

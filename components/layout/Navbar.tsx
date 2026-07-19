@@ -4,15 +4,47 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import toast from "react-hot-toast";
-import type { TMDBMovie } from "@/lib/tmdb";
 import FeedbackModal from "@/components/ui/FeedbackModal";
+
+interface MultiTitle {
+  id: number;
+  title?: string;
+  name?: string;
+  poster_path: string | null;
+  release_date?: string;
+  first_air_date?: string;
+  media_type: "movie" | "tv";
+}
+
+interface MultiPerson {
+  id: number;
+  name: string;
+  profile_path: string | null;
+  known_for_department: string | null;
+}
+
+interface MultiGenre {
+  id: number;
+  name: string;
+  media: "movie" | "tv";
+}
+
+interface MultiSuggestions {
+  movies: MultiTitle[];
+  tvShows: MultiTitle[];
+  people: MultiPerson[];
+  genres: MultiGenre[];
+}
+
+const EMPTY_SUGGESTIONS: MultiSuggestions = { movies: [], tvShows: [], people: [], genres: [] };
 
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [suggestions, setSuggestions] = useState<TMDBMovie[]>([]);
+  const [suggestions, setSuggestions] = useState<MultiSuggestions>(EMPTY_SUGGESTIONS);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -53,26 +85,34 @@ export default function Navbar() {
 
   useEffect(() => {
     if (query.trim().length < 2) {
-      setSuggestions([]);
+      setSuggestions(EMPTY_SUGGESTIONS);
       setShowSuggestions(false);
       return;
     }
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/movies/search?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`/api/search/multi?q=${encodeURIComponent(query)}`);
         if (res.ok) {
           const data = await res.json();
-          setSuggestions(
-            (data.results || [])
-              .sort((a: TMDBMovie, b: TMDBMovie) => b.popularity - a.popularity)
-              .slice(0, 5)
-          );
+          setSuggestions({
+            movies: data.movies || [],
+            tvShows: data.tvShows || [],
+            people: data.people || [],
+            genres: data.genres || [],
+          });
           setShowSuggestions(true);
         }
       } catch {}
     }, 300);
     return () => clearTimeout(timer);
   }, [query]);
+
+  const hasSuggestions =
+    suggestions.movies.length +
+      suggestions.tvShows.length +
+      suggestions.people.length +
+      suggestions.genres.length >
+    0;
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,10 +121,162 @@ export default function Navbar() {
     router.push(`/search?q=${encodeURIComponent(query.trim())}`);
   };
 
-  const handleSuggestion = (movie: TMDBMovie) => {
-    setQuery(movie.title);
+  const handleTitle = (title: MultiTitle) => {
+    const label = title.title || title.name || "";
+    setQuery(label);
     setShowSuggestions(false);
-    router.push(`/search?q=${encodeURIComponent(movie.title)}`);
+    router.push(`/search?q=${encodeURIComponent(label)}`);
+  };
+
+  const handlePerson = (person: MultiPerson) => {
+    setQuery(person.name);
+    setShowSuggestions(false);
+    router.push(`/search?personId=${person.id}&name=${encodeURIComponent(person.name)}`);
+  };
+
+  const handleGenre = (genre: MultiGenre) => {
+    setQuery(genre.name);
+    setShowSuggestions(false);
+    router.push(
+      `/search?genreId=${genre.id}&genreName=${encodeURIComponent(genre.name)}&genreMedia=${genre.media}`
+    );
+  };
+
+  const renderSuggestions = (variant: "desktop" | "mobile") => {
+    if (!hasSuggestions) return null;
+    const rowPad = variant === "desktop" ? "px-3 py-2" : "px-4 py-2.5";
+    const headerPad = variant === "desktop" ? "px-3 pt-2 pb-1" : "px-4 pt-2.5 pb-1";
+    return (
+      <div className="absolute z-50 w-full mt-1 bg-[var(--card-bg)] border border-[var(--border)] rounded-md shadow-lg max-h-96 overflow-y-auto">
+        {(suggestions.movies.length > 0 || suggestions.tvShows.length > 0) && (
+          <>
+            <p
+              className={`${headerPad} text-[10px] font-semibold uppercase tracking-wider`}
+              style={{ color: "var(--text-muted)" }}
+            >
+              Titles
+            </p>
+            {suggestions.movies.map((m) => (
+              <button
+                key={`m-${m.id}`}
+                type="button"
+                onClick={() => handleTitle(m)}
+                className={`w-full ${rowPad} text-left hover:bg-[var(--hover-bg)] transition-colors flex items-center gap-2`}
+              >
+                <span className="text-sm font-medium truncate" style={{ color: "var(--primary)" }}>
+                  {m.title}
+                </span>
+                {m.release_date && (
+                  <span className="text-xs shrink-0" style={{ color: "var(--text-muted)" }}>
+                    ({new Date(m.release_date).getFullYear()})
+                  </span>
+                )}
+                <span
+                  className="text-[9px] font-semibold uppercase tracking-wider shrink-0 ml-auto px-1.5 py-0.5 rounded"
+                  style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}
+                >
+                  Movie
+                </span>
+              </button>
+            ))}
+            {suggestions.tvShows.map((s) => (
+              <button
+                key={`t-${s.id}`}
+                type="button"
+                onClick={() => handleTitle(s)}
+                className={`w-full ${rowPad} text-left hover:bg-[var(--hover-bg)] transition-colors flex items-center gap-2`}
+              >
+                <span className="text-sm font-medium truncate" style={{ color: "var(--primary)" }}>
+                  {s.name}
+                </span>
+                {s.first_air_date && (
+                  <span className="text-xs shrink-0" style={{ color: "var(--text-muted)" }}>
+                    ({new Date(s.first_air_date).getFullYear()})
+                  </span>
+                )}
+                <span
+                  className="text-[9px] font-semibold uppercase tracking-wider shrink-0 ml-auto px-1.5 py-0.5 rounded"
+                  style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}
+                >
+                  TV
+                </span>
+              </button>
+            ))}
+          </>
+        )}
+
+        {suggestions.people.length > 0 && (
+          <>
+            <p
+              className={`${headerPad} text-[10px] font-semibold uppercase tracking-wider`}
+              style={{ color: "var(--text-muted)", borderTop: "1px solid var(--border)" }}
+            >
+              People
+            </p>
+            {suggestions.people.map((p) => (
+              <button
+                key={`p-${p.id}`}
+                type="button"
+                onClick={() => handlePerson(p)}
+                className={`w-full ${rowPad} text-left hover:bg-[var(--hover-bg)] transition-colors flex items-center gap-2`}
+              >
+                <div
+                  className="shrink-0 rounded-full overflow-hidden"
+                  style={{ width: 24, height: 24, backgroundColor: "var(--border)" }}
+                >
+                  {p.profile_path && (
+                    <Image
+                      src={`https://image.tmdb.org/t/p/w45${p.profile_path}`}
+                      alt={p.name}
+                      width={24}
+                      height={24}
+                      className="object-cover w-full h-full"
+                    />
+                  )}
+                </div>
+                <span className="text-sm font-medium truncate" style={{ color: "var(--primary)" }}>
+                  {p.name}
+                </span>
+                {p.known_for_department && (
+                  <span className="text-xs shrink-0 ml-auto" style={{ color: "var(--text-muted)" }}>
+                    {p.known_for_department === "Directing" ? "Director" : p.known_for_department === "Acting" ? "Actor" : p.known_for_department}
+                  </span>
+                )}
+              </button>
+            ))}
+          </>
+        )}
+
+        {suggestions.genres.length > 0 && (
+          <>
+            <p
+              className={`${headerPad} text-[10px] font-semibold uppercase tracking-wider`}
+              style={{ color: "var(--text-muted)", borderTop: "1px solid var(--border)" }}
+            >
+              Genres
+            </p>
+            <div className={`${rowPad} flex flex-wrap gap-1.5`}>
+              {suggestions.genres.map((g) => (
+                <button
+                  key={`g-${g.media}-${g.id}`}
+                  type="button"
+                  onClick={() => handleGenre(g)}
+                  className="px-2.5 py-1 rounded-full text-xs transition-colors hover:opacity-80"
+                  style={{
+                    backgroundColor: "color-mix(in srgb, var(--accent) 12%, var(--card-bg))",
+                    color: "var(--accent)",
+                    border: "1px solid var(--accent)",
+                  }}
+                >
+                  {g.name}
+                  <span className="ml-1 opacity-70">· {g.media === "movie" ? "movies" : "TV"}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    );
   };
 
   const navLinks = [
@@ -134,9 +326,9 @@ export default function Navbar() {
                     type="text"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                    onFocus={() => { if (hasSuggestions) setShowSuggestions(true); }}
                     onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                    placeholder="Search movies..."
+                    placeholder="Search titles, people, genres..."
                     className="w-full px-3 py-1.5 text-sm border rounded-l-md focus:outline-none focus:ring-1 focus:ring-[var(--accent)] bg-[var(--card-bg)]"
                     style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
                   />
@@ -151,25 +343,7 @@ export default function Navbar() {
                   </button>
                 </div>
               </form>
-              {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-[var(--card-bg)] border border-[var(--border)] rounded-md shadow-lg max-h-60 overflow-y-auto">
-                  {suggestions.map((movie) => (
-                    <button
-                      key={movie.id}
-                      type="button"
-                      onClick={() => handleSuggestion(movie)}
-                      className="w-full px-3 py-2 text-left hover:bg-[var(--hover-bg)] transition-colors flex items-center gap-2"
-                    >
-                      <span className="text-sm font-medium" style={{ color: "var(--primary)" }}>{movie.title}</span>
-                      {movie.release_date && (
-                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                          ({new Date(movie.release_date).getFullYear()})
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
+              {showSuggestions && renderSuggestions("desktop")}
             </div>
 
             {/* Feedback icon */}
@@ -271,9 +445,9 @@ export default function Navbar() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                onFocus={() => { if (hasSuggestions) setShowSuggestions(true); }}
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                placeholder="Search movies..."
+                placeholder="Search titles, people, genres..."
                 className="w-full px-4 py-3 text-base border rounded-l-md focus:outline-none focus:ring-1 focus:ring-[var(--accent)] bg-[var(--card-bg)]"
                 style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
               />
@@ -288,25 +462,7 @@ export default function Navbar() {
               </button>
             </div>
           </form>
-          {showSuggestions && suggestions.length > 0 && (
-            <div className="absolute z-50 w-full mt-1 bg-[var(--card-bg)] border border-[var(--border)] rounded-md shadow-lg max-h-60 overflow-y-auto">
-              {suggestions.map((movie) => (
-                <button
-                  key={movie.id}
-                  type="button"
-                  onClick={() => handleSuggestion(movie)}
-                  className="w-full px-4 py-3 text-left hover:bg-[var(--hover-bg)] transition-colors flex items-center gap-2"
-                >
-                  <span className="text-sm font-medium" style={{ color: "var(--primary)" }}>{movie.title}</span>
-                  {movie.release_date && (
-                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      ({new Date(movie.release_date).getFullYear()})
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
+          {showSuggestions && renderSuggestions("mobile")}
         </div>
 
         {/* Mobile nav links */}

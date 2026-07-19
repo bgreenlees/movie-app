@@ -375,6 +375,96 @@ class TMDBClient {
     return response.json();
   }
 
+  // ── Multi search + person ───────────────────────────────────────────────────
+
+  async searchMulti(query: string): Promise<{
+    results: Array<
+      | (TMDBMovie & { media_type: "movie" })
+      | (TMDBTVShow & { media_type: "tv" })
+      | { media_type: "person"; id: number; name: string; profile_path: string | null; known_for_department: string | null; popularity: number }
+    >;
+  }> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url = `${this.baseUrl}/search/multi?query=${encodeURIComponent(query)}&api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 3600 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
+  async getPersonDetails(personId: number): Promise<{
+    id: number;
+    name: string;
+    profile_path: string | null;
+    known_for_department: string | null;
+    biography: string;
+  }> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url = `${this.baseUrl}/person/${personId}?api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 86400 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
+  async getPersonMovieCredits(personId: number): Promise<{
+    cast: Array<TMDBMovie & { character: string }>;
+    crew: Array<TMDBMovie & { job: string; department: string }>;
+  }> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url = `${this.baseUrl}/person/${personId}/movie_credits?api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 86400 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
+  async getPersonTVCredits(personId: number): Promise<{
+    cast: Array<TMDBTVShow & { character: string }>;
+    crew: Array<TMDBTVShow & { job: string; department: string }>;
+  }> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url = `${this.baseUrl}/person/${personId}/tv_credits?api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 86400 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
+  async getMovieGenres(): Promise<Array<{ id: number; name: string }>> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url = `${this.baseUrl}/genre/movie/list?api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 604800 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    const data = await response.json();
+    return data.genres || [];
+  }
+
+  async getTVGenres(): Promise<Array<{ id: number; name: string }>> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url = `${this.baseUrl}/genre/tv/list?api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 604800 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    const data = await response.json();
+    return data.genres || [];
+  }
+
+  async discoverMoviesByGenre(genreId: number): Promise<TMDBSearchResponse> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url =
+      `${this.baseUrl}/discover/movie?with_genres=${genreId}` +
+      `&sort_by=popularity.desc&vote_count.gte=200&api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 3600 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
+  async discoverTVByGenreSingle(genreId: number): Promise<TMDBTVSearchResponse> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url =
+      `${this.baseUrl}/discover/tv?with_genres=${genreId}` +
+      `&sort_by=popularity.desc&vote_count.gte=100&api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 3600 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
   async discoverTVByGenre(genreIds: number[]): Promise<TMDBTVSearchResponse> {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
     const url =
