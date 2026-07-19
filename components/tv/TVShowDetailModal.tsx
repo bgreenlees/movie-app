@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Image from "next/image";
-import type { TMDBWatchProvider, TMDBEpisode, TMDBSeason, TMDBNextEpisode } from "@/lib/tmdb";
+import type { TMDBWatchProvider, TMDBEpisode, TMDBSeason, TMDBNextEpisode, TMDBTVShow } from "@/lib/tmdb";
 
 interface CastMember {
   id: number;
@@ -53,6 +53,12 @@ export default function TVShowDetailModal({
   overview,
   onClose,
 }: TVShowDetailModalProps) {
+  const [currentId, setCurrentId] = useState<number | null>(tvId);
+  const [currentName, setCurrentName] = useState<string>(tvName);
+  const [history, setHistory] = useState<Array<{ id: number; name: string }>>([]);
+  const rootPosterRef = useRef<string | null | undefined>(posterPath);
+  const rootOverviewRef = useRef<string | undefined>(overview);
+
   const [details, setDetails] = useState<TVDetails | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [providers, setProviders] = useState<{ flatrate: TMDBWatchProvider[]; rent: TMDBWatchProvider[] }>({ flatrate: [], rent: [] });
@@ -61,17 +67,46 @@ export default function TVShowDetailModal({
   const [seasonEpisodes, setSeasonEpisodes] = useState<Record<number, TMDBEpisode[]>>({});
   const [loadingSeasons, setLoadingSeasons] = useState<Set<number>>(new Set());
 
+  const [recs, setRecs] = useState<TMDBTVShow[]>([]);
+  const [recsLoading, setRecsLoading] = useState(false);
+  const [watchlistIds, setWatchlistIds] = useState<Set<number>>(new Set());
+
   useEffect(() => {
-    if (!tvId) return;
+    if (tvId === null) return;
+    setCurrentId(tvId);
+    setCurrentName(tvName);
+    setHistory([]);
+    rootPosterRef.current = posterPath;
+    rootOverviewRef.current = overview;
+  }, [tvId, tvName, posterPath, overview]);
+
+  useEffect(() => {
+    if (tvId === null) return;
+    fetch("/api/tv/watchlist")
+      .then((r) => r.json())
+      .then((d) => {
+        const ids = new Set<number>();
+        (d.entries || []).forEach((e: any) => {
+          if (typeof e.tvShowId === "number") ids.add(e.tvShowId);
+        });
+        setWatchlistIds(ids);
+      })
+      .catch(() => {});
+  }, [tvId]);
+
+  useEffect(() => {
+    if (!currentId) return;
     setDetails(null);
     setProviders({ flatrate: [], rent: [] });
     setExpandedSeason(null);
     setSeasonEpisodes({});
+    setRecs([]);
     setIsLoading(true);
+    setRecsLoading(true);
 
     Promise.all([
-      fetch(`/api/tv/${tvId}/credits`).then((r) => r.json()),
-      fetch(`/api/tv/${tvId}/providers`).then((r) => r.json()),
+      fetch(`/api/tv/${currentId}/credits`).then((r) => r.json()),
+      fetch(`/api/tv/${currentId}/providers`).then((r) => r.json()),
       fetch("/api/user/streaming").then((r) => r.json()),
     ])
       .then(([creditsData, providerData, userData]) => {
@@ -81,7 +116,13 @@ export default function TVShowDetailModal({
       })
       .catch(() => setDetails(null))
       .finally(() => setIsLoading(false));
-  }, [tvId]);
+
+    fetch(`/api/tv/${currentId}/recommendations`)
+      .then((r) => r.json())
+      .then((d) => setRecs(d.results || []))
+      .catch(() => setRecs([]))
+      .finally(() => setRecsLoading(false));
+  }, [currentId]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -106,7 +147,7 @@ export default function TVShowDetailModal({
     if (!seasonEpisodes[seasonNumber]) {
       setLoadingSeasons((prev) => new Set(prev).add(seasonNumber));
       try {
-        const res = await fetch(`/api/tv/${tvId}/season/${seasonNumber}`);
+        const res = await fetch(`/api/tv/${currentId}/season/${seasonNumber}`);
         const data = await res.json();
         setSeasonEpisodes((prev) => ({ ...prev, [seasonNumber]: data.episodes || [] }));
       } finally {
@@ -119,10 +160,32 @@ export default function TVShowDetailModal({
     }
   };
 
-  if (!tvId) return null;
+  const handleSwapTo = (id: number, name: string) => {
+    setHistory((prev) => [...prev, { id: currentId!, name: currentName }]);
+    setCurrentId(id);
+    setCurrentName(name);
+    setExpandedSeason(null);
+    setSeasonEpisodes({});
+  };
 
-  const displayPoster = details?.poster_path ?? posterPath;
-  const displayOverview = details?.overview ?? overview;
+  const handleBack = () => {
+    setHistory((prev) => {
+      if (prev.length === 0) return prev;
+      const next = prev.slice(0, -1);
+      const last = prev[prev.length - 1];
+      setCurrentId(last.id);
+      setCurrentName(last.name);
+      setExpandedSeason(null);
+      setSeasonEpisodes({});
+      return next;
+    });
+  };
+
+  if (!tvId || !currentId) return null;
+
+  const isRootShow = currentId === tvId;
+  const displayPoster = details?.poster_path ?? (isRootShow ? rootPosterRef.current : null);
+  const displayOverview = details?.overview ?? (isRootShow ? rootOverviewRef.current : undefined);
   const mainSeasons = details?.seasons.filter((s) => s.season_number > 0) ?? [];
   const nextEp = details?.next_episode_to_air;
   const daysAway = nextEp ? daysUntil(nextEp.air_date) : null;
@@ -140,9 +203,23 @@ export default function TVShowDetailModal({
           className="sticky top-0 flex items-center justify-between px-5 py-3 z-10"
           style={{ backgroundColor: "var(--card-bg)", borderBottom: "1px solid var(--border)" }}
         >
-          <h2 className="font-bold text-base truncate pr-4" style={{ color: "var(--primary)" }}>
-            {tvName}
-          </h2>
+          <div className="flex items-center gap-2 min-w-0 flex-1 pr-4">
+            {history.length > 0 && (
+              <button
+                onClick={handleBack}
+                className="shrink-0 hover:opacity-70 transition-opacity"
+                style={{ color: "var(--text-muted)" }}
+                aria-label="Back"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+            )}
+            <h2 className="font-bold text-base truncate" style={{ color: "var(--primary)" }}>
+              {currentName}
+            </h2>
+          </div>
           <button onClick={onClose} className="shrink-0 hover:opacity-70 transition-opacity" style={{ color: "var(--text-muted)" }} aria-label="Close">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -165,7 +242,7 @@ export default function TVShowDetailModal({
                   <div className="shrink-0 rounded-lg overflow-hidden" style={{ width: "120px", aspectRatio: "2/3", backgroundColor: "var(--border)" }}>
                     <Image
                       src={`https://image.tmdb.org/t/p/w300${displayPoster}`}
-                      alt={tvName}
+                      alt={currentName}
                       width={120}
                       height={180}
                       className="object-cover w-full h-full"
@@ -388,6 +465,76 @@ export default function TVShowDetailModal({
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* More like this */}
+              {(recsLoading || recs.length > 0) && (
+                <div className="mt-6">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
+                    More like this
+                  </h3>
+                  {recsLoading ? (
+                    <div className="flex gap-3 overflow-x-auto pb-2">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="shrink-0 rounded-md animate-pulse"
+                          style={{ width: "110px", aspectRatio: "2/3", backgroundColor: "var(--border)" }}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex gap-3 overflow-x-auto pb-2">
+                      {recs.map((rec) => {
+                        const onList = watchlistIds.has(rec.id);
+                        return (
+                          <button
+                            key={rec.id}
+                            onClick={() => handleSwapTo(rec.id, rec.name)}
+                            className="shrink-0 text-left cursor-pointer group"
+                            style={{ width: "110px" }}
+                            title={rec.name}
+                          >
+                            <div
+                              className="relative rounded-md overflow-hidden mb-1.5"
+                              style={{ width: "110px", aspectRatio: "2/3", backgroundColor: "var(--border)" }}
+                            >
+                              {rec.poster_path && (
+                                <Image
+                                  src={`https://image.tmdb.org/t/p/w300${rec.poster_path}`}
+                                  alt={rec.name}
+                                  width={110}
+                                  height={165}
+                                  className="object-cover w-full h-full group-hover:opacity-90 transition-opacity"
+                                />
+                              )}
+                              {onList && (
+                                <div
+                                  className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-white text-[10px] font-semibold leading-none"
+                                  style={{ backgroundColor: "var(--accent)" }}
+                                  title="On your list"
+                                >
+                                  ✓ On list
+                                </div>
+                              )}
+                            </div>
+                            <p
+                              className="text-xs font-medium leading-tight line-clamp-2"
+                              style={{ color: "var(--foreground)" }}
+                            >
+                              {rec.name}
+                            </p>
+                            {typeof rec.vote_average === "number" && rec.vote_average > 0 && (
+                              <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                                ★ {rec.vote_average.toFixed(1)}
+                              </p>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </>

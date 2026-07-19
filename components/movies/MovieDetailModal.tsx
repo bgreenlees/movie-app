@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Image from "next/image";
-import type { TMDBWatchProvider } from "@/lib/tmdb";
+import type { TMDBWatchProvider, TMDBMovie } from "@/lib/tmdb";
 
 interface CastMember {
   id: number;
@@ -41,20 +41,59 @@ export default function MovieDetailModal({
   overview,
   onClose,
 }: MovieDetailModalProps) {
+  const [currentId, setCurrentId] = useState<number | null>(movieId);
+  const [currentTitle, setCurrentTitle] = useState<string>(movieTitle);
+  const [history, setHistory] = useState<Array<{ id: number; title: string }>>([]);
+  const rootPosterRef = useRef<string | null | undefined>(posterPath);
+  const rootOverviewRef = useRef<string | undefined>(overview);
+
   const [details, setDetails] = useState<MovieDetails | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [providers, setProviders] = useState<{ flatrate: TMDBWatchProvider[]; rent: TMDBWatchProvider[] }>({ flatrate: [], rent: [] });
   const [userServices, setUserServices] = useState<Set<number>>(new Set());
 
+  const [recs, setRecs] = useState<TMDBMovie[]>([]);
+  const [recsLoading, setRecsLoading] = useState(false);
+  const [watchlistIds, setWatchlistIds] = useState<Set<number>>(new Set());
+
+  // Reset internal state when the outer prop opens a new modal.
   useEffect(() => {
-    if (!movieId) return;
+    if (movieId === null) return;
+    setCurrentId(movieId);
+    setCurrentTitle(movieTitle);
+    setHistory([]);
+    rootPosterRef.current = posterPath;
+    rootOverviewRef.current = overview;
+  }, [movieId, movieTitle, posterPath, overview]);
+
+  // Fetch watchlist ids once per open (not per swap).
+  useEffect(() => {
+    if (movieId === null) return;
+    Promise.all([
+      fetch("/api/watchlist?status=WANT_TO_WATCH").then((r) => r.json()).catch(() => ({ entries: [] })),
+      fetch("/api/watchlist?status=WATCHED").then((r) => r.json()).catch(() => ({ entries: [] })),
+      fetch("/api/watchlist?status=NOT_INTERESTED").then((r) => r.json()).catch(() => ({ entries: [] })),
+    ]).then(([want, watched, not]) => {
+      const ids = new Set<number>();
+      [...(want.entries || []), ...(watched.entries || []), ...(not.entries || [])].forEach((e: any) => {
+        if (typeof e.movieId === "number") ids.add(e.movieId);
+      });
+      setWatchlistIds(ids);
+    });
+  }, [movieId]);
+
+  // Fetch details + providers + recs whenever the currently viewed movie changes.
+  useEffect(() => {
+    if (!currentId) return;
     setDetails(null);
     setProviders({ flatrate: [], rent: [] });
+    setRecs([]);
     setIsLoading(true);
+    setRecsLoading(true);
 
     Promise.all([
-      fetch(`/api/movies/${movieId}/credits`).then((r) => r.json()),
-      fetch(`/api/movies/${movieId}/providers`).then((r) => r.json()),
+      fetch(`/api/movies/${currentId}/credits`).then((r) => r.json()),
+      fetch(`/api/movies/${currentId}/providers`).then((r) => r.json()),
       fetch("/api/user/streaming").then((r) => r.json()),
     ])
       .then(([creditsData, providerData, userData]) => {
@@ -64,7 +103,13 @@ export default function MovieDetailModal({
       })
       .catch(() => setDetails(null))
       .finally(() => setIsLoading(false));
-  }, [movieId]);
+
+    fetch(`/api/movies/${currentId}/recommendations`)
+      .then((r) => r.json())
+      .then((d) => setRecs(d.results || []))
+      .catch(() => setRecs([]))
+      .finally(() => setRecsLoading(false));
+  }, [currentId]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -80,15 +125,33 @@ export default function MovieDetailModal({
     };
   }, [movieId, onClose]);
 
-  if (!movieId) return null;
+  if (!movieId || !currentId) return null;
 
   const director = details?.crew.find((c) => c.job === "Director");
   const writers = details?.crew
     .filter((c) => c.department === "Writing" && (c.job === "Screenplay" || c.job === "Writer" || c.job === "Story"))
     .slice(0, 3);
   const cast = details?.cast ?? [];
-  const displayPoster = details?.poster_path ?? posterPath;
-  const displayOverview = details?.overview ?? overview;
+  const isRootMovie = currentId === movieId;
+  const displayPoster = details?.poster_path ?? (isRootMovie ? rootPosterRef.current : null);
+  const displayOverview = details?.overview ?? (isRootMovie ? rootOverviewRef.current : undefined);
+
+  const handleSwapTo = (id: number, title: string) => {
+    setHistory((prev) => [...prev, { id: currentId, title: currentTitle }]);
+    setCurrentId(id);
+    setCurrentTitle(title);
+  };
+
+  const handleBack = () => {
+    setHistory((prev) => {
+      if (prev.length === 0) return prev;
+      const next = prev.slice(0, -1);
+      const last = prev[prev.length - 1];
+      setCurrentId(last.id);
+      setCurrentTitle(last.title);
+      return next;
+    });
+  };
 
   return (
     <div
@@ -106,9 +169,23 @@ export default function MovieDetailModal({
           className="sticky top-0 flex items-center justify-between px-5 py-3 z-10"
           style={{ backgroundColor: "var(--card-bg)", borderBottom: "1px solid var(--border)" }}
         >
-          <h2 className="font-bold text-base truncate pr-4" style={{ color: "var(--primary)" }}>
-            {movieTitle}
-          </h2>
+          <div className="flex items-center gap-2 min-w-0 flex-1 pr-4">
+            {history.length > 0 && (
+              <button
+                onClick={handleBack}
+                className="shrink-0 hover:opacity-70 transition-opacity"
+                style={{ color: "var(--text-muted)" }}
+                aria-label="Back"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+            )}
+            <h2 className="font-bold text-base truncate" style={{ color: "var(--primary)" }}>
+              {currentTitle}
+            </h2>
+          </div>
           <button
             onClick={onClose}
             className="shrink-0 hover:opacity-70 transition-opacity"
@@ -140,7 +217,7 @@ export default function MovieDetailModal({
                   >
                     <Image
                       src={`https://image.tmdb.org/t/p/w300${displayPoster}`}
-                      alt={movieTitle}
+                      alt={currentTitle}
                       width={120}
                       height={180}
                       className="object-cover w-full h-full"
@@ -323,6 +400,79 @@ export default function MovieDetailModal({
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* More like this */}
+              {(recsLoading || recs.length > 0) && (
+                <div className="mt-6">
+                  <h3
+                    className="text-xs font-semibold uppercase tracking-wider mb-3"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    More like this
+                  </h3>
+                  {recsLoading ? (
+                    <div className="flex gap-3 overflow-x-auto pb-2">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="shrink-0 rounded-md animate-pulse"
+                          style={{ width: "110px", aspectRatio: "2/3", backgroundColor: "var(--border)" }}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex gap-3 overflow-x-auto pb-2">
+                      {recs.map((rec) => {
+                        const onList = watchlistIds.has(rec.id);
+                        return (
+                          <button
+                            key={rec.id}
+                            onClick={() => handleSwapTo(rec.id, rec.title)}
+                            className="shrink-0 text-left cursor-pointer group"
+                            style={{ width: "110px" }}
+                            title={rec.title}
+                          >
+                            <div
+                              className="relative rounded-md overflow-hidden mb-1.5"
+                              style={{ width: "110px", aspectRatio: "2/3", backgroundColor: "var(--border)" }}
+                            >
+                              {rec.poster_path && (
+                                <Image
+                                  src={`https://image.tmdb.org/t/p/w300${rec.poster_path}`}
+                                  alt={rec.title}
+                                  width={110}
+                                  height={165}
+                                  className="object-cover w-full h-full group-hover:opacity-90 transition-opacity"
+                                />
+                              )}
+                              {onList && (
+                                <div
+                                  className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-white text-[10px] font-semibold leading-none"
+                                  style={{ backgroundColor: "var(--accent)" }}
+                                  title="On your list"
+                                >
+                                  ✓ On list
+                                </div>
+                              )}
+                            </div>
+                            <p
+                              className="text-xs font-medium leading-tight line-clamp-2"
+                              style={{ color: "var(--foreground)" }}
+                            >
+                              {rec.title}
+                            </p>
+                            {typeof rec.vote_average === "number" && rec.vote_average > 0 && (
+                              <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                                ★ {rec.vote_average.toFixed(1)}
+                              </p>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </>
