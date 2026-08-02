@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import type { TMDBWatchProvider, TMDBMovie } from "@/lib/tmdb";
 import AddMovieModal from "./AddMovieModal";
 import ShareButton from "@/components/ui/ShareButton";
@@ -52,6 +53,7 @@ export default function MovieDetailModal({
   overview,
   onClose,
 }: MovieDetailModalProps) {
+  const router = useRouter();
   const [currentId, setCurrentId] = useState<number | null>(movieId);
   const [currentTitle, setCurrentTitle] = useState<string>(movieTitle);
   const [history, setHistory] = useState<Array<{ id: number; title: string }>>([]);
@@ -396,7 +398,11 @@ export default function MovieDetailModal({
                   </h3>
                   <div className="grid grid-cols-4 gap-3">
                     {cast.map((member) => (
-                      <div key={member.id} className="text-center">
+                      <button
+                        key={member.id}
+                        onClick={() => router.push(`/search?personId=${member.id}&name=${encodeURIComponent(member.name)}`)}
+                        className="text-center hover:opacity-80 transition-opacity"
+                      >
                         <div
                           className="rounded-full overflow-hidden mx-auto mb-1.5"
                           style={{
@@ -428,7 +434,7 @@ export default function MovieDetailModal({
                         <p className="text-xs leading-tight mt-0.5" style={{ color: "var(--text-muted)" }}>
                           {member.character}
                         </p>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>

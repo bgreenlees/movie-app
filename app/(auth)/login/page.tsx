@@ -54,7 +54,7 @@ export default function LoginPage() {
                 </linearGradient>
               </defs>
             </svg>
-            <span className="text-2xl font-bold tracking-tight" style={{ color: "#fff" }}>Flickpick</span>
+            <span className="text-2xl font-bold tracking-tight" style={{ color: "#fff" }}>What&apos;s Up Next</span>
           </div>
           <h1 className="text-4xl font-bold mb-3 tracking-tight" style={{ color: "#fff" }}>
             Welcome back.

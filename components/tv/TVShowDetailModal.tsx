@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import type { TMDBWatchProvider, TMDBEpisode, TMDBSeason, TMDBNextEpisode, TMDBTVShow } from "@/lib/tmdb";
 import AddTVModal from "./AddTVModal";
 import ShareButton from "@/components/ui/ShareButton";
@@ -65,6 +66,7 @@ export default function TVShowDetailModal({
   overview,
   onClose,
 }: TVShowDetailModalProps) {
+  const router = useRouter();
   const [currentId, setCurrentId] = useState<number | null>(tvId);
   const [currentName, setCurrentName] = useState<string>(tvName);
   const [history, setHistory] = useState<Array<{ id: number; name: string }>>([]);
@@ -484,7 +486,11 @@ export default function TVShowDetailModal({
                   </h3>
                   <div className="grid grid-cols-4 gap-3">
                     {details.cast.map((member) => (
-                      <div key={member.id} className="text-center">
+                      <button
+                        key={member.id}
+                        onClick={() => router.push(`/search?personId=${member.id}&name=${encodeURIComponent(member.name)}`)}
+                        className="text-center hover:opacity-80 transition-opacity"
+                      >
                         <div className="rounded-full overflow-hidden mx-auto mb-1.5" style={{ width: "56px", height: "56px", backgroundColor: "var(--border)" }}>
                           {member.profile_path ? (
                             <Image src={`https://image.tmdb.org/t/p/w185${member.profile_path}`} alt={member.name} width={56} height={56} className="object-cover w-full h-full" />
@@ -494,7 +500,7 @@ export default function TVShowDetailModal({
                         </div>
                         <p className="text-xs font-medium leading-tight" style={{ color: "var(--foreground)" }}>{member.name}</p>
                         <p className="text-xs leading-tight mt-0.5" style={{ color: "var(--text-muted)" }}>{member.character}</p>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>

@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const details = await tmdb.getTVShowDetails(tvId);
     const posterUrl = tmdb.getPosterUrl(details.poster_path, "original");
     return {
-      title: `${details.name} — Movie Watchlist`,
+      title: `${details.name} — What's Up Next`,
       description: details.overview || undefined,
       openGraph: {
         title: details.name,
@@ -206,7 +206,11 @@ export default async function TVShowPage({ params }: Props) {
             <h2 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>Top Cast</h2>
             <div className="grid grid-cols-4 gap-3">
               {cast.map((member) => (
-                <div key={member.id} className="text-center">
+                <Link
+                  key={member.id}
+                  href={`/search?personId=${member.id}&name=${encodeURIComponent(member.name)}`}
+                  className="text-center hover:opacity-80 transition-opacity"
+                >
                   <div className="rounded-full overflow-hidden mx-auto mb-1.5" style={{ width: 56, height: 56, backgroundColor: "var(--border)" }}>
                     {member.profile_path ? (
                       <Image src={`https://image.tmdb.org/t/p/w185${member.profile_path}`} alt={member.name} width={56} height={56} className="object-cover w-full h-full" />
@@ -216,7 +220,7 @@ export default async function TVShowPage({ params }: Props) {
                   </div>
                   <p className="text-xs font-medium leading-tight" style={{ color: "var(--foreground)" }}>{member.name}</p>
                   <p className="text-xs leading-tight mt-0.5" style={{ color: "var(--text-muted)" }}>{member.character}</p>
-                </div>
+                </Link>
               ))}
             </div>
           </div>

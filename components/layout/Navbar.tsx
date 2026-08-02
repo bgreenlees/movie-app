@@ -295,7 +295,7 @@ export default function Navbar() {
         <div className="flex items-center gap-4">
           {/* Logo */}
           <Link href="/search" className="text-xl font-bold shrink-0" style={{ color: "var(--primary)" }}>
-            Movie Watchlist
+            What&apos;s Up Next
           </Link>
 
           {/* Desktop nav links */}

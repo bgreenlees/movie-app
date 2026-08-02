@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const details = await tmdb.getMovieDetailsWithCredits(movieId);
     const posterUrl = tmdb.getPosterUrl(details.poster_path, "original");
     return {
-      title: `${details.title} — Movie Watchlist`,
+      title: `${details.title} — What's Up Next`,
       description: details.overview || undefined,
       openGraph: {
         title: details.title,
@@ -181,7 +181,11 @@ export default async function MoviePage({ params }: Props) {
             </h2>
             <div className="grid grid-cols-4 gap-3">
               {details.cast.map((member) => (
-                <div key={member.id} className="text-center">
+                <Link
+                  key={member.id}
+                  href={`/search?personId=${member.id}&name=${encodeURIComponent(member.name)}`}
+                  className="text-center hover:opacity-80 transition-opacity"
+                >
                   <div
                     className="rounded-full overflow-hidden mx-auto mb-1.5"
                     style={{ width: 56, height: 56, backgroundColor: "var(--border)" }}
@@ -200,7 +204,7 @@ export default async function MoviePage({ params }: Props) {
                   </div>
                   <p className="text-xs font-medium leading-tight" style={{ color: "var(--foreground)" }}>{member.name}</p>
                   <p className="text-xs leading-tight mt-0.5" style={{ color: "var(--text-muted)" }}>{member.character}</p>
-                </div>
+                </Link>
               ))}
             </div>
           </div>

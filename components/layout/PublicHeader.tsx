@@ -5,7 +5,7 @@ export default function PublicHeader({ isLoggedIn }: { isLoggedIn: boolean }) {
     <nav className="border-b border-[var(--border)] bg-[var(--card-bg)]">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
         <Link href="/" className="text-xl font-bold" style={{ color: "var(--primary)" }}>
-          Movie Watchlist
+          What&apos;s Up Next
         </Link>
         <Link
           href={isLoggedIn ? "/search" : "/login"}

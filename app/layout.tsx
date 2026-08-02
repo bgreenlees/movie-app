@@ -18,7 +18,7 @@ const lato = Lato({
 });
 
 export const metadata: Metadata = {
-  title: "Movie Watchlist",
+  title: "What's Up Next",
   description: "Track movies you want to watch and have watched",
 };
 
