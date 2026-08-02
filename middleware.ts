@@ -9,8 +9,11 @@ export default auth((req) => {
   const isAuthPage =
     req.nextUrl.pathname.startsWith("/login") ||
     req.nextUrl.pathname.startsWith("/register");
+  // Public, shareable deeplinks — viewable without signing in.
+  const isPublicDetailPage =
+    /^\/movie\/\d+$/.test(req.nextUrl.pathname) || /^\/tv\/\d+$/.test(req.nextUrl.pathname);
 
-  if (!isLoggedIn && !isAuthPage && req.nextUrl.pathname !== "/") {
+  if (!isLoggedIn && !isAuthPage && !isPublicDetailPage && req.nextUrl.pathname !== "/") {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 

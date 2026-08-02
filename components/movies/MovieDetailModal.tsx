@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import type { TMDBWatchProvider, TMDBMovie } from "@/lib/tmdb";
+import AddMovieModal from "./AddMovieModal";
+import ShareButton from "@/components/ui/ShareButton";
 
 interface CastMember {
   id: number;
@@ -24,6 +26,15 @@ interface MovieDetails {
   poster_path: string | null;
   cast: CastMember[];
   crew: CrewMember[];
+}
+
+interface WatchlistEntry {
+  id: string;
+  status: string;
+  platform?: string | null;
+  watchType?: string | null;
+  rating?: number | null;
+  review?: string | null;
 }
 
 interface MovieDetailModalProps {
@@ -54,7 +65,8 @@ export default function MovieDetailModal({
 
   const [recs, setRecs] = useState<TMDBMovie[]>([]);
   const [recsLoading, setRecsLoading] = useState(false);
-  const [watchlistIds, setWatchlistIds] = useState<Set<number>>(new Set());
+  const [watchlistEntries, setWatchlistEntries] = useState<Record<number, WatchlistEntry>>({});
+  const [showAddModal, setShowAddModal] = useState(false);
 
   // Reset internal state when the outer prop opens a new modal.
   useEffect(() => {
@@ -66,21 +78,27 @@ export default function MovieDetailModal({
     rootOverviewRef.current = overview;
   }, [movieId, movieTitle, posterPath, overview]);
 
-  // Fetch watchlist ids once per open (not per swap).
-  useEffect(() => {
-    if (movieId === null) return;
+  // Fetch full watchlist entries once per open (not per swap).
+  const fetchWatchlistEntries = useCallback(() => {
     Promise.all([
       fetch("/api/watchlist?status=WANT_TO_WATCH").then((r) => r.json()).catch(() => ({ entries: [] })),
       fetch("/api/watchlist?status=WATCHED").then((r) => r.json()).catch(() => ({ entries: [] })),
       fetch("/api/watchlist?status=NOT_INTERESTED").then((r) => r.json()).catch(() => ({ entries: [] })),
     ]).then(([want, watched, not]) => {
-      const ids = new Set<number>();
+      const entries: Record<number, WatchlistEntry> = {};
       [...(want.entries || []), ...(watched.entries || []), ...(not.entries || [])].forEach((e: any) => {
-        if (typeof e.movieId === "number") ids.add(e.movieId);
+        if (typeof e.movieId === "number") {
+          entries[e.movieId] = { id: e.id, status: e.status, platform: e.platform, watchType: e.watchType, rating: e.rating, review: e.review };
+        }
       });
-      setWatchlistIds(ids);
+      setWatchlistEntries(entries);
     });
-  }, [movieId]);
+  }, []);
+
+  useEffect(() => {
+    if (movieId === null) return;
+    fetchWatchlistEntries();
+  }, [movieId, fetchWatchlistEntries]);
 
   // Fetch details + providers + recs whenever the currently viewed movie changes.
   useEffect(() => {
@@ -135,6 +153,7 @@ export default function MovieDetailModal({
   const isRootMovie = currentId === movieId;
   const displayPoster = details?.poster_path ?? (isRootMovie ? rootPosterRef.current : null);
   const displayOverview = details?.overview ?? (isRootMovie ? rootOverviewRef.current : undefined);
+  const currentEntry = watchlistEntries[currentId];
 
   const handleSwapTo = (id: number, title: string) => {
     setHistory((prev) => [...prev, { id: currentId, title: currentTitle }]);
@@ -208,6 +227,18 @@ export default function MovieDetailModal({
 
           {!isLoading && (
             <>
+              {/* Actions */}
+              <div className="flex items-center gap-2 mb-4">
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium text-white transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: currentEntry ? "var(--border)" : "var(--accent)", color: currentEntry ? "var(--foreground)" : "white" }}
+                >
+                  {currentEntry ? "✓ On Your List" : "+ Add to Watchlist"}
+                </button>
+                <ShareButton url={`/movie/${currentId}`} title={currentTitle} text={displayOverview} />
+              </div>
+
               {/* Poster + meta */}
               <div className="flex gap-5">
                 {displayPoster && (
@@ -425,7 +456,7 @@ export default function MovieDetailModal({
                   ) : (
                     <div className="flex gap-3 overflow-x-auto pb-2">
                       {recs.map((rec) => {
-                        const onList = watchlistIds.has(rec.id);
+                        const onList = !!watchlistEntries[rec.id];
                         return (
                           <button
                             key={rec.id}
@@ -479,6 +510,14 @@ export default function MovieDetailModal({
           )}
         </div>
       </div>
+      <AddMovieModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        movieId={currentId}
+        movieTitle={currentTitle}
+        existingEntry={currentEntry}
+        onSuccess={() => { setShowAddModal(false); fetchWatchlistEntries(); }}
+      />
     </div>
   );
 }

@@ -293,6 +293,33 @@ class TMDBClient {
     return `https://image.tmdb.org/t/p/${size}${posterPath}`;
   }
 
+  async getMovieDetailsWithCredits(movieId: number): Promise<{
+    title: string;
+    tagline: string | null;
+    overview: string | null;
+    poster_path: string | null;
+    release_date: string | null;
+    genres: Array<{ id: number; name: string }>;
+    cast: Array<{ id: number; name: string; character: string; profile_path: string | null }>;
+    crew: Array<{ id: number; name: string; job: string; department: string }>;
+  }> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url = `${this.baseUrl}/movie/${movieId}?append_to_response=credits&api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 86400 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    const data = await response.json();
+    return {
+      title: data.title,
+      tagline: data.tagline || null,
+      overview: data.overview || null,
+      poster_path: data.poster_path || null,
+      release_date: data.release_date || null,
+      genres: data.genres || [],
+      cast: (data.credits?.cast || []).slice(0, 8),
+      crew: data.credits?.crew || [],
+    };
+  }
+
   // ── TV Shows ────────────────────────────────────────────────────────────────
 
   async searchTVShows(query: string, page = 1): Promise<TMDBTVSearchResponse> {

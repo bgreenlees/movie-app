@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import type { TMDBWatchProvider, TMDBEpisode, TMDBSeason, TMDBNextEpisode, TMDBTVShow } from "@/lib/tmdb";
+import AddTVModal from "./AddTVModal";
+import ShareButton from "@/components/ui/ShareButton";
 
 interface CastMember {
   id: number;
@@ -24,6 +26,16 @@ interface TVDetails {
   seasons: TMDBSeason[];
   networks: Array<{ id: number; name: string; logo_path: string | null }>;
   cast: CastMember[];
+}
+
+interface TVWatchlistEntry {
+  id: string;
+  status: string;
+  platform?: string | null;
+  rating?: number | null;
+  review?: string | null;
+  currentSeason?: number | null;
+  currentEpisode?: number | null;
 }
 
 interface TVShowDetailModalProps {
@@ -69,7 +81,8 @@ export default function TVShowDetailModal({
 
   const [recs, setRecs] = useState<TMDBTVShow[]>([]);
   const [recsLoading, setRecsLoading] = useState(false);
-  const [watchlistIds, setWatchlistIds] = useState<Set<number>>(new Set());
+  const [watchlistEntries, setWatchlistEntries] = useState<Record<number, TVWatchlistEntry>>({});
+  const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
     if (tvId === null) return;
@@ -80,19 +93,25 @@ export default function TVShowDetailModal({
     rootOverviewRef.current = overview;
   }, [tvId, tvName, posterPath, overview]);
 
-  useEffect(() => {
-    if (tvId === null) return;
+  const fetchWatchlistEntries = useCallback(() => {
     fetch("/api/tv/watchlist")
       .then((r) => r.json())
       .then((d) => {
-        const ids = new Set<number>();
+        const entries: Record<number, TVWatchlistEntry> = {};
         (d.entries || []).forEach((e: any) => {
-          if (typeof e.tvShowId === "number") ids.add(e.tvShowId);
+          if (typeof e.tvShowId === "number") {
+            entries[e.tvShowId] = { id: e.id, status: e.status, platform: e.platform, rating: e.rating, review: e.review, currentSeason: e.currentSeason, currentEpisode: e.currentEpisode };
+          }
         });
-        setWatchlistIds(ids);
+        setWatchlistEntries(entries);
       })
       .catch(() => {});
-  }, [tvId]);
+  }, []);
+
+  useEffect(() => {
+    if (tvId === null) return;
+    fetchWatchlistEntries();
+  }, [tvId, fetchWatchlistEntries]);
 
   useEffect(() => {
     if (!currentId) return;
@@ -186,6 +205,7 @@ export default function TVShowDetailModal({
   const isRootShow = currentId === tvId;
   const displayPoster = details?.poster_path ?? (isRootShow ? rootPosterRef.current : null);
   const displayOverview = details?.overview ?? (isRootShow ? rootOverviewRef.current : undefined);
+  const currentEntry = watchlistEntries[currentId];
   const mainSeasons = details?.seasons.filter((s) => s.season_number > 0) ?? [];
   const nextEp = details?.next_episode_to_air;
   const daysAway = nextEp ? daysUntil(nextEp.air_date) : null;
@@ -236,6 +256,18 @@ export default function TVShowDetailModal({
 
           {!isLoading && (
             <>
+              {/* Actions */}
+              <div className="flex items-center gap-2 mb-4">
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: currentEntry ? "var(--border)" : "var(--accent)", color: currentEntry ? "var(--foreground)" : "white" }}
+                >
+                  {currentEntry ? "✓ On Your List" : "+ Add to Watchlist"}
+                </button>
+                <ShareButton url={`/tv/${currentId}`} title={currentName} text={displayOverview} />
+              </div>
+
               {/* Poster + meta */}
               <div className="flex gap-5">
                 {displayPoster && (
@@ -487,7 +519,7 @@ export default function TVShowDetailModal({
                   ) : (
                     <div className="flex gap-3 overflow-x-auto pb-2">
                       {recs.map((rec) => {
-                        const onList = watchlistIds.has(rec.id);
+                        const onList = !!watchlistEntries[rec.id];
                         return (
                           <button
                             key={rec.id}
@@ -541,6 +573,14 @@ export default function TVShowDetailModal({
           )}
         </div>
       </div>
+      <AddTVModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        tvShowId={currentId}
+        tvShowName={currentName}
+        existingEntry={currentEntry}
+        onSuccess={() => { setShowAddModal(false); fetchWatchlistEntries(); }}
+      />
     </div>
   );
 }
