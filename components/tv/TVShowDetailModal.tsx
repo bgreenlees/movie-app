@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { TMDBWatchProvider, TMDBEpisode, TMDBSeason, TMDBNextEpisode, TMDBTVShow } from "@/lib/tmdb";
 import AddTVModal from "./AddTVModal";
 import ShareButton from "@/components/ui/ShareButton";
+import TrailerButton from "@/components/ui/TrailerButton";
 
 interface CastMember {
   id: number;
@@ -267,11 +268,12 @@ export default function TVShowDetailModal({
                 >
                   {currentEntry ? "✓ On Your List" : "+ Add to Watchlist"}
                 </button>
+                <TrailerButton id={currentId} title={currentName} mediaType="tv" />
                 <ShareButton url={`/tv/${currentId}`} title={currentName} text={displayOverview} />
               </div>
 
               {/* Poster + meta */}
-              <div className="flex gap-5">
+              <div className="flex gap-5 items-start">
                 {displayPoster && (
                   <div className="shrink-0 rounded-lg overflow-hidden" style={{ width: "120px", aspectRatio: "2/3", backgroundColor: "var(--border)" }}>
                     <Image
