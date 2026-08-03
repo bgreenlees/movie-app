@@ -5,10 +5,11 @@ import { useEffect, useState } from "react";
 interface TrailerModalProps {
   movieId: number | null;
   movieTitle: string;
+  mediaType?: "movie" | "tv";
   onClose: () => void;
 }
 
-export default function TrailerModal({ movieId, movieTitle, onClose }: TrailerModalProps) {
+export default function TrailerModal({ movieId, movieTitle, mediaType = "movie", onClose }: TrailerModalProps) {
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -20,7 +21,7 @@ export default function TrailerModal({ movieId, movieTitle, onClose }: TrailerMo
     setNotFound(false);
     setIsLoading(true);
 
-    fetch(`/api/movies/${movieId}/trailer`)
+    fetch(`/api/${mediaType === "tv" ? "tv" : "movies"}/${movieId}/trailer`)
       .then((r) => r.json())
       .then((data) => {
         if (data.key) {
@@ -31,7 +32,7 @@ export default function TrailerModal({ movieId, movieTitle, onClose }: TrailerMo
       })
       .catch(() => setNotFound(true))
       .finally(() => setIsLoading(false));
-  }, [movieId]);
+  }, [movieId, mediaType]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {

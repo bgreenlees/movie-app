@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { tmdb } from "@/lib/tmdb";
 import { auth } from "@/lib/auth";
 import ShareButton from "@/components/ui/ShareButton";
+import TrailerButton from "@/components/ui/TrailerButton";
 import PublicHeader from "@/components/layout/PublicHeader";
 import MovieWatchlistAction from "@/components/movies/MovieWatchlistAction";
 
@@ -68,7 +69,7 @@ export default async function MoviePage({ params }: Props) {
     <div className="min-h-screen" style={{ backgroundColor: "var(--secondary-bg)" }}>
       <PublicHeader isLoggedIn={!!session?.user} />
       <main className="max-w-3xl mx-auto p-4 sm:p-6">
-        <div className="flex gap-5 flex-col sm:flex-row">
+        <div className="flex gap-5 flex-col sm:flex-row sm:items-start">
           {posterUrl && (
             <div
               className="shrink-0 rounded-lg overflow-hidden mx-auto sm:mx-0"
@@ -97,6 +98,7 @@ export default async function MoviePage({ params }: Props) {
 
             <div className="flex items-center gap-2 mb-4 flex-wrap">
               <MovieWatchlistAction movieId={movieId} movieTitle={details.title} isLoggedIn={!!session?.user} />
+              <TrailerButton id={movieId} title={details.title} mediaType="movie" />
               <ShareButton url={`/movie/${movieId}`} title={details.title} text={details.overview || undefined} />
             </div>
 
