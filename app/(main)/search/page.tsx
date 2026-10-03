@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 import MovieCard from "@/components/movies/MovieCard";
 import AddMovieModal from "@/components/movies/AddMovieModal";
@@ -75,6 +76,8 @@ function DiscoverPageInner() {
   const [seasonBanners, setSeasonBanners] = useState<Record<number, TVSeasonBanner>>({});
 
   const [isLoading, setIsLoading] = useState(false);
+  // Set when a search had no exact matches and we fell back to close spellings
+  const [suggestion, setSuggestion] = useState<string | null>(null);
   const [columns, setColumns] = useState(6);
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -151,6 +154,8 @@ function DiscoverPageInner() {
   // ── Content loading ───────────────────────────────────────────────────────
 
   useEffect(() => {
+    setSuggestion(null);
+
     // Person mode
     if (personId) {
       setIsLoading(true);
@@ -197,8 +202,11 @@ function DiscoverPageInner() {
         fetch(`/api/movies/search?q=${encodeURIComponent(urlQuery)}`)
           .then((r) => r.json())
           .then((data) => {
-            setMovies((data.results || []).sort((a: TMDBMovie, b: TMDBMovie) => b.popularity - a.popularity));
-            if (!data.results?.length) toast.error("No movies found");
+            const results: TMDBMovie[] = data.results || [];
+            // Fuzzy results are already ranked by closeness to the query
+            if (!data.fuzzy) results.sort((a, b) => b.popularity - a.popularity);
+            setMovies(results);
+            setSuggestion(data.fuzzy ? data.suggestion ?? null : null);
           })
           .catch(() => toast.error("Search failed"))
           .finally(() => setIsLoading(false));
@@ -229,11 +237,11 @@ function DiscoverPageInner() {
         fetch(`/api/tv/search?q=${encodeURIComponent(urlQuery)}`)
           .then((r) => r.json())
           .then((data) => {
-            const results: TMDBTVShow[] = (data.results || [])
-              .filter((s: TMDBTVShow) => s.poster_path)
-              .sort((a: TMDBTVShow, b: TMDBTVShow) => b.popularity - a.popularity);
+            const results: TMDBTVShow[] = (data.results || []).filter((s: TMDBTVShow) => s.poster_path);
+            // Fuzzy results are already ranked by closeness to the query
+            if (!data.fuzzy) results.sort((a, b) => b.popularity - a.popularity);
             setTVShows(results);
-            if (!results.length) toast.error("No TV shows found");
+            setSuggestion(data.fuzzy ? data.suggestion ?? null : null);
             fetchSeasonBanners(results);
           })
           .catch(() => toast.error("Search failed"))
@@ -463,6 +471,19 @@ function DiscoverPageInner() {
                 {genreMedia === "tv" ? "TV shows" : "Movies"}
               </p>
             )}
+            {suggestion && urlQuery && !isPersonMode && !isGenreMode && !isLoading && (
+              <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+                No exact matches. Did you mean{" "}
+                <Link
+                  href={`/search?q=${encodeURIComponent(suggestion)}`}
+                  className="font-semibold underline"
+                  style={{ color: "var(--accent)" }}
+                >
+                  {suggestion}
+                </Link>
+                ?
+              </p>
+            )}
           </div>
         </div>
 
@@ -593,7 +614,9 @@ function DiscoverPageInner() {
                   : `No ${mediaType === "tv" ? "TV shows" : "movies"} available.`}
           </p>
           {urlQuery && !isPersonMode && !isGenreMode && (
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>Try a different search term</p>
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+              Check the spelling, try fewer words, or switch to {mediaType === "tv" ? "Movies" : "TV Shows"}
+            </p>
           )}
         </div>
       )}
