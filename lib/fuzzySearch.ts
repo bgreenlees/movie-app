@@ -1,10 +1,12 @@
 // Typo-tolerant fallback for title search. TMDB search has no spelling
-// correction, so when a query returns nothing we retry with looser variants
-// (truncated words, dropped words) and keep results whose titles are close
-// to what the user typed.
+// correction, so when a query returns nothing we retry with a spell-corrected
+// query plus looser variants (truncated words, dropped words) and keep results
+// whose titles are close to what the user typed.
+
+import { WORDS_BY_FREQUENCY } from "./data/wordFrequency";
 
 const MIN_SIMILARITY = 0.5;
-const MAX_CANDIDATES = 5;
+const MAX_CANDIDATES = 6;
 const STOPWORDS = new Set(["the", "a", "an", "of", "and", "in", "on", "to"]);
 
 function normalize(s: string): string {
@@ -51,12 +53,78 @@ export function titleSimilarity(query: string, title: string): number {
   return Math.max(...variants.flatMap((v) => [ratio(q, v), ratio(q, v.slice(0, q.length))]));
 }
 
+// word -> frequency rank (0 = most common); built lazily on first use
+let wordRanks: Map<string, number> | null = null;
+function getWordRanks(): Map<string, number> {
+  if (!wordRanks) {
+    wordRanks = new Map(WORDS_BY_FREQUENCY.split(" ").map((w, i) => [w, i]));
+  }
+  return wordRanks;
+}
+
+const ALPHABET = "abcdefghijklmnopqrstuvwxyz";
+
+// All strings one deletion, transposition, substitution or insertion away.
+function edits1(word: string): Set<string> {
+  const out = new Set<string>();
+  for (let i = 0; i <= word.length; i++) {
+    const head = word.slice(0, i);
+    const tail = word.slice(i);
+    if (tail) out.add(head + tail.slice(1));
+    if (tail.length > 1) out.add(head + tail[1] + tail[0] + tail.slice(2));
+    for (const c of ALPHABET) {
+      if (tail) out.add(head + c + tail.slice(1));
+      out.add(head + c + tail);
+    }
+  }
+  return out;
+}
+
+function knownByFrequency(candidates: Iterable<string>, ranks: Map<string, number>): string[] {
+  return Array.from(candidates)
+    .filter((c) => ranks.has(c))
+    .sort((a, b) => ranks.get(a)! - ranks.get(b)!);
+}
+
+// Norvig-style correction: known words one edit away, most common first,
+// falling back to two edits away (longer words only, where two typos are
+// plausible). Returns [word] unchanged when it's already a word or no fix is
+// found.
+export function wordCorrections(word: string, max = 3): string[] {
+  const ranks = getWordRanks();
+  if (word.length < 3 || /\d/.test(word) || ranks.has(word)) return [word];
+
+  const one = edits1(word);
+  let fixes = knownByFrequency(one, ranks);
+  if (!fixes.length && word.length >= 5) {
+    const two = new Set<string>();
+    for (const e of one) for (const e2 of edits1(e)) if (ranks.has(e2)) two.add(e2);
+    fixes = knownByFrequency(two, ranks);
+  }
+  return fixes.length ? fixes.slice(0, max) : [word];
+}
+
+// Spell-corrected versions of the query, likeliest first. The most common fix
+// isn't always right ("strnger" -> "stronger", not "stranger"), so runner-up
+// fixes for each word are included too.
+function spellingCandidates(words: string[]): string[] {
+  const corrections = words.map((w) => wordCorrections(w));
+  const best = corrections.map((c) => c[0]);
+  const spellings = [best.join(" ")];
+  corrections.forEach((c, i) => {
+    for (const alt of c.slice(1)) spellings.push(best.map((b, j) => (j === i ? alt : b)).join(" "));
+  });
+  return spellings.slice(0, 3);
+}
+
 export function buildFallbackQueries(query: string): string[] {
   const words = normalize(query).split(" ").filter(Boolean);
   if (!words.length) return [];
 
   const truncate = (w: string, keep: number) => (w.length > 3 ? w.slice(0, Math.max(3, keep)) : w);
   const candidates = [
+    // Spell-corrected first: handles typos anywhere in a word ("loghtning")
+    ...spellingCandidates(words),
     words.map((w) => truncate(w, Math.ceil(w.length * 0.6))).join(" "),
     words.map((w) => truncate(w, 3)).join(" "),
   ];
@@ -70,6 +138,18 @@ export function buildFallbackQueries(query: string): string[] {
     .slice(0, MAX_CANDIDATES);
 }
 
+// Titles close to what was typed rank highest; titles that merely contain the
+// corrected words ("The Lightning Thief" for "loghtning") still qualify.
+function scoreTitle(query: string, corrected: string, title: string): number {
+  const t = normalize(title);
+  const containsCorrected = ` ${t} `.includes(` ${corrected} `);
+  return Math.max(
+    titleSimilarity(query, title),
+    titleSimilarity(corrected, title) * 0.95,
+    containsCorrected ? 0.6 : 0
+  );
+}
+
 export async function fuzzySearch<T extends { id: number; popularity: number }>(
   query: string,
   search: (q: string) => Promise<{ results: T[] }>,
@@ -77,12 +157,14 @@ export async function fuzzySearch<T extends { id: number; popularity: number }>(
 ): Promise<{ results: T[]; suggestion: string | null }> {
   const responses = await Promise.allSettled(buildFallbackQueries(query).map(search));
 
+  const spellings = spellingCandidates(normalize(query).split(" ").filter(Boolean));
+  const corrected = spellings[0] ?? "";
   const scored = new Map<number, { item: T; score: number }>();
   for (const r of responses) {
     if (r.status !== "fulfilled") continue;
     for (const item of r.value.results || []) {
       if (scored.has(item.id)) continue;
-      const score = titleSimilarity(query, getTitle(item));
+      const score = scoreTitle(query, corrected, getTitle(item));
       if (score >= MIN_SIMILARITY) scored.set(item.id, { item, score });
     }
   }
@@ -94,6 +176,16 @@ export async function fuzzySearch<T extends { id: number; popularity: number }>(
   const best = ranked[0];
   return {
     results: ranked.map((r) => r.item),
-    suggestion: best ? getTitle(best.item) : null,
+    suggestion: best ? suggestionFor(getTitle(best.item), spellings) : null,
   };
+}
+
+// Suggest the full title when the query was a misspelling of all of it, but
+// just the corrected words when they're only part of it, so "loghtning"
+// suggests "Lightning" (all lightning titles) rather than "Lightning Point".
+function suggestionFor(title: string, spellings: string[]): string {
+  const t = normalize(title).replace(/^(the|a|an) /, "");
+  const spelling = spellings.find((s) => s !== t && ` ${t} `.includes(` ${s} `));
+  if (!spelling) return title;
+  return spelling.replace(/\b[a-z]/g, (c) => c.toUpperCase());
 }
