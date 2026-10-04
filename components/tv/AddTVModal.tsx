@@ -5,6 +5,7 @@ import Image from "next/image";
 import Modal from "@/components/ui/Modal";
 import ThumbRating from "@/components/ui/ThumbRating";
 import toast from "react-hot-toast";
+import { canonicalProviderId } from "@/lib/providers";
 import type { TMDBWatchProvider } from "@/lib/tmdb";
 
 interface ExistingTVEntry {
@@ -219,7 +220,7 @@ export default function AddTVModal({
                 <p className="text-xs font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>Stream</p>
                 <div className="flex flex-wrap gap-2">
                   {providers.flatrate.map((p) => {
-                    const have = userServices.has(p.provider_id);
+                    const have = userServices.has(canonicalProviderId(p.provider_id));
                     return (
                       <div key={p.provider_id} className="flex items-center gap-1.5 px-2 py-1 rounded-md"
                         style={{ backgroundColor: have ? "color-mix(in srgb, var(--accent) 12%, var(--card-bg))" : "transparent", border: `1px solid ${have ? "var(--accent)" : "transparent"}` }}

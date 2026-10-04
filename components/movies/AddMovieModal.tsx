@@ -5,6 +5,7 @@ import Image from "next/image";
 import Modal from "@/components/ui/Modal";
 import ThumbRating from "@/components/ui/ThumbRating";
 import toast from "react-hot-toast";
+import { canonicalProviderId } from "@/lib/providers";
 import type { TMDBWatchProvider } from "@/lib/tmdb";
 
 interface ExistingEntry {
@@ -220,7 +221,7 @@ export default function AddMovieModal({
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {providers.flatrate.map((p) => {
-                    const have = userServices.has(p.provider_id);
+                    const have = userServices.has(canonicalProviderId(p.provider_id));
                     return (
                       <div
                         key={p.provider_id}
@@ -264,7 +265,7 @@ export default function AddMovieModal({
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {providers.rent.map((p) => {
-                    const have = userServices.has(p.provider_id);
+                    const have = userServices.has(canonicalProviderId(p.provider_id));
                     return (
                       <div
                         key={p.provider_id}

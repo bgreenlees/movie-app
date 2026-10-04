@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { canonicalProviderIds } from "@/lib/providers";
 
 export async function GET() {
   const session = await auth();
@@ -11,7 +12,7 @@ export async function GET() {
     select: { streamingServices: true },
   });
 
-  return NextResponse.json({ streamingServices: user?.streamingServices || [] });
+  return NextResponse.json({ streamingServices: canonicalProviderIds(user?.streamingServices || []) });
 }
 
 export async function PATCH(req: NextRequest) {

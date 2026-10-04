@@ -1,3 +1,5 @@
+import { PROVIDER_NAME_OVERRIDES } from "./providers";
+
 interface TMDBMovie {
   id: number;
   title: string;
@@ -108,6 +110,14 @@ interface TMDBMovieDetails {
   genres: Array<{ id: number; name: string }>;
 }
 
+function daysAgo(days: number): string {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+}
+
+function providerParam(providerIds?: number[]): string {
+  return providerIds && providerIds.length > 0 ? `&with_watch_providers=${providerIds.join("|")}` : "";
+}
+
 class TMDBClient {
   private apiKey: string;
   private baseUrl: string;
@@ -201,21 +211,52 @@ class TMDBClient {
     return response.json();
   }
 
+  // Recent titles available on the given services. "New" is approximated by release
+  // window (movies) or recent episode air dates (TV, so new seasons count) — TMDB
+  // doesn't record when a title was added to a service.
   async getNewOnStreaming(providerIds?: number[]): Promise<TMDBSearchResponse> {
+    return this.discoverRecentMovies("flatrate", providerIds, 90);
+  }
+
+  async getNewToRentOrBuy(): Promise<TMDBSearchResponse> {
+    return this.discoverRecentMovies("rent|buy", undefined, 120);
+  }
+
+  async getNewOnStreamingTV(providerIds?: number[]): Promise<TMDBTVSearchResponse> {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
-    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split("T")[0];
-    const providerParam =
-      providerIds && providerIds.length > 0
-        ? `&with_watch_providers=${providerIds.join("|")}`
-        : "";
     const url =
-      `${this.baseUrl}/discover/movie?sort_by=primary_release_date.desc` +
+      `${this.baseUrl}/discover/tv?sort_by=popularity.desc` +
       `&with_watch_monetization_types=flatrate&watch_region=US` +
-      `&primary_release_date.gte=${ninetyDaysAgo}` +
+      `&air_date.gte=${daysAgo(60)}&air_date.lte=${daysAgo(0)}` +
       `&with_original_language=en` +
-      `${providerParam}&api_key=${this.apiKey}`;
+      // Skip kids/news/reality/soap/talk — daily shows otherwise crowd out premieres
+      `&without_genres=10762,10763,10764,10766,10767` +
+      `${providerParam(providerIds)}&api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 3600 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
+  async getOnTheAirTV(): Promise<TMDBTVSearchResponse> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url = `${this.baseUrl}/tv/on_the_air?api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 3600 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
+  private async discoverRecentMovies(
+    monetization: string,
+    providerIds: number[] | undefined,
+    windowDays: number
+  ): Promise<TMDBSearchResponse> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url =
+      `${this.baseUrl}/discover/movie?sort_by=popularity.desc` +
+      `&with_watch_monetization_types=${monetization}&watch_region=US` +
+      `&primary_release_date.gte=${daysAgo(windowDays)}&primary_release_date.lte=${daysAgo(0)}` +
+      `&with_original_language=en` +
+      `${providerParam(providerIds)}&api_key=${this.apiKey}`;
     const response = await fetch(url, { next: { revalidate: 3600 } });
     if (!response.ok) throw new Error("TMDB API error");
     return response.json();
@@ -261,7 +302,7 @@ class TMDBClient {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
 
     // Curated list of popular US streaming service IDs
-    const POPULAR_IDS = new Set([8, 9, 15, 337, 350, 386, 531, 1899]);
+    const POPULAR_IDS = new Set([8, 9, 15, 337, 350, 386, 1899, 2303]);
 
     const url = `${this.baseUrl}/watch/providers/movie?watch_region=US&api_key=${this.apiKey}`;
     const response = await fetch(url, { next: { revalidate: 86400 } });
@@ -269,7 +310,9 @@ class TMDBClient {
     if (!response.ok) throw new Error("TMDB API error");
 
     const data = await response.json();
-    return (data.results as TMDBWatchProvider[]).filter((p) => POPULAR_IDS.has(p.provider_id));
+    return (data.results as TMDBWatchProvider[])
+      .filter((p) => POPULAR_IDS.has(p.provider_id))
+      .map((p) => ({ ...p, provider_name: PROVIDER_NAME_OVERRIDES[p.provider_id] ?? p.provider_name }));
   }
 
   async getWatchProviders(movieId: number): Promise<TMDBWatchProvidersResponse> {

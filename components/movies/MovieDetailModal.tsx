@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { TMDBWatchProvider, TMDBMovie } from "@/lib/tmdb";
+import { canonicalProviderId } from "@/lib/providers";
 import AddMovieModal from "./AddMovieModal";
 import ShareButton from "@/components/ui/ShareButton";
 import TrailerButton from "@/components/ui/TrailerButton";
@@ -307,7 +308,7 @@ export default function MovieDetailModal({
                       <p className="text-xs mb-1.5" style={{ color: "var(--text-muted)" }}>Stream</p>
                       <div className="flex flex-wrap gap-2">
                         {providers.flatrate.map((p) => {
-                          const have = userServices.has(p.provider_id);
+                          const have = userServices.has(canonicalProviderId(p.provider_id));
                           return (
                             <div
                               key={p.provider_id}
@@ -349,7 +350,7 @@ export default function MovieDetailModal({
                       <p className="text-xs mb-1.5" style={{ color: "var(--text-muted)" }}>Rent / Buy</p>
                       <div className="flex flex-wrap gap-2">
                         {providers.rent.map((p) => {
-                          const have = userServices.has(p.provider_id);
+                          const have = userServices.has(canonicalProviderId(p.provider_id));
                           return (
                             <div
                               key={p.provider_id}
