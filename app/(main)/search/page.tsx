@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import MovieCard from "@/components/movies/MovieCard";
@@ -12,6 +12,7 @@ import TVShowCard, { type TVSeasonBanner } from "@/components/tv/TVShowCard";
 import AddTVModal from "@/components/tv/AddTVModal";
 import ThumbRating from "@/components/ui/ThumbRating";
 import type { TMDBMovie, TMDBTVShow } from "@/lib/tmdb";
+import { DISCOVER_COUNTRIES, countryName, isValidCountry } from "@/lib/countries";
 import toast from "react-hot-toast";
 
 interface PersonData {
@@ -48,12 +49,17 @@ interface TVEntry {
 
 function DiscoverPageInner() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const urlQuery = searchParams.get("q") || "";
   const personId = searchParams.get("personId");
   const personNameParam = searchParams.get("name") || "";
   const genreId = searchParams.get("genreId");
   const genreName = searchParams.get("genreName") || "";
   const genreMedia = (searchParams.get("genreMedia") as "movie" | "tv" | null) || null;
+  // Country filter applies to browse and genre mode; search and person pages ignore it
+  const countryParam = searchParams.get("country");
+  const country = isValidCountry(countryParam) && !urlQuery && !personId ? countryParam : null;
 
   const [mediaType, setMediaType] = useState<"movie" | "tv">(genreMedia || "movie");
   const [personData, setPersonData] = useState<PersonData | null>(null);
@@ -175,10 +181,11 @@ function DiscoverPageInner() {
     if (genreId) {
       const media = genreMedia || "movie";
       setIsLoading(true);
+      const countryQs = country ? `&country=${country}` : "";
       const endpoint =
         media === "movie"
-          ? `/api/discover/movie?genreId=${genreId}`
-          : `/api/discover/tv?genreId=${genreId}`;
+          ? `/api/discover/movie?genreId=${genreId}${countryQs}`
+          : `/api/discover/tv?genreId=${genreId}${countryQs}`;
       fetch(endpoint)
         .then((r) => r.json())
         .then((data) => {
@@ -192,6 +199,28 @@ function DiscoverPageInner() {
           }
         })
         .catch(() => toast.error("Failed to load genre results"))
+        .finally(() => setIsLoading(false));
+      return;
+    }
+
+    // Country browse mode
+    if (country) {
+      setIsLoading(true);
+      setIsPersonalized(false);
+      setTVPersonalized(false);
+      setShowNudge(false);
+      fetch(`/api/discover/${mediaType}?country=${country}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (mediaType === "movie") {
+            setMovies(data.results || []);
+          } else {
+            const results: TMDBTVShow[] = data.results || [];
+            setTVShows(results);
+            fetchSeasonBanners(results);
+          }
+        })
+        .catch(() => toast.error("Failed to load results"))
         .finally(() => setIsLoading(false));
       return;
     }
@@ -260,7 +289,7 @@ function DiscoverPageInner() {
           .finally(() => setIsLoading(false));
       }
     }
-  }, [urlQuery, mediaType, personId, genreId, genreMedia, fetchSeasonBanners]);
+  }, [urlQuery, mediaType, personId, genreId, genreMedia, country, fetchSeasonBanners]);
 
   useEffect(() => {
     if (!gridRef.current) return;
@@ -273,6 +302,14 @@ function DiscoverPageInner() {
     obs.observe(gridRef.current);
     return () => obs.disconnect();
   }, [movies, tvShows]);
+
+  const handleCountryChange = (code: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (code) params.set("country", code);
+    else params.delete("country");
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname);
+  };
 
   // ── Movie handlers ────────────────────────────────────────────────────────
 
@@ -348,7 +385,9 @@ function DiscoverPageInner() {
       ? `${genreName || "Genre"}`
       : urlQuery
         ? `Results for "${urlQuery}"`
-        : mediaType === "movie"
+        : country
+          ? `${mediaType === "movie" ? "Movies" : "TV Shows"} from ${countryName(country)}`
+          : mediaType === "movie"
           ? isPersonalized ? "Recommended for You" : "Discover"
           : tvPersonalized ? "TV Recommended for You" : "Discover TV Shows";
 
@@ -469,6 +508,7 @@ function DiscoverPageInner() {
             {isGenreMode && (
               <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                 {genreMedia === "tv" ? "TV shows" : "Movies"}
+                {country && ` from ${countryName(country)}`}
               </p>
             )}
             {suggestion && urlQuery && !isPersonMode && !isGenreMode && !isLoading && (
@@ -487,37 +527,64 @@ function DiscoverPageInner() {
           </div>
         </div>
 
-        {/* Movies / TV toggle */}
-        <div
-          className="flex rounded-lg overflow-hidden shrink-0"
-          style={{ border: "1px solid var(--border)" }}
-        >
-          <button
-            onClick={() => setMediaType("movie")}
-            className="px-4 py-2.5 text-sm font-medium transition-all"
-            style={{
-              backgroundColor: mediaType === "movie" ? "var(--accent)" : "transparent",
-              color: mediaType === "movie" ? "white" : "var(--foreground)",
-            }}
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {/* Country filter (browse and genre mode only) */}
+          {!urlQuery && !isPersonMode && (
+            <select
+              value={country ?? ""}
+              onChange={(e) => handleCountryChange(e.target.value)}
+              aria-label="Filter by country"
+              className="px-3 py-2.5 text-sm font-medium rounded-lg cursor-pointer"
+              style={{
+                border: "1px solid var(--border)",
+                backgroundColor: country ? "var(--accent)" : "var(--card-bg)",
+                color: country ? "white" : "var(--foreground)",
+              }}
+            >
+              {[{ code: "", name: "All countries" }, ...DISCOVER_COUNTRIES].map((c) => (
+                <option
+                  key={c.code}
+                  value={c.code}
+                  style={{ backgroundColor: "var(--card-bg)", color: "var(--foreground)" }}
+                >
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/* Movies / TV toggle */}
+          <div
+            className="flex rounded-lg overflow-hidden shrink-0"
+            style={{ border: "1px solid var(--border)" }}
           >
-            Movies
-          </button>
-          <button
-            onClick={() => setMediaType("tv")}
-            className="px-4 py-2.5 text-sm font-medium transition-all"
-            style={{
-              backgroundColor: mediaType === "tv" ? "var(--accent)" : "transparent",
-              color: mediaType === "tv" ? "white" : "var(--foreground)",
-              borderLeft: "1px solid var(--border)",
-            }}
-          >
-            TV Shows
-          </button>
+            <button
+              onClick={() => setMediaType("movie")}
+              className="px-4 py-2.5 text-sm font-medium transition-all"
+              style={{
+                backgroundColor: mediaType === "movie" ? "var(--accent)" : "transparent",
+                color: mediaType === "movie" ? "white" : "var(--foreground)",
+              }}
+            >
+              Movies
+            </button>
+            <button
+              onClick={() => setMediaType("tv")}
+              className="px-4 py-2.5 text-sm font-medium transition-all"
+              style={{
+                backgroundColor: mediaType === "tv" ? "var(--accent)" : "transparent",
+                color: mediaType === "tv" ? "white" : "var(--foreground)",
+                borderLeft: "1px solid var(--border)",
+              }}
+            >
+              TV Shows
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Nudge (movies only) */}
-      {mediaType === "movie" && showNudge && !nudgeDismissed && !urlQuery && !isPersonMode && !isGenreMode && (
+      {mediaType === "movie" && showNudge && !nudgeDismissed && !urlQuery && !isPersonMode && !isGenreMode && !country && (
         <div
           className="flex items-center justify-between gap-4 px-4 py-3 mb-6 rounded-lg border text-sm"
           style={{ borderColor: "var(--accent)", backgroundColor: "color-mix(in srgb, var(--accent) 10%, var(--card-bg))" }}
@@ -608,10 +675,12 @@ function DiscoverPageInner() {
             {isPersonMode
               ? `No ${mediaType === "tv" ? "TV credits" : "movie credits"} for ${personData?.name || personNameParam}`
               : isGenreMode
-                ? `No ${mediaType === "tv" ? "TV shows" : "movies"} found for ${genreName}`
+                ? `No ${mediaType === "tv" ? "TV shows" : "movies"} found for ${genreName}${country ? ` from ${countryName(country)}` : ""}`
                 : urlQuery
                   ? `No ${mediaType === "tv" ? "TV shows" : "movies"} found for "${urlQuery}"`
-                  : `No ${mediaType === "tv" ? "TV shows" : "movies"} available.`}
+                  : country
+                    ? `No ${mediaType === "tv" ? "TV shows" : "movies"} found from ${countryName(country)}`
+                    : `No ${mediaType === "tv" ? "TV shows" : "movies"} available.`}
           </p>
           {urlQuery && !isPersonMode && !isGenreMode && (
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>
@@ -633,7 +702,7 @@ function DiscoverPageInner() {
             setShowOnboarding(false);
             setShowNudge(false);
             fetch("/api/movies/recommended").then((r) => r.json()).then((d) => {
-              if (d.personalized && d.results.length >= 6) { setMovies(d.results); setIsPersonalized(true); }
+              if (!country && d.personalized && d.results.length >= 6) { setMovies(d.results); setIsPersonalized(true); }
             }).catch(() => {});
           }}
         />
