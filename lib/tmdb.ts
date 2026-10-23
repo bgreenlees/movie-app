@@ -535,6 +535,30 @@ class TMDBClient {
     return response.json();
   }
 
+  // Popular titles from one country (ISO 3166-1 code), optionally within a genre. The vote
+  // floor is lower than the genre-only pages because smaller industries get far fewer votes.
+  async discoverMoviesByCountry(country: string, genreId?: number, page = 1): Promise<TMDBSearchResponse> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url =
+      `${this.baseUrl}/discover/movie?with_origin_country=${country}` +
+      `${genreId ? `&with_genres=${genreId}` : ""}` +
+      `&sort_by=popularity.desc&vote_count.gte=50&page=${page}&api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 3600 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
+  async discoverTVByCountry(country: string, genreId?: number, page = 1): Promise<TMDBTVSearchResponse> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url =
+      `${this.baseUrl}/discover/tv?with_origin_country=${country}` +
+      `${genreId ? `&with_genres=${genreId}` : ""}` +
+      `&sort_by=popularity.desc&vote_count.gte=20&page=${page}&api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 3600 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
   async discoverTVByGenre(genreIds: number[]): Promise<TMDBTVSearchResponse> {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
     const url =
