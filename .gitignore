@@ -38,3 +38,4 @@ prisma/migrations/*
 !prisma/migrations/.gitkeep
 
 /app/generated/prisma
+.env*
