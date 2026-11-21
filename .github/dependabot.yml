@@ -22,7 +22,7 @@ updates:
       # @types/node majors track Node majors. Bump it by hand when you change .nvmrc,
       # so the types never describe a newer Node than the one production runs.
       - dependency-name: "@types/node"
-        update-types: [version-update:semver-major]
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
