@@ -14,6 +14,7 @@ import {
   moodSelectionToQuery,
   parseMoodSelection,
   pickRecommendations,
+  refreshPicks,
   type MediaChoice,
   type MoodCandidate,
   type MoodPick,
@@ -105,36 +106,58 @@ export default function WhatToWatchPage() {
   const [loaded, setLoaded] = useState<{ query: string; data: PoolData } | null>(null);
   const [picks, setPicks] = useState<MoodPick[]>([]);
   const [reload, setReload] = useState(0);
+  // Bumped by Retry so the same query is fetched again
+  const [attempt, setAttempt] = useState(0);
+  // The query whose load failed, so the page shows an error instead of "Loading…"
+  const [failed, setFailed] = useState<string | null>(null);
   const [selectedMovie, setSelectedMovie] = useState<Selected | null>(null);
   const [selectedShow, setSelectedShow] = useState<Selected | null>(null);
   const [trailer, setTrailer] = useState<(Selected & { mediaType: "movie" | "tv" }) | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    // Aborting stops a stale request (e.g. after quick chip clicks) instead of
+    // just ignoring its response, so it stops costing TMDB calls server-side.
+    const controller = new AbortController();
     (async () => {
       try {
-        const res = await fetch(`/api/mood-picks?${query}`);
-        if (!res.ok) throw new Error();
+        const res = await fetch(`/api/mood-picks?${query}`, { signal: controller.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data: PoolData = await res.json();
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
+        setFailed(null);
         setLoaded({ query, data });
-        // A reload (after Add/Update) keeps the same cards and just refreshes their flags
+        const sel = parseMoodSelection(new URLSearchParams(query));
+        // A reload (after Add/Update) keeps the cards, refreshes their flags, and
+        // swaps out any just marked watched or not interested
         setPicks((current) =>
           reload > 0
-            ? current.map((p) => ({ ...p, onWatchlist: candidateKey(p) in data.watchlist }))
-            : pick(data, parseMoodSelection(new URLSearchParams(query)))
+            ? refreshPicks(current, data.pool, {
+                selection: sel,
+                watchlist: new Set(Object.keys(data.watchlist)),
+                exclude: new Set(data.exclude),
+                count: PICK_COUNT,
+              })
+            : pick(data, sel)
         );
       } catch {
-        if (!cancelled) toast.error("Couldn't load suggestions");
+        if (controller.signal.aborted) return;
+        // A failed refresh after Add/Update keeps the cards that are showing;
+        // a failed load for a new selection shows the error with Retry
+        if (reload > 0) toast.error("Couldn't refresh suggestions");
+        else setFailed(query);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [query, reload]);
+    return () => controller.abort();
+  }, [query, reload, attempt]);
 
-  const isLoading = loaded?.query !== query;
-  const data = loaded?.data;
+  const hasError = failed === query;
+  const isLoading = loaded?.query !== query && !hasError;
+  const data = hasError ? undefined : loaded?.data;
+
+  const retry = () => {
+    setFailed(null);
+    setAttempt((n) => n + 1);
+  };
 
   const update = (next: Partial<MoodSelection>) => {
     setReload(0);
@@ -226,7 +249,7 @@ export default function WhatToWatchPage() {
         </h2>
         <button
           onClick={shuffle}
-          disabled={isLoading || picks.length === 0}
+          disabled={isLoading || hasError || picks.length === 0}
           className="flex items-center gap-1.5 px-4 py-1.5 text-white text-sm rounded-md cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ backgroundColor: "var(--accent)" }}
         >
@@ -237,7 +260,18 @@ export default function WhatToWatchPage() {
         </button>
       </div>
 
-      {isLoading && !data ? (
+      {hasError ? (
+        <div role="alert" className="flex flex-wrap items-center gap-3">
+          <p style={{ color: "var(--text-muted)" }}>Couldn&apos;t load suggestions.</p>
+          <button
+            onClick={retry}
+            className="px-4 py-1.5 text-sm rounded-md cursor-pointer transition-opacity hover:opacity-80"
+            style={{ color: "var(--accent)", border: "1px solid var(--accent)" }}
+          >
+            Retry
+          </button>
+        </div>
+      ) : isLoading && !data ? (
         <p style={{ color: "var(--text-muted)" }}>Loading…</p>
       ) : picks.length === 0 && !isLoading ? (
         <p style={{ color: "var(--text-muted)" }}>
@@ -262,7 +296,7 @@ export default function WhatToWatchPage() {
             );
             const children = (
               <>
-                <div className="flex items-center justify-between gap-1 text-xs">
+                <div className="flex items-start justify-between gap-1 text-xs">
                   {/* Same badge style as the search dropdown's Movie/TV tags */}
                   <span
                     className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0"
@@ -271,7 +305,8 @@ export default function WhatToWatchPage() {
                     {p.mediaType === "movie" ? "Movie" : "TV"}
                   </span>
                   {p.onWatchlist && (
-                    <span className="truncate" style={{ color: "var(--accent)" }}>
+                    // Wraps rather than truncating on narrow (2-column) cards
+                    <span className="text-right leading-tight" style={{ color: "var(--accent)" }}>
                       On your watchlist
                     </span>
                   )}

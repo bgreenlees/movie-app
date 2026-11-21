@@ -3,14 +3,18 @@ import {
   DEFAULT_SELECTION,
   blendPools,
   candidateKey,
+  filterByRealRuntime,
+  fitsRuntime,
   matchesDiscoverParams,
   mediaTypesFor,
   moodSelectionToQuery,
   moodToDiscoverParams,
   parseMoodSelection,
   pickRecommendations,
+  refreshPicks,
   traitScore,
   type MoodCandidate,
+  type MoodPick,
   type MoodSelection,
 } from "./moodPicker";
 
@@ -379,5 +383,159 @@ describe("Light (tightened) and Heavy moods", () => {
 
   it("parses heavy from the URL", () => {
     expect(parseMoodSelection(new URLSearchParams("vibe=heavy")).vibe).toBe("heavy");
+  });
+});
+
+// Exact pins: every mood × media type. A one-genre change to the mapping (e.g.
+// adding Comedy to TV Intense) must fail here, not slip through CI. If you mean
+// to change a mood, update this table in the same commit.
+describe("mood mapping, pinned exactly", () => {
+  const TV_ALWAYS = [10762, 10763, 10764, 10766, 10767]; // Kids, News, Reality, Soap, Talk
+  const nums = (v: string | undefined, sep: string) =>
+    v ? v.split(sep).map(Number).sort((a, b) => a - b) : [];
+  const sorted = (xs: number[]) => [...xs].sort((a, b) => a - b);
+
+  const table: { vibe: MoodSelection["vibe"]; media: "movie" | "tv"; with: number[]; without: number[] }[] = [
+    { vibe: "any", media: "movie", with: [], without: [] },
+    { vibe: "light", media: "movie", with: [35, 10751], without: [27, 53, 80, 10752] },
+    { vibe: "heavy", media: "movie", with: [18], without: [16, 35, 10751] },
+    { vibe: "intense", media: "movie", with: [27, 28, 53, 80, 9648, 10752], without: [16, 35, 10751] },
+    { vibe: "any", media: "tv", with: [], without: TV_ALWAYS },
+    { vibe: "light", media: "tv", with: [35, 10751], without: [80, 10768, ...TV_ALWAYS] },
+    { vibe: "heavy", media: "tv", with: [18], without: [16, 35, 10751, ...TV_ALWAYS] },
+    { vibe: "intense", media: "tv", with: [80, 9648, 10759, 10765, 10768], without: [16, 35, 10751, ...TV_ALWAYS] },
+  ];
+
+  it.each(table)("$vibe · $media → exact with_genres / without_genres", ({ vibe, media, with: w, without }) => {
+    const p = moodToDiscoverParams(sel({ vibe }), media, ctx);
+    expect(nums(p.with_genres, "|")).toEqual(sorted(w));
+    expect(nums(p.without_genres, ",")).toEqual(sorted(without));
+    if (w.length === 0) expect(p).not.toHaveProperty("with_genres");
+    if (without.length === 0) expect(p).not.toHaveProperty("without_genres");
+  });
+
+  it("vote floors: 6.5 rating; 300 votes for movies, 150 for TV, 50 for anything new", () => {
+    for (const media of ["movie", "tv"] as const) {
+      expect(moodToDiscoverParams(DEFAULT_SELECTION, media, ctx)["vote_average.gte"]).toBe("6.5");
+      expect(moodToDiscoverParams(sel({ fresh: true }), media, ctx)["vote_count.gte"]).toBe("50");
+    }
+    expect(moodToDiscoverParams(DEFAULT_SELECTION, "movie", ctx)["vote_count.gte"]).toBe("300");
+    expect(moodToDiscoverParams(DEFAULT_SELECTION, "tv", ctx)["vote_count.gte"]).toBe("150");
+  });
+
+  // The "against" genres don't change the query, only the ranking, so pin them
+  // through traitScore: adding one lowers the score; adding any other genre doesn't.
+  const score = (vibe: MoodSelection["vibe"], mediaType: "movie" | "tv", genreIds: number[]) =>
+    traitScore(
+      { id: 1, mediaType, title: "", posterPath: "/p", date: "", overview: "", popularity: 1, voteAverage: 7.5, voteCount: 2000, genreIds },
+      sel({ vibe })
+    );
+  const against: { vibe: MoodSelection["vibe"]; media: "movie" | "tv"; base: number; against: number[]; neutral: number[] }[] = [
+    { vibe: "light", media: "movie", base: 35, against: [18], neutral: [10749, 12] },
+    { vibe: "light", media: "tv", base: 35, against: [18], neutral: [10765, 10759] },
+    { vibe: "heavy", media: "movie", base: 18, against: [28, 12, 878, 14], neutral: [10749, 36] },
+    { vibe: "heavy", media: "tv", base: 18, against: [10759, 10765], neutral: [9648, 10768] },
+    { vibe: "intense", media: "movie", base: 53, against: [], neutral: [18, 878, 14, 12, 36] },
+    { vibe: "intense", media: "tv", base: 80, against: [], neutral: [18, 10766] },
+  ];
+
+  it.each(against)("$vibe · $media ranks its 'against' genres lower, and only those", ({ vibe, media, base, against: down, neutral }) => {
+    const pure = score(vibe, media, [base]);
+    for (const g of down) expect(score(vibe, media, [base, g]), `genre ${g}`).toBeLessThan(pure);
+    for (const g of neutral) expect(score(vibe, media, [base, g]), `genre ${g}`).toBe(pure);
+  });
+});
+
+describe("pickRecommendations tiers: watchlist and on-screen together", () => {
+  const make = (id: number): MoodCandidate => ({
+    id, mediaType: "movie", title: `T${id}`, posterPath: "/p.jpg", date: "2024-01-01",
+    overview: "", popularity: 1, voteAverage: 7,
+  });
+  const k = (id: number) => candidateKey(make(id));
+
+  it("orders new watchlist → new other → shown watchlist → shown other", () => {
+    // 1: on watchlist, not shown · 2: not on watchlist, not shown
+    // 3: on watchlist, shown     · 4: not on watchlist, shown
+    for (let seed = 0; seed < 20; seed++) {
+      const picks = pickRecommendations([make(4), make(3), make(2), make(1)], {
+        watchlist: new Set([k(1), k(3)]),
+        exclude: new Set(),
+        avoid: new Set([k(3), k(4)]),
+        count: 4,
+        random: () => (seed + 0.5) / 20,
+      });
+      expect(picks.map((p) => p.id)).toEqual([1, 2, 3, 4]);
+      expect(picks.map((p) => p.onWatchlist)).toEqual([true, false, true, false]);
+    }
+  });
+});
+
+describe("runtime: discover's filter is leaky, so real runtimes are checked", () => {
+  const under2 = moodToDiscoverParams(sel({ time: "120" }), "movie", ctx);
+  const half = moodToDiscoverParams(sel({ time: "30" }), "movie", ctx);
+  const anyTime = moodToDiscoverParams(DEFAULT_SELECTION, "movie", ctx);
+
+  it("fitsRuntime applies the limit and rejects unknown runtimes only when limited", () => {
+    expect(fitsRuntime(under2, 120)).toBe(true);
+    expect(fitsRuntime(under2, 121)).toBe(false);
+    expect(fitsRuntime(under2, 238)).toBe(false); // Gone with the Wind
+    expect(fitsRuntime(under2, null)).toBe(false);
+    expect(fitsRuntime(half, 22)).toBe(true);
+    expect(fitsRuntime(half, 5)).toBe(false); // a clip, below the 10 min floor
+    expect(fitsRuntime(anyTime, 238)).toBe(true);
+    expect(fitsRuntime(anyTime, null)).toBe(true);
+  });
+
+  const film = (id: number): MoodCandidate => ({
+    id, mediaType: "movie", title: `F${id}`, posterPath: "/p", date: "", overview: "", popularity: 1, voteAverage: 7,
+  });
+  const runtimes: Record<number, number | null> = { 1: 95, 2: 170, 3: 120, 4: null, 5: 124 };
+
+  it("drops over-length, unknown and failed lookups, keeping order", async () => {
+    const lookup = async (c: MoodCandidate) => {
+      if (c.id === 6) throw new Error("TMDB API error");
+      return runtimes[c.id];
+    };
+    const kept = await filterByRealRuntime([1, 2, 3, 4, 5, 6].map(film), under2, lookup);
+    expect(kept.map((c) => c.id)).toEqual([1, 3]);
+  });
+
+  it("makes no lookups when time isn't limited", async () => {
+    let calls = 0;
+    const pool = [1, 2].map(film);
+    const kept = await filterByRealRuntime(pool, anyTime, async () => (calls++, 999));
+    expect(kept).toBe(pool);
+    expect(calls).toBe(0);
+  });
+});
+
+describe("refreshPicks — after Add/Update", () => {
+  const make = (id: number): MoodCandidate => ({
+    id, mediaType: "movie", title: `T${id}`, posterPath: "/p.jpg", date: "2024-01-01",
+    overview: "", popularity: 1, voteAverage: 7,
+  });
+  const shown = (id: number, onWatchlist = false): MoodPick => ({ ...make(id), onWatchlist });
+  const pool = Array.from({ length: 10 }, (_, i) => make(i + 1));
+  const keys = (...ids: number[]) => new Set(ids.map((id) => candidateKey(make(id))));
+
+  it("keeps the cards in place and refreshes their watchlist flags", () => {
+    const current = [shown(1), shown(2), shown(3)];
+    const next = refreshPicks(current, pool, { watchlist: keys(2), exclude: new Set(), count: 3 });
+    expect(next.map((p) => p.id)).toEqual([1, 2, 3]);
+    expect(next.map((p) => p.onWatchlist)).toEqual([false, true, false]);
+  });
+
+  it("drops a card just marked watched and refills from titles not on screen", () => {
+    const current = [shown(1), shown(2), shown(3), shown(4), shown(5)];
+    const next = refreshPicks(current, pool, { watchlist: new Set(), exclude: keys(3), count: 5 });
+    expect(next).toHaveLength(5);
+    expect(next.slice(0, 4).map((p) => p.id)).toEqual([1, 2, 4, 5]);
+    expect([6, 7, 8, 9, 10]).toContain(next[4].id);
+  });
+
+  it("just shrinks when the pool has nothing else to offer", () => {
+    const small = pool.slice(0, 3);
+    const next = refreshPicks([shown(1), shown(2), shown(3)], small, { watchlist: new Set(), exclude: keys(2), count: 5 });
+    expect(next.map((p) => p.id)).toEqual([1, 3]);
   });
 });

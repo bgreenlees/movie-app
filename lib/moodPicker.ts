@@ -43,8 +43,8 @@ export const DEFAULT_SELECTION: MoodSelection = {
 //  - none:    a title with any of these is out (without_genres)
 //  - against: allowed, but lowers the tone score (see traitScore), so e.g. a pure
 //             drama ranks above an action blockbuster with a drama tag for "Heavy"
-// Light was tightened after the eval (docs/evals/mood-picker.md): Romance, Music or
-// Animation alone let in Titanic, Whiplash and action anime.
+// Light was tightened after a quality check: Romance, Music or Animation alone let
+// in Titanic, Whiplash and action anime. Tests in moodPicker.test.ts pin these lists.
 type VibeGenres = { any: number[]; none: number[]; against: number[] };
 const VIBE_GENRES: Record<MediaType, Record<Exclude<Vibe, "any">, VibeGenres>> = {
   movie: {
@@ -267,6 +267,31 @@ export function pickRecommendations(pool: MoodCandidate[], opts: PickOptions): M
 }
 
 /**
+ * After the user adds or updates a title, refresh the cards on screen: keep them
+ * in place with up-to-date watchlist flags, but drop any just marked watched or
+ * not interested (now in `exclude`) and refill those slots from the pool.
+ */
+export function refreshPicks(
+  current: MoodPick[],
+  pool: MoodCandidate[],
+  opts: Omit<PickOptions, "avoid">
+): MoodPick[] {
+  const count = opts.count ?? 5;
+  const kept = current
+    .filter((p) => !opts.exclude.has(candidateKey(p)))
+    .map((p) => ({ ...p, onWatchlist: opts.watchlist.has(candidateKey(p)) }));
+  if (kept.length === current.length) return kept; // nothing removed
+  const onScreen = new Set(current.map(candidateKey));
+  const refill = pickRecommendations(pool, {
+    ...opts,
+    // Never re-add a card that was just removed or is still showing
+    exclude: new Set([...opts.exclude, ...onScreen]),
+    count: count - kept.length,
+  });
+  return [...kept, ...refill];
+}
+
+/**
  * Build one candidate pool from per-type discover results without a hidden
  * movie/TV quota: each type gets a share of `size` proportional to how many of
  * its titles matched the filters (TMDB's total_results). With "~30 min", ~790
@@ -307,6 +332,41 @@ export interface TitleFacts {
 }
 
 /**
+ * Does a runtime (minutes) satisfy the time limit in discover params? With no
+ * limit anything goes; with one, an unknown runtime fails, so "Under 2 hrs" never
+ * shows a title we can't vouch for.
+ */
+export function fitsRuntime(params: Record<string, string>, runtime: number | null): boolean {
+  const rtMin = params["with_runtime.gte"];
+  const rtMax = params["with_runtime.lte"];
+  if (!rtMin && !rtMax) return true;
+  if (runtime == null) return false;
+  if (rtMin && runtime < Number(rtMin)) return false;
+  if (rtMax && runtime > Number(rtMax)) return false;
+  return true;
+}
+
+/**
+ * Keep only candidates whose real runtime fits the time limit. TMDB's discover
+ * `with_runtime` filter is leaky for movies (it has returned 3-hour films for
+ * "≤ 120 min"), so the route re-checks each one with a details lookup. A lookup
+ * that fails drops the title: better one fewer suggestion than a wrong one.
+ * Order is kept. `lookup` is injected so this stays free of network code.
+ */
+export async function filterByRealRuntime<C extends MoodCandidate>(
+  candidates: C[],
+  params: Record<string, string>,
+  lookup: (c: C) => Promise<number | null>
+): Promise<C[]> {
+  if (fitsRuntime(params, null)) return candidates; // no time limit
+  const checks = await Promise.allSettled(candidates.map(lookup));
+  return candidates.filter((_, i) => {
+    const r = checks[i];
+    return r.status === "fulfilled" && fitsRuntime(params, r.value);
+  });
+}
+
+/**
  * Does a title satisfy discover params built by moodToDiscoverParams? Used for the
  * user's watchlist, which TMDB discover can't filter by ID. Interpreting the params
  * (rather than re-deriving from the selection) keeps one source of truth for what
@@ -322,13 +382,7 @@ export function matchesDiscoverParams(params: Record<string, string>, t: TitleFa
   const minVote = Number(params["vote_average.gte"] ?? 0);
   if (t.voteAverage > 0 && t.voteAverage < minVote) return false;
 
-  const rtMin = params["with_runtime.gte"];
-  const rtMax = params["with_runtime.lte"];
-  if (rtMin || rtMax) {
-    if (t.runtime == null) return false;
-    if (rtMin && t.runtime < Number(rtMin)) return false;
-    if (rtMax && t.runtime > Number(rtMax)) return false;
-  }
+  if (!fitsRuntime(params, t.runtime)) return false;
 
   const dateFrom = params["primary_release_date.gte"] ?? params["first_air_date.gte"];
   const dateTo = params["primary_release_date.lte"] ?? params["first_air_date.lte"];

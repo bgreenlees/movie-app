@@ -3,9 +3,11 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { tmdb } from "@/lib/tmdb";
 import { canonicalProviderIds } from "@/lib/providers";
+import { createLimiter } from "@/lib/concurrency";
 import {
   blendPools,
   candidateKey,
+  filterByRealRuntime,
   matchesDiscoverParams,
   mediaTypesFor,
   moodToDiscoverParams,
@@ -21,6 +23,15 @@ const POOL_SIZE = 60;
 // Most-recently-added watchlist titles to check against the moods, per media type.
 // Each is one (24h-cached) TMDB details call, so this is capped.
 const WATCHLIST_CHECK = 20;
+// TMDB detail lookups (watchlist checks + runtime checks) in flight at once, per request
+const DETAIL_CONCURRENCY = 6;
+
+// Log a failed TMDB call without leaking the API key, in case an error message
+// ever includes the request URL.
+function warnFailed(what: string, error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.warn(`Mood picks: ${what} failed: ${message.replace(/api_key=[^&\s]+/g, "api_key=***")}`);
+}
 
 // Returns a filtered candidate pool; the client picks 3–5 from it with
 // pickRecommendations, so Shuffle is instant and doesn't re-hit TMDB.
@@ -73,11 +84,15 @@ export async function GET(req: NextRequest) {
 
     const ctx = { today: new Date(), providerIds };
     const medias = mediaTypesFor(selection.media);
+    const paramsFor = Object.fromEntries(
+      medias.map((m) => [m, moodToDiscoverParams(selection, m, ctx)])
+    ) as Record<MediaType, Record<string, string>>;
+    const limit = createLimiter(DETAIL_CONCURRENCY);
 
     // Per type: up to 3 discover pages, plus TMDB's count of all matches, which
     // blendPools uses to size each type's share of the pool.
     const discoverGroups = medias.map(async (media) => {
-      const params = moodToDiscoverParams(selection, media, ctx);
+      const params = paramsFor[media];
       const pages = await Promise.allSettled(
         PAGES.map((page) =>
           media === "movie"
@@ -113,6 +128,9 @@ export async function GET(req: NextRequest) {
               }))
         )
       );
+      pages.forEach((r, i) => {
+        if (r.status === "rejected") warnFailed(`discover ${media} page ${PAGES[i]}`, r.reason);
+      });
       const ok = pages.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
       if (ok.length === 0) throw new Error(`TMDB discover failed for ${media}`);
       return { total: ok[0].total, candidates: ok.flatMap((p) => p.candidates) };
@@ -122,9 +140,9 @@ export async function GET(req: NextRequest) {
     // them directly against the same params — that's what makes "watchlist first"
     // work. They're added on top of the blended pool: the user chose them.
     const watchlistChecks = medias.flatMap((media) => {
-      const params = moodToDiscoverParams(selection, media, ctx);
+      const params = paramsFor[media];
       return wantIds[media].slice(0, WATCHLIST_CHECK).map((id) =>
-        tmdb.getTitleMoodFacts(media, id).then((t): MoodCandidate[] =>
+        limit(() => tmdb.getTitleMoodFacts(media, id)).then((t): MoodCandidate[] =>
           matchesDiscoverParams(params, t)
             ? [{
                 id: t.id,
@@ -149,9 +167,33 @@ export async function GET(req: NextRequest) {
     ]);
     const okGroups = groups.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
     if (okGroups.length === 0) throw new Error("All TMDB discover calls failed");
+    const failedChecks = checks.filter((r) => r.status === "rejected");
+    if (failedChecks.length > 0) {
+      warnFailed(`${failedChecks.length} of ${checks.length} watchlist checks`, (failedChecks[0] as PromiseRejectedResult).reason);
+    }
+
+    // Discover's runtime filter is leaky for movies, so when time is limited each
+    // movie's real runtime is checked (24h-cached details call) before it can be
+    // picked. TV episode lengths from discover have held up, so they're trusted.
+    const blended = blendPools(okGroups, POOL_SIZE);
+    const verified = paramsFor.movie
+      ? await filterByRealRuntime(
+          blended.filter((c) => c.mediaType === "movie"),
+          paramsFor.movie,
+          (c) =>
+            limit(() => tmdb.getTitleMoodFacts("movie", c.id)).then(
+              (t) => t.runtime,
+              (error) => {
+                warnFailed(`runtime check for movie ${c.id}`, error);
+                throw error;
+              }
+            )
+        )
+      : [];
+    const verifiedKeys = new Set(verified.map(candidateKey));
     const pool = [
       ...checks.flatMap((r) => (r.status === "fulfilled" ? r.value : [])),
-      ...blendPools(okGroups, POOL_SIZE),
+      ...blended.filter((c) => c.mediaType !== "movie" || verifiedKeys.has(candidateKey(c))),
     ];
 
     return NextResponse.json({

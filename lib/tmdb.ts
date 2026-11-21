@@ -604,7 +604,7 @@ class TMDBClient {
     if (!response.ok) throw new Error("TMDB API error");
     const d = await response.json();
     const flatrate: TMDBWatchProvider[] = d["watch/providers"]?.results?.US?.flatrate ?? [];
-    const runtime = media === "movie" ? d.runtime : d.episode_run_time?.[0];
+    const runtime = media === "movie" ? d.runtime : tvEpisodeRuntime(d);
     return {
       id: d.id,
       title: media === "movie" ? d.title : d.name,
@@ -630,6 +630,21 @@ class TMDBClient {
     if (!response.ok) throw new Error("TMDB API error");
     return response.json();
   }
+}
+
+/**
+ * Typical episode length in minutes for a TMDB TV details response. TMDB leaves
+ * `episode_run_time` empty for many current shows, so fall back to the latest
+ * episode's runtime. Null if neither is a positive number.
+ */
+export function tvEpisodeRuntime(d: {
+  episode_run_time?: number[] | null;
+  last_episode_to_air?: { runtime?: number | null } | null;
+}): number | null {
+  for (const r of [d.episode_run_time?.[0], d.last_episode_to_air?.runtime]) {
+    if (typeof r === "number" && r > 0) return r;
+  }
+  return null;
 }
 
 export const tmdb = new TMDBClient();
