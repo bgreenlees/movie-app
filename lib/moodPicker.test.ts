@@ -216,3 +216,41 @@ describe("matchesDiscoverParams", () => {
     expect(matchesDiscoverParams(params({}), { ...facts, voteAverage: 0 })).toBe(true); // unrated
   });
 });
+
+describe("pickRecommendations — movie/TV mix", () => {
+  const item = (id: number, mediaType: "movie" | "tv"): MoodCandidate => ({
+    id, mediaType, title: `${mediaType}${id}`, posterPath: "/p.jpg", date: "2024-01-01",
+    overview: "", popularity: 1, voteAverage: 7,
+  });
+  // Movie-heavy pool, like a real "Both" pool where movies outnumber shows
+  const pool = [
+    ...Array.from({ length: 30 }, (_, i) => item(i + 1, "movie")),
+    ...Array.from({ length: 5 }, (_, i) => item(i + 1, "tv")),
+  ];
+  const count = (picks: { mediaType: string }[], t: string) => picks.filter((p) => p.mediaType === t).length;
+
+  it("includes both movies and TV when the pool has both", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      let s = seed;
+      const random = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
+      const picks = pickRecommendations(pool, { watchlist: new Set(), exclude: new Set(), random });
+      expect(count(picks, "movie")).toBeGreaterThanOrEqual(2);
+      expect(count(picks, "tv")).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("still mixes when every watchlist match is a movie", () => {
+    const watchlist = new Set(["movie-1", "movie-2", "movie-3", "movie-4", "movie-5"]);
+    const picks = pickRecommendations(pool, { watchlist, exclude: new Set() });
+    expect(count(picks, "tv")).toBeGreaterThanOrEqual(2);
+    expect(picks.filter((p) => p.onWatchlist).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("fills from the other type when one runs out", () => {
+    const picks = pickRecommendations([...pool.slice(0, 10), item(1, "tv")], {
+      watchlist: new Set(), exclude: new Set(),
+    });
+    expect(picks).toHaveLength(5);
+    expect(count(picks, "tv")).toBe(1);
+  });
+});

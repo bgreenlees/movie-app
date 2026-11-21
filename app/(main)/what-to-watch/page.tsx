@@ -244,11 +244,20 @@ export default function WhatToWatchPage() {
             );
             const children = (
               <>
-                {p.onWatchlist && (
-                  <p className="text-xs text-center" style={{ color: "var(--accent)" }}>
-                    On your watchlist
-                  </p>
-                )}
+                <div className="flex items-center justify-between gap-1 text-xs">
+                  {/* Same badge style as the search dropdown's Movie/TV tags */}
+                  <span
+                    className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0"
+                    style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}
+                  >
+                    {p.mediaType === "movie" ? "Movie" : "TV"}
+                  </span>
+                  {p.onWatchlist && (
+                    <span className="truncate" style={{ color: "var(--accent)" }}>
+                      On your watchlist
+                    </span>
+                  )}
+                </div>
                 {addButton}
               </>
             );

@@ -11,7 +11,13 @@
 // Needs TMDB_API_KEY (from .env.local). Calls TMDB only, never the database. Not a
 // Vitest test on purpose: it hits the network and its output needs human judgement.
 
-import { mediaTypesFor, moodToDiscoverParams, DEFAULT_SELECTION, type MoodSelection } from "../lib/moodPicker";
+import {
+  DEFAULT_SELECTION,
+  mediaTypesFor,
+  moodToDiscoverParams,
+  pickRecommendations,
+  type MoodSelection,
+} from "../lib/moodPicker";
 
 const API = process.env.TMDB_API_BASE_URL || "https://api.themoviedb.org/3";
 const KEY = process.env.TMDB_API_KEY;
@@ -31,6 +37,12 @@ const COMBOS: Array<{ name: string; sel: Partial<MoodSelection>; providers?: num
   { name: "Something new · Movies", sel: { fresh: true, media: "movie" } },
   { name: "Intense + Something new · TV", sel: { vibe: "intense", fresh: true, media: "tv" } },
   { name: "Light + On Netflix · Both", sel: { vibe: "light", onMyServices: true }, providers: [NETFLIX] },
+  // "Both" is the default and the real-life case: "a heavy film if we have the
+  // evening, or a light episode if we don't" — the 5 picks should mix the two.
+  { name: "Light · Both", sel: { vibe: "light", media: "both" } },
+  { name: "Intense · Both", sel: { vibe: "intense", media: "both" } },
+  { name: "Short · Both", sel: { short: true, media: "both" } },
+  { name: "Something new · Both", sel: { fresh: true, media: "both" } },
   { name: "Everything ticked · Movies (sparse)", sel: { vibe: "intense", short: true, fresh: true, onMyServices: true, media: "movie" }, providers: [NETFLIX] },
 ];
 
@@ -59,7 +71,7 @@ async function main() {
   }
 
   const today = new Date();
-  const out: Array<{ name: string; params: Record<string, Record<string, string>>; total: number; rows: Row[] }> = [];
+  const out: Array<{ name: string; params: Record<string, Record<string, string>>; total: number; rows: Row[]; mix?: string }> = [];
 
   for (const combo of COMBOS) {
     const sel = { ...DEFAULT_SELECTION, ...combo.sel };
@@ -98,7 +110,26 @@ async function main() {
         r.runtime = (r.media === "movie" ? d.runtime : d.episode_run_time?.[0]) || null;
       }
     }
-    out.push({ name: combo.name, params, total, rows });
+    // For "Both", check what the 5 picks a user sees look like across 20 shuffles
+    let mix: string | undefined;
+    if (sel.media === "both") {
+      const candidates = pool.map((r) => ({
+        id: r.id, mediaType: r.media, title: r.title, posterPath: "/x", date: r.year,
+        overview: "", popularity: 0, voteAverage: r.rating,
+      }));
+      const pickRand = seeded(7);
+      let movies = 0, shows = 0, mixedSets = 0;
+      for (let i = 0; i < 20; i++) {
+        const picks = pickRecommendations(candidates, { watchlist: new Set(), exclude: new Set(), random: pickRand });
+        const m = picks.filter((p) => p.mediaType === "movie").length;
+        movies += m;
+        shows += picks.length - m;
+        if (m > 0 && m < picks.length) mixedSets++;
+      }
+      const poolTV = pool.filter((r) => r.media === "tv").length;
+      mix = `Pool: ${pool.length - poolTV} movies / ${poolTV} TV · picks over 20 shuffles: ${movies / 20} movies + ${shows / 20} TV per set, ${mixedSets}/20 sets mixed`;
+    }
+    out.push({ name: combo.name, params, total, rows, mix });
   }
 
   if (json) {
@@ -108,6 +139,7 @@ async function main() {
   for (const c of out) {
     console.log(`\n## ${c.name}\n`);
     console.log(`TMDB matches: ${c.total} · sampled ${c.rows.length}\n`);
+    if (c.mix) console.log(`${c.mix}\n`);
     const rt = c.rows.some((r) => r.runtime !== undefined);
     console.log(`| Fits? | Type | Title | Year | Genres | Rating |${rt ? " Runtime |" : ""}`);
     console.log(`|---|---|---|---|---|---|${rt ? "---|" : ""}`);

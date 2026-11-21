@@ -218,8 +218,26 @@ export function pickRecommendations(pool: MoodCandidate[], opts: PickOptions): M
   const buckets: MoodCandidate[][] = [[], [], [], []];
   for (const c of eligible) buckets[tier(c)].push(c);
 
-  return buckets
-    .flatMap((b) => shuffled(b, random))
+  const ranked = buckets.flatMap((b) => shuffled(b, random));
+
+  // When the pool has movies *and* TV, alternate between them so a "Both" set
+  // offers a real choice (a film if you have the evening, an episode if you
+  // don't). Each list keeps its own ranking, so watchlist titles still lead
+  // within their type; if one type runs out, the other fills the rest.
+  const movies = ranked.filter((c) => c.mediaType === "movie");
+  const shows = ranked.filter((c) => c.mediaType === "tv");
+  let mixed = ranked;
+  if (movies.length > 0 && shows.length > 0) {
+    // Start with whichever type has the best-ranked title
+    const [first, second] = ranked[0].mediaType === "movie" ? [movies, shows] : [shows, movies];
+    mixed = [];
+    for (let i = 0; mixed.length < count && (i < first.length || i < second.length); i++) {
+      if (i < first.length) mixed.push(first[i]);
+      if (i < second.length) mixed.push(second[i]);
+    }
+  }
+
+  return mixed
     .slice(0, count)
     .map((c) => ({ ...c, onWatchlist: watchlist.has(candidateKey(c)) }));
 }

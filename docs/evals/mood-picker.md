@@ -37,6 +37,21 @@ Rated by Claude on a first pass; worth a human second opinion.
 | Light + On Netflix · Both | 625 | **71%** | 365 Days, Cruel Intentions, JoJo |
 | Everything ticked · Movies | 13 | 83% | ~4 true-crime documentaries |
 
+### Movie / TV mix ("Both")
+
+"Both" is the default and the real-life case: on a given night you might have the
+time and energy for a heavy film, or only for a light episode, so a set should offer
+both. The eval runs the picker 20 times on each "Both" pool and reports the split.
+
+| | Sets with both movies and TV | Avg per set of 5 |
+|---|---|---|
+| Light / Intense / Short / Something new / Light + Netflix · Both | 20/20 each | 2.6 movies + 2.4 TV |
+
+Before the fix, picks were drawn at random from the combined pool. Balanced pools
+usually mixed, but a watchlist full of movies, or a lopsided pool, could produce an
+all-movie set: the first manual test showed 4 watchlist movies and 1 show. The picker
+now alternates movie/TV while keeping watchlist titles first within each type.
+
 ### Runtime ("Short")
 
 | | ≤ limit | Over by ≤ 10 min | Way over |
@@ -61,5 +76,9 @@ slightly over, which is fine for "short-ish", but a few are badly wrong.
    *NCIS*. Genres can't separate these; TMDB keywords might.
 4. **"Short" movies need a runtime check** on the 5 titles actually shown (5 cached
    detail calls) if 3-hour films are unacceptable.
-5. **Intense + everything** pulls in true-crime documentaries; excluding Documentary
+5. **"Heavy drama" has no home.** "Intense" means thrillers, action, horror and crime, and
+   leans towards blockbusters (Avatar, Infinity War). A serious drama (Drama without
+   Comedy) only appears by accident. A separate "Heavy" mood may fit "we have the
+   evening and the energy" better.
+6. **Intense + everything** pulls in true-crime documentaries; excluding Documentary
    (99) from "Intense" would fix it.
