@@ -14,14 +14,16 @@ export async function GET(req: NextRequest) {
       tmdb.getTVGenres(),
     ]);
 
-    const movies: any[] = [];
-    const tvShows: any[] = [];
-    const people: any[] = [];
+    type MultiResult = Awaited<ReturnType<typeof tmdb.searchMulti>>["results"][number];
+    const movies: Extract<MultiResult, { media_type: "movie" }>[] = [];
+    const tvShows: Extract<MultiResult, { media_type: "tv" }>[] = [];
+    const people: Extract<MultiResult, { media_type: "person" }>[] = [];
 
+    // Narrowing on media_type lets TypeScript pick the right union member.
     for (const r of multi.results || []) {
-      if ((r as any).media_type === "movie" && (r as any).poster_path) movies.push(r);
-      else if ((r as any).media_type === "tv" && (r as any).poster_path) tvShows.push(r);
-      else if ((r as any).media_type === "person" && (r as any).profile_path) people.push(r);
+      if (r.media_type === "movie") { if (r.poster_path) movies.push(r); }
+      else if (r.media_type === "tv") { if (r.poster_path) tvShows.push(r); }
+      else if (r.media_type === "person") { if (r.profile_path) people.push(r); }
     }
 
     movies.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));

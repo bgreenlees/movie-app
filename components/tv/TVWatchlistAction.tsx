@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import AddTVModal from "./AddTVModal";
 
@@ -24,19 +24,19 @@ export default function TVWatchlistAction({ tvShowId, tvShowName, isLoggedIn }: 
   const [open, setOpen] = useState(false);
   const [existingEntry, setExistingEntry] = useState<ExistingTVEntry | undefined>(undefined);
 
-  const fetchEntry = () => {
+  const fetchEntry = useCallback(() => {
     fetch("/api/tv/watchlist")
       .then((r) => r.json())
       .then((d) => {
-        const match = (d.entries || []).find((e: any) => e.tvShowId === tvShowId);
+        const match = (d.entries || []).find((e: ExistingTVEntry & { tvShowId?: number }) => e.tvShowId === tvShowId);
         setExistingEntry(match);
       })
       .catch(() => {});
-  };
+  }, [tvShowId]);
 
   useEffect(() => {
     if (isLoggedIn) fetchEntry();
-  }, [isLoggedIn, tvShowId]);
+  }, [isLoggedIn, fetchEntry]);
 
   if (!isLoggedIn) {
     return (

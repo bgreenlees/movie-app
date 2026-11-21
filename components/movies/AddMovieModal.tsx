@@ -162,7 +162,7 @@ export default function AddMovieModal({
       toast.success("Added to watchlist!");
       if (onSuccess) onSuccess();
       onClose();
-    } catch (error) {
+    } catch {
       toast.error("An error occurred. Please try again.");
     } finally {
       setIsSubmitting(false);

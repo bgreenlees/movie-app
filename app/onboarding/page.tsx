@@ -92,7 +92,7 @@ const CLUSTERS: { label: string; movies: { id: number; title: string }[] }[] = [
 const POSTER_BASE = "https://image.tmdb.org/t/p/w342";
 
 export default function OnboardingPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [posters, setPosters] = useState<Record<number, string>>({});

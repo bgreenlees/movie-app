@@ -184,7 +184,7 @@ export default function ProfilePage() {
           Profile
         </h1>
         <p className="text-sm mb-8" style={{ color: "var(--text-muted)" }}>
-          Select the streaming services you subscribe to. We'll highlight them when adding movies.
+          Select the streaming services you subscribe to. We&apos;ll highlight them when adding movies.
         </p>
 
         <h2 className="text-base font-semibold mb-4" style={{ color: "var(--foreground)" }}>

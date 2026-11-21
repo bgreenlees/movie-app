@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { TVWatchStatus } from "@prisma/client";
 import { tmdb } from "@/lib/tmdb";
 
 export async function GET(req: NextRequest) {
@@ -10,11 +11,16 @@ export async function GET(req: NextRequest) {
 
     const userId = session.user.id as string;
     const status = req.nextUrl.searchParams.get("status");
+    // Reject unknown statuses up front; passing an arbitrary string to Prisma
+    // makes the query throw and surfaces as a 500 instead of a 400.
+    if (status && !(Object.values(TVWatchStatus) as string[]).includes(status)) {
+      return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    }
 
     const entries = await prisma.tVWatchlistEntry.findMany({
       where: {
         userId,
-        ...(status ? { status: status as any } : {}),
+        ...(status ? { status: status as TVWatchStatus } : {}),
       },
       include: { tvShow: true },
       orderBy: { updatedAt: "desc" },

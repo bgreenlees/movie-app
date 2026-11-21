@@ -52,7 +52,6 @@ export default function MyMoviesPage() {
 
   useEffect(() => {
     fetchEntries(activeTab);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   const handleRating = async (entryId: string, rating: number) => {

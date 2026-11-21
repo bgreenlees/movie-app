@@ -13,6 +13,7 @@ Next.js 16 (App Router, Turbopack) · TypeScript · NextAuth v5 (Google + creden
 ## Commands
 - `npm run dev` — dev server on http://localhost:3000 (uses the Neon `dev` branch)
 - `npx tsc --noEmit` — type-check (run before every commit)
+- `npm run lint` — ESLint 9 flat config (`eslint.config.mjs`, Next core-web-vitals + TypeScript rules); must exit 0
 - `npm run build` — **runs `prisma migrate deploy` against `DATABASE_URL`; don't run locally**
 - Prisma CLI reads `.env`, not `.env.local`. For `prisma generate` alone a placeholder works: `DATABASE_URL=postgresql://x@localhost/x npx prisma generate`
 
@@ -29,7 +30,6 @@ Schema changes are applied with `prisma db push`; `prisma/migrations/*` is gitig
 `vercel env pull .env.local` fetches Development vars (dev database). `NEXTAUTH_URL` is production-only; locally NextAuth infers the host.
 
 ## Known issues
-- `npm run lint` is broken: `next lint` was removed in Next 16 and `.eslintrc.json` is the legacy format ESLint 9 ignores. Needs migration to `eslint.config.mjs`.
 - No tests or CI yet.
 
 ## Workflow

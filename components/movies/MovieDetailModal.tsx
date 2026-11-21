@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { TMDBWatchProvider, TMDBMovie } from "@/lib/tmdb";
@@ -48,6 +48,9 @@ interface MovieDetailModalProps {
   onClose: () => void;
 }
 
+const EMPTY_PROVIDERS: { flatrate: TMDBWatchProvider[]; rent: TMDBWatchProvider[] } = { flatrate: [], rent: [] };
+const EMPTY_RECS: TMDBMovie[] = [];
+
 export default function MovieDetailModal({
   movieId,
   movieTitle,
@@ -59,28 +62,41 @@ export default function MovieDetailModal({
   const [currentId, setCurrentId] = useState<number | null>(movieId);
   const [currentTitle, setCurrentTitle] = useState<string>(movieTitle);
   const [history, setHistory] = useState<Array<{ id: number; title: string }>>([]);
-  const rootPosterRef = useRef<string | null | undefined>(posterPath);
-  const rootOverviewRef = useRef<string | undefined>(overview);
 
-  const [details, setDetails] = useState<MovieDetails | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [providers, setProviders] = useState<{ flatrate: TMDBWatchProvider[]; rent: TMDBWatchProvider[] }>({ flatrate: [], rent: [] });
+  // Fetched data is stored together with the movie id it belongs to, and the
+  // loading flags are derived from that. This means the fetch effect never has
+  // to reset state synchronously, and a slow response for a previously viewed
+  // movie can't overwrite the one currently on screen.
+  const [detailData, setDetailData] = useState<{
+    id: number;
+    details: MovieDetails | null;
+    providers: { flatrate: TMDBWatchProvider[]; rent: TMDBWatchProvider[] };
+  } | null>(null);
   const [userServices, setUserServices] = useState<Set<number>>(new Set());
+  const [recsData, setRecsData] = useState<{ id: number; recs: TMDBMovie[] } | null>(null);
 
-  const [recs, setRecs] = useState<TMDBMovie[]>([]);
-  const [recsLoading, setRecsLoading] = useState(false);
+  const currentDetail = detailData && detailData.id === currentId ? detailData : null;
+  const details = currentDetail?.details ?? null;
+  const providers = currentDetail?.providers ?? EMPTY_PROVIDERS;
+  const isLoading = currentId !== null && currentDetail === null;
+  const currentRecs = recsData && recsData.id === currentId ? recsData : null;
+  const recs = currentRecs?.recs ?? EMPTY_RECS;
+  const recsLoading = currentId !== null && currentRecs === null;
   const [watchlistEntries, setWatchlistEntries] = useState<Record<number, WatchlistEntry>>({});
   const [showAddModal, setShowAddModal] = useState(false);
 
-  // Reset internal state when the outer prop opens a new modal.
-  useEffect(() => {
-    if (movieId === null) return;
-    setCurrentId(movieId);
-    setCurrentTitle(movieTitle);
-    setHistory([]);
-    rootPosterRef.current = posterPath;
-    rootOverviewRef.current = overview;
-  }, [movieId, movieTitle, posterPath, overview]);
+  // Reset internal state when the outer prop opens a new modal. Adjusting state
+  // during render (instead of in an effect) avoids rendering once with stale
+  // state first: https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  const [prevMovieId, setPrevMovieId] = useState(movieId);
+  if (movieId !== prevMovieId) {
+    setPrevMovieId(movieId);
+    if (movieId !== null) {
+      setCurrentId(movieId);
+      setCurrentTitle(movieTitle);
+      setHistory([]);
+    }
+  }
 
   // Fetch full watchlist entries once per open (not per swap).
   const fetchWatchlistEntries = useCallback(() => {
@@ -90,7 +106,7 @@ export default function MovieDetailModal({
       fetch("/api/watchlist?status=NOT_INTERESTED").then((r) => r.json()).catch(() => ({ entries: [] })),
     ]).then(([want, watched, not]) => {
       const entries: Record<number, WatchlistEntry> = {};
-      [...(want.entries || []), ...(watched.entries || []), ...(not.entries || [])].forEach((e: any) => {
+      [...(want.entries || []), ...(watched.entries || []), ...(not.entries || [])].forEach((e: WatchlistEntry & { movieId?: unknown }) => {
         if (typeof e.movieId === "number") {
           entries[e.movieId] = { id: e.id, status: e.status, platform: e.platform, watchType: e.watchType, rating: e.rating, review: e.review };
         }
@@ -107,11 +123,8 @@ export default function MovieDetailModal({
   // Fetch details + providers + recs whenever the currently viewed movie changes.
   useEffect(() => {
     if (!currentId) return;
-    setDetails(null);
-    setProviders({ flatrate: [], rent: [] });
-    setRecs([]);
-    setIsLoading(true);
-    setRecsLoading(true);
+    const id = currentId;
+    let cancelled = false;
 
     Promise.all([
       fetch(`/api/movies/${currentId}/credits`).then((r) => r.json()),
@@ -119,18 +132,30 @@ export default function MovieDetailModal({
       fetch("/api/user/streaming").then((r) => r.json()),
     ])
       .then(([creditsData, providerData, userData]) => {
-        setDetails(creditsData);
-        setProviders({ flatrate: providerData.flatrate || [], rent: providerData.rent || [] });
+        if (cancelled) return;
+        setDetailData({
+          id,
+          details: creditsData,
+          providers: { flatrate: providerData.flatrate || [], rent: providerData.rent || [] },
+        });
         setUserServices(new Set(userData.streamingServices || []));
       })
-      .catch(() => setDetails(null))
-      .finally(() => setIsLoading(false));
+      .catch(() => {
+        if (!cancelled) setDetailData({ id, details: null, providers: EMPTY_PROVIDERS });
+      });
 
     fetch(`/api/movies/${currentId}/recommendations`)
       .then((r) => r.json())
-      .then((d) => setRecs(d.results || []))
-      .catch(() => setRecs([]))
-      .finally(() => setRecsLoading(false));
+      .then((d) => {
+        if (!cancelled) setRecsData({ id, recs: d.results || [] });
+      })
+      .catch(() => {
+        if (!cancelled) setRecsData({ id, recs: [] });
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [currentId]);
 
   useEffect(() => {
@@ -155,8 +180,10 @@ export default function MovieDetailModal({
     .slice(0, 3);
   const cast = details?.cast ?? [];
   const isRootMovie = currentId === movieId;
-  const displayPoster = details?.poster_path ?? (isRootMovie ? rootPosterRef.current : null);
-  const displayOverview = details?.overview ?? (isRootMovie ? rootOverviewRef.current : undefined);
+  // The posterPath/overview props always describe the root movie, so use them
+  // directly as a fallback (reading refs during render can show stale values).
+  const displayPoster = details?.poster_path ?? (isRootMovie ? posterPath : null);
+  const displayOverview = details?.overview ?? (isRootMovie ? overview : undefined);
   const currentEntry = watchlistEntries[currentId];
 
   const handleSwapTo = (id: number, title: string) => {

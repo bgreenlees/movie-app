@@ -102,7 +102,7 @@ export default function TVShowDetailModal({
       .then((r) => r.json())
       .then((d) => {
         const entries: Record<number, TVWatchlistEntry> = {};
-        (d.entries || []).forEach((e: any) => {
+        (d.entries || []).forEach((e: TVWatchlistEntry & { tvShowId?: unknown }) => {
           if (typeof e.tvShowId === "number") {
             entries[e.tvShowId] = { id: e.id, status: e.status, platform: e.platform, rating: e.rating, review: e.review, currentSeason: e.currentSeason, currentEpisode: e.currentEpisode };
           }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import AddMovieModal from "./AddMovieModal";
 
@@ -23,22 +23,22 @@ export default function MovieWatchlistAction({ movieId, movieTitle, isLoggedIn }
   const [open, setOpen] = useState(false);
   const [existingEntry, setExistingEntry] = useState<ExistingEntry | undefined>(undefined);
 
-  const fetchEntry = () => {
+  const fetchEntry = useCallback(() => {
     Promise.all([
       fetch("/api/watchlist?status=WANT_TO_WATCH").then((r) => r.json()).catch(() => ({ entries: [] })),
       fetch("/api/watchlist?status=WATCHED").then((r) => r.json()).catch(() => ({ entries: [] })),
       fetch("/api/watchlist?status=NOT_INTERESTED").then((r) => r.json()).catch(() => ({ entries: [] })),
     ]).then(([want, watched, not]) => {
       const match = [...(want.entries || []), ...(watched.entries || []), ...(not.entries || [])].find(
-        (e: any) => e.movieId === movieId
+        (e: ExistingEntry & { movieId?: number }) => e.movieId === movieId
       );
       setExistingEntry(match);
     });
-  };
+  }, [movieId]);
 
   useEffect(() => {
     if (isLoggedIn) fetchEntry();
-  }, [isLoggedIn, movieId]);
+  }, [isLoggedIn, fetchEntry]);
 
   if (!isLoggedIn) {
     return (
