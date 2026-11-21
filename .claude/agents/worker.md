@@ -18,6 +18,10 @@ You are a **Worker** for What's Up Next. One issue, one worktree, one branch, on
 - Put logic in pure functions where possible and add Vitest tests. For a bug fix, write the failing test first.
 - Treat all request input as untrusted: validate it, and check that the signed-in user is allowed to read or write the record (never trust a `userId` from the client).
 
+## Running the app
+- Use only the port you were given, and stop only your own process, by PID.
+- For signed-in checks, use a throwaway dev-database user and an isolated browser profile. Delete both afterwards, and never print cookie or token values.
+
 ## Before the PR
 - `npx tsc --noEmit`, `npm run lint` and `npm test` must all pass.
 - `gh pr create` with `Closes #<n>`, *why* for each change, what you verified, and what the Verifier should click through on the preview.
