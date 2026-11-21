@@ -1,0 +1,35 @@
+# Dependabot version updates: opens PRs to keep dependencies current.
+# Each PR runs CI like any other, so a green check means type-check, lint and tests still pass.
+# Updates are grouped so a week's worth arrives as one or two PRs, not a dozen.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps
+    groups:
+      # Minor and patch bumps are meant to be backwards compatible: review them together.
+      minor-and-patch:
+        update-types: [minor, patch]
+    # Major versions (e.g. Prisma 7, ESLint 10, TypeScript 7) come one PR per package,
+    # because each may need code changes. Close any you're not ready for; Dependabot
+    # won't reopen that version.
+    ignore:
+      # @types/node majors track Node majors. Bump it by hand when you change .nvmrc,
+      # so the types never describe a newer Node than the one production runs.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ["*"]

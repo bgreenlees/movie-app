@@ -1,4 +1,4 @@
-# claude-movie-app
+# What's Up Next
 
 A movie and TV show tracking app built with Next.js. Discover new releases, track what you're watching, keep watchlists, and get personalized recommendations powered by TMDB.
 
@@ -27,11 +27,10 @@ A movie and TV show tracking app built with Next.js. Discover new releases, trac
 
 ### Prerequisites
 
-- Node.js
-- A PostgreSQL database (e.g. [Neon](https://neon.tech))
-- A [TMDB API key](https://www.themoviedb.org/settings/api)
-- Google OAuth credentials
-- A [Resend](https://resend.com) API key (for the feedback form)
+- **Node.js 24** (the version in `.nvmrc`, same as Vercel and CI). With a version manager: `fnm use` or `nvm use`.
+- The [Vercel CLI](https://vercel.com/docs/cli) (`npm i -g vercel`), logged in with access to the `movie-app` project. It provides the dev environment variables.
+
+You don't need your own database or API keys: local development uses the shared Neon **dev** branch and the Development variables stored in Vercel.
 
 ### Setup
 
@@ -41,26 +40,15 @@ A movie and TV show tracking app built with Next.js. Discover new releases, trac
    npm install
    ```
 
-2. Create a `.env.local` file with the following variables:
+2. Pull the Development environment variables into `.env.local`. They point at the Neon `dev` branch, never production:
 
    ```bash
-   DATABASE_URL=
-   AUTH_SECRET=
-   NEXTAUTH_URL=http://localhost:3000
-   GOOGLE_CLIENT_ID=
-   GOOGLE_CLIENT_SECRET=
-   TMDB_API_KEY=
-   TMDB_API_BASE_URL=
-   RESEND_API_KEY=
+   vercel env pull .env.local --environment=development --project movie-app --scope bobgreenlees-gmailcoms-projects --yes
    ```
 
-3. Push the Prisma schema to your database:
+   `.env.example` lists every variable the app reads and what it's for. Don't set `NEXTAUTH_URL` locally; NextAuth works out the host itself.
 
-   ```bash
-   npx prisma db push
-   ```
-
-4. Start the dev server:
+3. Start the dev server:
 
    ```bash
    npm run dev
@@ -68,13 +56,20 @@ A movie and TV show tracking app built with Next.js. Discover new releases, trac
 
    The app runs at [http://localhost:3000](http://localhost:3000).
 
+The dev database already has the current schema, so there's no database step. Schema changes are a separate, deliberate step; see "Database" in `CLAUDE.md`.
+
 ### Other commands
 
 ```bash
-npm run build   # prisma generate + migrate deploy + next build
-npm run start   # start production server
-npm run lint    # run ESLint
+npx tsc --noEmit   # type-check
+npm run lint       # ESLint
+npm test           # Vitest, run once (npx vitest for watch mode)
+npm run start      # start a production build locally
 ```
+
+Run the type-check, lint and tests before every commit. CI runs the same three on every pull request.
+
+Don't run `npm run build` locally: it runs `prisma migrate deploy` against whatever `DATABASE_URL` is set. Vercel builds with its own build command (`npx prisma generate && next build`, set in the Vercel project settings).
 
 ## Project structure
 
@@ -85,9 +80,13 @@ app/
   api/          # API routes (movies, tv, watchlist, auth, feedback, ...)
 components/     # shared UI, movie, and TV components
 lib/            # auth config, db client, TMDB client
-prisma/         # schema and migrations
+prisma/         # schema.prisma (migrations are not committed)
+docs/           # feature specs and reviews
 ```
 
 ## Deployment
 
-Deployed on [Vercel](https://vercel.com) with a [Neon](https://neon.tech) Postgres database.
+Deployed on [Vercel](https://vercel.com) with a [Neon](https://neon.tech) Postgres database. Live at https://whatsupnext.site.
+
+- Every pull request gets a Vercel preview deployment, using the Neon `dev` branch.
+- Merging to `main` deploys to production, using the Neon `production` branch. `main` is protected: the `ci` check (type-check, lint, tests) must pass first.
