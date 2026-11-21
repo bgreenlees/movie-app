@@ -20,10 +20,12 @@ Next.js 16 (App Router, Turbopack) · TypeScript · NextAuth v5 (Google + creden
 
 ## Database
 Neon project `movie-app` (`square-glade-69239353`) has two branches:
-- `production` — used only by Vercel Production
-- `dev` — full copy of production (real user data), used by Vercel Development + Preview and local dev
+- `production` — used only by Vercel Production. Real user data.
+- `dev-clean` — **schema-only** (same tables, no production rows), used by Vercel Development + Preview and local dev. Contains test accounts only.
 
-Safe to experiment against `dev`. Before any schema change or destructive script, check that `DATABASE_URL` points at the dev host (`ep-sparkling-resonance-…`), never production. To refresh `dev` from production: `neon branches reset dev --parent --project-id square-glade-69239353` (wipes dev changes).
+Safe to experiment against `dev-clean`. Before any schema change or destructive script, check that `DATABASE_URL` points at the dev host (`ep-royal-tooth-…`), never production (`ep-rough-art-…`). Never copy production data into a non-production branch: it holds real users' emails and password hashes.
+
+`dev-clean` is an independent root branch, so it **can't** be reset from production. If it drifts or gets messy, recreate it: `neon branches create --project-id square-glade-69239353 --name <new> --parent production --schema-only`, point Vercel Preview + Development `DATABASE_URL` at its pooled connection string (`vercel env update DATABASE_URL --environment development`), then delete the old branch.
 
 Schema changes are applied with `prisma db push`; `prisma/migrations/*` is gitignored, so `migrate deploy` in the build is effectively a no-op.
 
