@@ -11,11 +11,17 @@ import { providerTierIds } from "./providers";
 export type MediaType = "movie" | "tv";
 export type MediaChoice = MediaType | "both";
 export type Vibe = "any" | "light" | "intense";
+/** Minutes available for one sitting: a film's runtime or one episode's */
+export type TimeAvailable = "any" | "30" | "120";
 
 export interface MoodSelection {
   vibe: Vibe;
-  /** Movies under ~100 min, TV episodes ~30 min or less */
-  short: boolean;
+  /**
+   * How long you've got. The same limit applies to a film's runtime and to one
+   * episode, so the mix of movies and TV comes from runtimes, not from type: with
+   * ~30 min, half-hour episodes qualify and feature films don't.
+   */
+  time: TimeAvailable;
   /** Released in roughly the last year */
   fresh: boolean;
   /** Only titles streaming on the user's saved services */
@@ -25,7 +31,7 @@ export interface MoodSelection {
 
 export const DEFAULT_SELECTION: MoodSelection = {
   vibe: "any",
-  short: false,
+  time: "any",
   fresh: false,
   onMyServices: false,
   media: "both",
@@ -52,8 +58,8 @@ const GENRES = {
 // (same exclusion as getNewOnStreamingTV in lib/tmdb.ts).
 const TV_ALWAYS_EXCLUDED = [10762, 10763, 10764, 10766, 10767];
 
-export const SHORT_MOVIE_MAX_MINUTES = 100;
-export const SHORT_EPISODE_MAX_MINUTES = 30;
+// Below this a "title" is usually a clip or extra, not something to sit down to
+const MIN_RUNTIME_MINUTES = 10;
 export const FRESH_WINDOW_DAYS = 365;
 
 function isoDate(d: Date): string {
@@ -103,11 +109,9 @@ export function moodToDiscoverParams(
 
   if (without.size > 0) params.without_genres = [...without].join(",");
 
-  if (selection.short) {
-    params["with_runtime.gte"] = media === "movie" ? "60" : "10"; // skip shorts/clips
-    params["with_runtime.lte"] = String(
-      media === "movie" ? SHORT_MOVIE_MAX_MINUTES : SHORT_EPISODE_MAX_MINUTES
-    );
+  if (selection.time !== "any") {
+    params["with_runtime.gte"] = String(MIN_RUNTIME_MINUTES);
+    params["with_runtime.lte"] = selection.time;
   }
 
   if (selection.fresh) {
@@ -130,14 +134,15 @@ export function mediaTypesFor(choice: MediaChoice): MediaType[] {
   return choice === "both" ? ["movie", "tv"] : [choice];
 }
 
-/** Parse ?vibe=&short=&fresh=&services=&media= from a URL, ignoring junk values. */
+/** Parse ?vibe=&time=&fresh=&services=&media= from a URL, ignoring junk values. */
 export function parseMoodSelection(params: URLSearchParams): MoodSelection {
   const vibe = params.get("vibe");
   const media = params.get("media");
+  const time = params.get("time");
   const flag = (k: string) => params.get(k) === "1";
   return {
     vibe: vibe === "light" || vibe === "intense" ? vibe : "any",
-    short: flag("short"),
+    time: time === "30" || time === "120" ? time : "any",
     fresh: flag("fresh"),
     onMyServices: flag("services"),
     media: media === "movie" || media === "tv" ? media : "both",
@@ -145,8 +150,7 @@ export function parseMoodSelection(params: URLSearchParams): MoodSelection {
 }
 
 export function moodSelectionToQuery(s: MoodSelection): string {
-  const q = new URLSearchParams({ vibe: s.vibe, media: s.media });
-  if (s.short) q.set("short", "1");
+  const q = new URLSearchParams({ vibe: s.vibe, media: s.media, time: s.time });
   if (s.fresh) q.set("fresh", "1");
   if (s.onMyServices) q.set("services", "1");
   return q.toString();
@@ -163,6 +167,9 @@ export interface MoodCandidate {
   overview: string;
   popularity: number;
   voteAverage: number;
+  /** Traits used for scoring; optional so partial data still works */
+  voteCount?: number;
+  genreIds?: number[];
 }
 
 export interface MoodPick extends MoodCandidate {
@@ -179,26 +186,50 @@ export interface PickOptions {
   /** Keys currently on screen; a shuffle avoids repeating them when it can */
   avoid?: Set<string>;
   count?: number;
+  /** The moods picked, so titles are scored on how strongly they fit them */
+  selection?: MoodSelection;
   /** Injected so tests are deterministic; defaults to Math.random */
   random?: () => number;
 }
 
-function shuffled<T>(items: T[], random: () => number): T[] {
-  const out = [...items];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+
+/**
+ * How good a pick a title is, 0–1, judged only on its traits — never on whether
+ * it's a movie or a show. Time available is already a hard filter on runtime /
+ * episode length, so here it's:
+ *  - tone: how strongly its genres match the mood (a pure sitcom is "lighter"
+ *    than a romance; a crime-thriller more "intense" than an action comedy)
+ *  - quality: rating, shrunk towards average when there are few votes, so a 9.0
+ *    from 40 votes doesn't beat an 8.4 from 20,000
+ */
+export function traitScore(c: MoodCandidate, selection?: MoodSelection): number {
+  const votes = c.voteCount ?? 0;
+  const PRIOR_VOTES = 300;
+  const PRIOR_RATING = 6.8;
+  const rating = (votes * c.voteAverage + PRIOR_VOTES * PRIOR_RATING) / (votes + PRIOR_VOTES);
+  const quality = clamp01((rating - 6) / 2.5);
+
+  let tone = 0.5; // no vibe picked: tone doesn't matter
+  if (selection && selection.vibe !== "any" && c.genreIds && c.genreIds.length > 0) {
+    const g = GENRES[c.mediaType];
+    const want: readonly number[] = selection.vibe === "light" ? g.light : g.intense;
+    const against: readonly number[] = selection.vibe === "light" ? g.intense : g.light;
+    const hits = c.genreIds.filter((id) => want.includes(id)).length;
+    const misses = c.genreIds.filter((id) => against.includes(id)).length;
+    tone = clamp01(0.5 + 0.25 * hits - 0.25 * misses);
   }
-  return out;
+
+  return 0.5 * quality + 0.5 * tone;
 }
 
 /**
  * Choose `count` titles from a candidate pool: drop excluded and duplicate titles,
- * put watchlist matches first, and prefer titles not currently shown. Randomised
- * so "Shuffle" gives a fresh set each time.
+ * put watchlist matches first, prefer titles not currently shown, and favour
+ * titles whose traits fit the mood best. Randomised so "Shuffle" gives a fresh set.
  */
 export function pickRecommendations(pool: MoodCandidate[], opts: PickOptions): MoodPick[] {
-  const { watchlist, exclude, avoid = new Set<string>(), count = 5, random = Math.random } = opts;
+  const { watchlist, exclude, avoid = new Set<string>(), count = 5, random = Math.random, selection } = opts;
 
   const seen = new Set<string>();
   const eligible: MoodCandidate[] = [];
@@ -210,36 +241,52 @@ export function pickRecommendations(pool: MoodCandidate[], opts: PickOptions): M
   }
 
   // Tiers, best first: fresh watchlist → fresh other → repeat watchlist → repeat other.
-  // Within a tier, order is random.
+  // Within a tier, a weighted random draw: better-fitting titles (traitScore)
+  // come up more often, but Shuffle still varies. Movies and TV compete on the
+  // same traits, so the mix follows the mood — "~30 min + Light" means sitcom
+  // episodes because of their runtime and genre — rather than a fixed quota. (Efraimidis–Spirakis: sort by
+  // random^(1/weight); the small floor gives every match some chance.)
   const tier = (c: MoodCandidate) => {
     const key = candidateKey(c);
     return (avoid.has(key) ? 2 : 0) + (watchlist.has(key) ? 0 : 1);
   };
-  const buckets: MoodCandidate[][] = [[], [], [], []];
-  for (const c of eligible) buckets[tier(c)].push(c);
-
-  const ranked = buckets.flatMap((b) => shuffled(b, random));
-
-  // When the pool has movies *and* TV, alternate between them so a "Both" set
-  // offers a real choice (a film if you have the evening, an episode if you
-  // don't). Each list keeps its own ranking, so watchlist titles still lead
-  // within their type; if one type runs out, the other fills the rest.
-  const movies = ranked.filter((c) => c.mediaType === "movie");
-  const shows = ranked.filter((c) => c.mediaType === "tv");
-  let mixed = ranked;
-  if (movies.length > 0 && shows.length > 0) {
-    // Start with whichever type has the best-ranked title
-    const [first, second] = ranked[0].mediaType === "movie" ? [movies, shows] : [shows, movies];
-    mixed = [];
-    for (let i = 0; mixed.length < count && (i < first.length || i < second.length); i++) {
-      if (i < first.length) mixed.push(first[i]);
-      if (i < second.length) mixed.push(second[i]);
-    }
+  const buckets: { c: MoodCandidate; key: number }[][] = [[], [], [], []];
+  for (const c of eligible) {
+    const weight = 0.05 + traitScore(c, selection);
+    buckets[tier(c)].push({ c, key: Math.pow(random(), 1 / weight) });
   }
+  const ranked = buckets.flatMap((b) => b.sort((a, z) => z.key - a.key).map((x) => x.c));
 
-  return mixed
+  return ranked
     .slice(0, count)
     .map((c) => ({ ...c, onWatchlist: watchlist.has(candidateKey(c)) }));
+}
+
+/**
+ * Build one candidate pool from per-type discover results without a hidden
+ * movie/TV quota: each type gets a share of `size` proportional to how many of
+ * its titles matched the filters (TMDB's total_results). With "~30 min", ~790
+ * shows but only ~80 short films match, so the pool is ~90% TV — because of
+ * runtimes, not because of type. Each group's order (popularity) is kept; if a
+ * type has too few candidates, the other tops up.
+ */
+export function blendPools(
+  groups: { candidates: MoodCandidate[]; total: number }[],
+  size: number
+): MoodCandidate[] {
+  const sum = groups.reduce((n, g) => n + g.total, 0);
+  if (sum === 0) return [];
+  const taken = groups.map((g) =>
+    g.total > 0 ? Math.min(g.candidates.length, Math.max(1, Math.round((size * g.total) / sum))) : 0
+  );
+  // Top up from whichever groups still have candidates
+  let short = size - taken.reduce((a, b) => a + b, 0);
+  for (let i = 0; short > 0 && i < groups.length; i++) {
+    const extra = Math.min(short, groups[i].candidates.length - taken[i]);
+    taken[i] += extra;
+    short -= extra;
+  }
+  return groups.flatMap((g, i) => g.candidates.slice(0, taken[i])).slice(0, size);
 }
 
 // ── Matching a known title against the same filters ──────────────────────────

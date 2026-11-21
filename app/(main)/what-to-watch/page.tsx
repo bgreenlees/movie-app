@@ -12,11 +12,13 @@ import {
   DEFAULT_SELECTION,
   candidateKey,
   moodSelectionToQuery,
+  parseMoodSelection,
   pickRecommendations,
   type MediaChoice,
   type MoodCandidate,
   type MoodPick,
   type MoodSelection,
+  type TimeAvailable,
   type Vibe,
 } from "@/lib/moodPicker";
 
@@ -49,8 +51,13 @@ const VIBES: { value: Exclude<Vibe, "any">; label: string }[] = [
   { value: "intense", label: "Intense" },
 ];
 
-const TOGGLES: { key: "short" | "fresh" | "onMyServices"; label: string }[] = [
-  { key: "short", label: "Short" },
+// One runtime limit for films and single episodes alike
+const TIMES: { value: Exclude<TimeAvailable, "any">; label: string }[] = [
+  { value: "30", label: "~30 min" },
+  { value: "120", label: "Under 2 hrs" },
+];
+
+const TOGGLES: { key: "fresh" | "onMyServices"; label: string }[] = [
   { key: "fresh", label: "Something new" },
   { key: "onMyServices", label: "On my services" },
 ];
@@ -59,8 +66,9 @@ const PICK_COUNT = 5;
 
 type Selected = { id: number; title: string };
 
-function pick(data: PoolData, avoid?: MoodPick[]): MoodPick[] {
+function pick(data: PoolData, selection: MoodSelection, avoid?: MoodPick[]): MoodPick[] {
   return pickRecommendations(data.pool, {
+    selection,
     watchlist: new Set(Object.keys(data.watchlist)),
     exclude: new Set(data.exclude),
     avoid: new Set((avoid ?? []).map(candidateKey)),
@@ -113,7 +121,7 @@ export default function WhatToWatchPage() {
         setPicks((current) =>
           reload > 0
             ? current.map((p) => ({ ...p, onWatchlist: candidateKey(p) in data.watchlist }))
-            : pick(data)
+            : pick(data, parseMoodSelection(new URLSearchParams(query)))
         );
       } catch {
         if (!cancelled) toast.error("Couldn't load suggestions");
@@ -133,7 +141,7 @@ export default function WhatToWatchPage() {
   };
 
   const shuffle = () => {
-    if (data) setPicks(pick(data, picks));
+    if (data) setPicks(pick(data, selection, picks));
   };
 
   // After adding/updating, refresh watchlist info but keep the cards on screen
@@ -183,6 +191,15 @@ export default function WhatToWatchPage() {
             onClick={() => update({ vibe: selection.vibe === v.value ? "any" : v.value })}
           >
             {v.label}
+          </Chip>
+        ))}
+        {TIMES.map((t) => (
+          <Chip
+            key={t.value}
+            active={selection.time === t.value}
+            onClick={() => update({ time: selection.time === t.value ? "any" : t.value })}
+          >
+            {t.label}
           </Chip>
         ))}
         {TOGGLES.map((t) => (

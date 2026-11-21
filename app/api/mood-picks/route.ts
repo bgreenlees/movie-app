@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { tmdb } from "@/lib/tmdb";
 import { canonicalProviderIds } from "@/lib/providers";
 import {
+  blendPools,
   candidateKey,
   matchesDiscoverParams,
   mediaTypesFor,
@@ -13,8 +14,10 @@ import {
   type MoodCandidate,
 } from "@/lib/moodPicker";
 
-// How many discover pages (20 results each) to pull per media type for the pool.
+// Discover pages (20 results each) fetched per media type, and the size of the
+// blended pool the picker draws from.
 const PAGES = [1, 2, 3];
+const POOL_SIZE = 60;
 // Most-recently-added watchlist titles to check against the moods, per media type.
 // Each is one (24h-cached) TMDB details call, so this is capped.
 const WATCHLIST_CHECK = 20;
@@ -69,41 +72,59 @@ export async function GET(req: NextRequest) {
     }
 
     const ctx = { today: new Date(), providerIds };
-    const fetches: Promise<MoodCandidate[]>[] = mediaTypesFor(selection.media).flatMap((media) => {
+    const medias = mediaTypesFor(selection.media);
+
+    // Per type: up to 3 discover pages, plus TMDB's count of all matches, which
+    // blendPools uses to size each type's share of the pool.
+    const discoverGroups = medias.map(async (media) => {
       const params = moodToDiscoverParams(selection, media, ctx);
-
-      const discoverPages = PAGES.map((page) =>
-        media === "movie"
-          ? tmdb.discover("movie", params, page).then((d) =>
-              (d.results || []).map<MoodCandidate>((m) => ({
-                id: m.id,
-                mediaType: "movie",
-                title: m.title,
-                posterPath: m.poster_path,
-                date: m.release_date,
-                overview: m.overview,
-                popularity: m.popularity,
-                voteAverage: m.vote_average,
+      const pages = await Promise.allSettled(
+        PAGES.map((page) =>
+          media === "movie"
+            ? tmdb.discover("movie", params, page).then((d) => ({
+                total: d.total_results,
+                candidates: (d.results || []).map<MoodCandidate>((m) => ({
+                  id: m.id,
+                  mediaType: "movie",
+                  title: m.title,
+                  posterPath: m.poster_path,
+                  date: m.release_date,
+                  overview: m.overview,
+                  popularity: m.popularity,
+                  voteAverage: m.vote_average,
+                  voteCount: m.vote_count,
+                  genreIds: m.genre_ids,
+                })),
               }))
-            )
-          : tmdb.discover("tv", params, page).then((d) =>
-              (d.results || []).map<MoodCandidate>((s) => ({
-                id: s.id,
-                mediaType: "tv",
-                title: s.name,
-                posterPath: s.poster_path,
-                date: s.first_air_date,
-                overview: s.overview,
-                popularity: s.popularity,
-                voteAverage: s.vote_average,
+            : tmdb.discover("tv", params, page).then((d) => ({
+                total: d.total_results,
+                candidates: (d.results || []).map<MoodCandidate>((s) => ({
+                  id: s.id,
+                  mediaType: "tv",
+                  title: s.name,
+                  posterPath: s.poster_path,
+                  date: s.first_air_date,
+                  overview: s.overview,
+                  popularity: s.popularity,
+                  voteAverage: s.vote_average,
+                  voteCount: s.vote_count,
+                  genreIds: s.genre_ids,
+                })),
               }))
-            )
+        )
       );
+      const ok = pages.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+      if (ok.length === 0) throw new Error(`TMDB discover failed for ${media}`);
+      return { total: ok[0].total, candidates: ok.flatMap((p) => p.candidates) };
+    });
 
-      // Discover can't filter by ID and rarely returns watchlist titles, so check
-      // them directly against the same params — that's what makes "watchlist first" work.
-      const watchlistMatches = wantIds[media].slice(0, WATCHLIST_CHECK).map((id) =>
-        tmdb.getTitleMoodFacts(media, id).then((t) =>
+    // Discover can't filter by ID and rarely returns watchlist titles, so check
+    // them directly against the same params — that's what makes "watchlist first"
+    // work. They're added on top of the blended pool: the user chose them.
+    const watchlistChecks = medias.flatMap((media) => {
+      const params = moodToDiscoverParams(selection, media, ctx);
+      return wantIds[media].slice(0, WATCHLIST_CHECK).map((id) =>
+        tmdb.getTitleMoodFacts(media, id).then((t): MoodCandidate[] =>
           matchesDiscoverParams(params, t)
             ? [{
                 id: t.id,
@@ -114,19 +135,24 @@ export async function GET(req: NextRequest) {
                 overview: t.overview,
                 popularity: t.popularity,
                 voteAverage: t.voteAverage,
+                voteCount: t.voteCount,
+                genreIds: t.genreIds,
               }]
             : []
         )
       );
-
-      return [...discoverPages, ...watchlistMatches];
     });
 
-    const settled = await Promise.allSettled(fetches);
-    if (settled.length > 0 && settled.every((r) => r.status === "rejected")) {
-      throw new Error("All TMDB calls failed");
-    }
-    const pool = settled.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+    const [groups, checks] = await Promise.all([
+      Promise.allSettled(discoverGroups),
+      Promise.allSettled(watchlistChecks),
+    ]);
+    const okGroups = groups.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+    if (okGroups.length === 0) throw new Error("All TMDB discover calls failed");
+    const pool = [
+      ...checks.flatMap((r) => (r.status === "fulfilled" ? r.value : [])),
+      ...blendPools(okGroups, POOL_SIZE),
+    ];
 
     return NextResponse.json({
       pool,

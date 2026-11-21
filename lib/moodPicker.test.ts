@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SELECTION,
+  blendPools,
   candidateKey,
   matchesDiscoverParams,
   mediaTypesFor,
@@ -8,6 +9,7 @@ import {
   moodToDiscoverParams,
   parseMoodSelection,
   pickRecommendations,
+  traitScore,
   type MoodCandidate,
   type MoodSelection,
 } from "./moodPicker";
@@ -47,9 +49,14 @@ describe("moodToDiscoverParams", () => {
     expect(p.with_genres?.split("|")).toContain("80");
   });
 
-  it("short means <100 min movies and ≤30 min episodes", () => {
-    expect(moodToDiscoverParams(sel({ short: true }), "movie", ctx)["with_runtime.lte"]).toBe("100");
-    expect(moodToDiscoverParams(sel({ short: true }), "tv", ctx)["with_runtime.lte"]).toBe("30");
+  it("time available is one runtime rule, the same for movies and TV", () => {
+    for (const media of ["movie", "tv"] as const) {
+      const half = moodToDiscoverParams(sel({ time: "30" }), media, ctx);
+      expect(half["with_runtime.lte"]).toBe("30");
+      expect(half["with_runtime.gte"]).toBe("10"); // skip clips
+      expect(moodToDiscoverParams(sel({ time: "120" }), media, ctx)["with_runtime.lte"]).toBe("120");
+      expect(moodToDiscoverParams(sel({ time: "any" }), media, ctx)).not.toHaveProperty("with_runtime.lte");
+    }
   });
 
   it("something new → last 12 months, with a lower vote floor", () => {
@@ -81,12 +88,12 @@ describe("moodToDiscoverParams", () => {
 
 describe("parseMoodSelection / moodSelectionToQuery", () => {
   it("round-trips a selection", () => {
-    const s = sel({ vibe: "light", short: true, onMyServices: true, media: "tv" });
+    const s = sel({ vibe: "light", time: "30", onMyServices: true, media: "tv" });
     expect(parseMoodSelection(new URLSearchParams(moodSelectionToQuery(s)))).toEqual(s);
   });
 
   it("falls back to defaults for junk values", () => {
-    expect(parseMoodSelection(new URLSearchParams("vibe=sad&media=books&short=yes"))).toEqual(
+    expect(parseMoodSelection(new URLSearchParams("vibe=sad&media=books&time=45"))).toEqual(
       DEFAULT_SELECTION
     );
   });
@@ -195,10 +202,11 @@ describe("matchesDiscoverParams", () => {
     expect(matchesDiscoverParams(params({ vibe: "light" }), { ...facts, genreIds: [35, 27] })).toBe(false);
   });
 
-  it("checks runtime, and rejects unknown runtime when short is picked", () => {
-    expect(matchesDiscoverParams(params({ short: true }), facts)).toBe(true);
-    expect(matchesDiscoverParams(params({ short: true }), { ...facts, runtime: 140 })).toBe(false);
-    expect(matchesDiscoverParams(params({ short: true }), { ...facts, runtime: null })).toBe(false);
+  it("checks runtime, and rejects unknown runtime when time is limited", () => {
+    expect(matchesDiscoverParams(params({ time: "120" }), facts)).toBe(true);
+    expect(matchesDiscoverParams(params({ time: "120" }), { ...facts, runtime: 140 })).toBe(false);
+    expect(matchesDiscoverParams(params({ time: "30" }), facts)).toBe(false); // a 95-min film
+    expect(matchesDiscoverParams(params({ time: "120" }), { ...facts, runtime: null })).toBe(false);
   });
 
   it("checks the release window", () => {
@@ -217,40 +225,112 @@ describe("matchesDiscoverParams", () => {
   });
 });
 
-describe("pickRecommendations — movie/TV mix", () => {
-  const item = (id: number, mediaType: "movie" | "tv"): MoodCandidate => ({
+describe("traits, not quotas — movies and TV compete on the same terms", () => {
+  const item = (
+    id: number,
+    mediaType: "movie" | "tv",
+    genreIds: number[],
+    voteAverage = 7.5,
+    voteCount = 2000
+  ): MoodCandidate => ({
     id, mediaType, title: `${mediaType}${id}`, posterPath: "/p.jpg", date: "2024-01-01",
-    overview: "", popularity: 1, voteAverage: 7,
+    overview: "", popularity: 1, voteAverage, voteCount, genreIds,
   });
-  // Movie-heavy pool, like a real "Both" pool where movies outnumber shows
-  const pool = [
-    ...Array.from({ length: 30 }, (_, i) => item(i + 1, "movie")),
-    ...Array.from({ length: 5 }, (_, i) => item(i + 1, "tv")),
-  ];
-  const count = (picks: { mediaType: string }[], t: string) => picks.filter((p) => p.mediaType === t).length;
-
-  it("includes both movies and TV when the pool has both", () => {
-    for (let seed = 0; seed < 20; seed++) {
-      let s = seed;
-      const random = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
-      const picks = pickRecommendations(pool, { watchlist: new Set(), exclude: new Set(), random });
-      expect(count(picks, "movie")).toBeGreaterThanOrEqual(2);
-      expect(count(picks, "tv")).toBeGreaterThanOrEqual(2);
+  const light = sel({ vibe: "light" });
+  const seeded = (seed: number) => () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+  // Share of picks that are TV across many shuffles
+  const tvShare = (pool: MoodCandidate[], selection: MoodSelection) => {
+    const random = seeded(1);
+    let tv = 0;
+    for (let i = 0; i < 200; i++) {
+      const picks = pickRecommendations(pool, { watchlist: new Set(), exclude: new Set(), selection, random });
+      tv += picks.filter((p) => p.mediaType === "tv").length;
     }
+    return tv / 1000;
+  };
+
+  it("scores a pure comedy as lighter than a comedy-thriller, whatever its type", () => {
+    const sitcom = item(1, "tv", [35]);
+    const comedyThriller = item(2, "movie", [35, 53, 80]);
+    expect(traitScore(sitcom, light)).toBeGreaterThan(traitScore(comedyThriller, light));
   });
 
-  it("still mixes when every watchlist match is a movie", () => {
-    const watchlist = new Set(["movie-1", "movie-2", "movie-3", "movie-4", "movie-5"]);
-    const picks = pickRecommendations(pool, { watchlist, exclude: new Set() });
-    expect(count(picks, "tv")).toBeGreaterThanOrEqual(2);
-    expect(picks.filter((p) => p.onWatchlist).length).toBeGreaterThanOrEqual(2);
+  it("scores a well-rated title above a poorly-rated one, discounting few votes", () => {
+    expect(traitScore(item(1, "movie", [35], 8.2))).toBeGreaterThan(traitScore(item(2, "movie", [35], 6.6)));
+    // 9.5 from 20 votes is mostly noise; 8.4 from 20k is a sure thing
+    expect(traitScore(item(1, "movie", [35], 8.4, 20000))).toBeGreaterThan(
+      traitScore(item(2, "movie", [35], 9.5, 20))
+    );
   });
 
-  it("fills from the other type when one runs out", () => {
-    const picks = pickRecommendations([...pool.slice(0, 10), item(1, "tv")], {
-      watchlist: new Set(), exclude: new Set(),
+  it("doesn't force TV in when the movies fit the mood better", () => {
+    const pool = [
+      ...Array.from({ length: 10 }, (_, i) => item(i + 1, "movie", [35, 10751], 8.0)), // family comedies
+      ...Array.from({ length: 10 }, (_, i) => item(i + 1, "tv", [35, 80, 10759], 6.6)), // crime-action comedies
+    ];
+    expect(tvShare(pool, light)).toBeLessThan(0.3);
+  });
+
+  it("lets TV win when the shows fit the mood better", () => {
+    const pool = [
+      ...Array.from({ length: 10 }, (_, i) => item(i + 1, "movie", [35, 28, 80], 6.6)),
+      ...Array.from({ length: 10 }, (_, i) => item(i + 1, "tv", [35, 10751], 8.0)),
+    ];
+    expect(tvShare(pool, light)).toBeGreaterThan(0.7);
+  });
+
+  it("gives an even split when movies and shows fit equally — no type preference", () => {
+    const pool = [
+      ...Array.from({ length: 10 }, (_, i) => item(i + 1, "movie", [35])),
+      ...Array.from({ length: 10 }, (_, i) => item(i + 1, "tv", [35])),
+    ];
+    const share = tvShare(pool, light);
+    expect(share).toBeGreaterThan(0.4);
+    expect(share).toBeLessThan(0.6);
+  });
+
+  it("still puts watchlist titles first, regardless of score", () => {
+    const pool = [item(1, "movie", [35, 10751], 8.5), item(2, "tv", [80, 53], 6.6)];
+    const picks = pickRecommendations(pool, {
+      watchlist: new Set(["tv-2"]), exclude: new Set(), selection: light, count: 1,
     });
-    expect(picks).toHaveLength(5);
-    expect(count(picks, "tv")).toBe(1);
+    expect(picks[0].id).toBe(2);
+  });
+});
+
+describe("blendPools — no hidden quota when building the pool", () => {
+  const items = (n: number, mediaType: "movie" | "tv"): MoodCandidate[] =>
+    Array.from({ length: n }, (_, i) => ({
+      id: i + 1, mediaType, title: "", posterPath: "/p.jpg", date: "", overview: "", popularity: n - i, voteAverage: 7,
+    }));
+
+  it("sizes each type by how many titles matched, not 50/50", () => {
+    // "~30 min": ~790 shows match but only ~80 short films
+    const pool = blendPools(
+      [
+        { candidates: items(60, "movie"), total: 80 },
+        { candidates: items(60, "tv"), total: 790 },
+      ],
+      60
+    );
+    const movies = pool.filter((c) => c.mediaType === "movie").length;
+    expect(movies).toBe(6); // 80 / 870 of 60, rounded up
+    expect(pool).toHaveLength(60);
+  });
+
+  it("keeps each type's most popular titles", () => {
+    const pool = blendPools([{ candidates: items(10, "movie"), total: 100 }, { candidates: items(10, "tv"), total: 100 }], 4);
+    expect(pool.map((c) => c.id).sort()).toEqual([1, 1, 2, 2]);
+  });
+
+  it("gives an even split when match counts are even", () => {
+    const pool = blendPools([{ candidates: items(60, "movie"), total: 500 }, { candidates: items(60, "tv"), total: 500 }], 60);
+    expect(pool.filter((c) => c.mediaType === "tv")).toHaveLength(30);
+  });
+
+  it("tops up from the other type when one runs short", () => {
+    const pool = blendPools([{ candidates: items(3, "movie"), total: 900 }, { candidates: items(60, "tv"), total: 100 }], 20);
+    expect(pool).toHaveLength(20);
+    expect(pool.filter((c) => c.mediaType === "movie")).toHaveLength(3);
   });
 });

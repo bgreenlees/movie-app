@@ -593,6 +593,7 @@ class TMDBClient {
     overview: string;
     popularity: number;
     voteAverage: number;
+    voteCount: number;
     genreIds: number[];
     runtime: number | null;
     providerIds: number[];
@@ -612,6 +613,7 @@ class TMDBClient {
       overview: d.overview ?? "",
       popularity: d.popularity ?? 0,
       voteAverage: d.vote_average ?? 0,
+      voteCount: d.vote_count ?? 0,
       genreIds: (d.genres ?? []).map((g: { id: number }) => g.id),
       runtime: typeof runtime === "number" && runtime > 0 ? runtime : null,
       providerIds: flatrate.map((p) => p.provider_id),

@@ -15,7 +15,10 @@ import {
   DEFAULT_SELECTION,
   mediaTypesFor,
   moodToDiscoverParams,
+  blendPools,
+  candidateKey,
   pickRecommendations,
+  type MoodCandidate,
   type MoodSelection,
 } from "../lib/moodPicker";
 
@@ -23,6 +26,7 @@ const API = process.env.TMDB_API_BASE_URL || "https://api.themoviedb.org/3";
 const KEY = process.env.TMDB_API_KEY;
 const SAMPLE = 12; // titles shown per combination
 const PAGES = [1, 2, 3]; // same as app/api/mood-picks
+const POOL_SIZE = 60; // same as app/api/mood-picks
 const NETFLIX = 8;
 
 const COMBOS: Array<{ name: string; sel: Partial<MoodSelection>; providers?: number[] }> = [
@@ -30,23 +34,27 @@ const COMBOS: Array<{ name: string; sel: Partial<MoodSelection>; providers?: num
   { name: "Light · TV", sel: { vibe: "light", media: "tv" } },
   { name: "Intense · Movies", sel: { vibe: "intense", media: "movie" } },
   { name: "Intense · TV", sel: { vibe: "intense", media: "tv" } },
-  { name: "Light + Short · Movies", sel: { vibe: "light", short: true, media: "movie" } },
-  { name: "Light + Short · TV", sel: { vibe: "light", short: true, media: "tv" } },
-  { name: "Intense + Short · Movies", sel: { vibe: "intense", short: true, media: "movie" } },
-  { name: "Short · TV", sel: { short: true, media: "tv" } },
+  { name: "Light + Under 2 hrs · Movies", sel: { vibe: "light", time: "120", media: "movie" } },
+  { name: "Intense + Under 2 hrs · Movies", sel: { vibe: "intense", time: "120", media: "movie" } },
+  { name: "~30 min · TV", sel: { time: "30", media: "tv" } },
   { name: "Something new · Movies", sel: { fresh: true, media: "movie" } },
   { name: "Intense + Something new · TV", sel: { vibe: "intense", fresh: true, media: "tv" } },
   { name: "Light + On Netflix · Both", sel: { vibe: "light", onMyServices: true }, providers: [NETFLIX] },
-  // "Both" is the default and the real-life case: "a heavy film if we have the
-  // evening, or a light episode if we don't" — the 5 picks should mix the two.
+  // "Both" is the default. There's no movie/TV quota: both compete on the same
+  // traits, so the split reported below should follow the mood (e.g. Short + Light
+  // leaning to sitcoms), not sit at 50/50.
   { name: "Light · Both", sel: { vibe: "light", media: "both" } },
   { name: "Intense · Both", sel: { vibe: "intense", media: "both" } },
-  { name: "Short · Both", sel: { short: true, media: "both" } },
+  // The "Thursday night" cases: with an evening free, films and series compete;
+  // with half an hour, runtimes alone should leave mostly episodes.
+  { name: "~30 min · Both", sel: { time: "30", media: "both" } },
+  { name: "Light + ~30 min · Both", sel: { vibe: "light", time: "30", media: "both" } },
+  { name: "Intense + Under 2 hrs · Both", sel: { vibe: "intense", time: "120", media: "both" } },
   { name: "Something new · Both", sel: { fresh: true, media: "both" } },
-  { name: "Everything ticked · Movies (sparse)", sel: { vibe: "intense", short: true, fresh: true, onMyServices: true, media: "movie" }, providers: [NETFLIX] },
+  { name: "Everything ticked · Movies (sparse)", sel: { vibe: "intense", time: "120", fresh: true, onMyServices: true, media: "movie" }, providers: [NETFLIX] },
 ];
 
-type Row = { id: number; media: "movie" | "tv"; title: string; year: string; genres: string; rating: number; votes: number; runtime?: number | null };
+type Row = { id: number; genreIds: number[]; media: "movie" | "tv"; title: string; year: string; genres: string; rating: number; votes: number; runtime?: number | null };
 
 async function get<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   const q = new URLSearchParams({ ...params, api_key: KEY! });
@@ -54,6 +62,11 @@ async function get<T>(path: string, params: Record<string, string> = {}): Promis
   if (!res.ok) throw new Error(`TMDB ${res.status} for ${path}`);
   return res.json() as Promise<T>;
 }
+
+const toCandidate = (r: Row): MoodCandidate => ({
+  id: r.id, mediaType: r.media, title: r.title, posterPath: "/x", date: r.year,
+  overview: "", popularity: 0, voteAverage: r.rating, voteCount: r.votes, genreIds: r.genreIds,
+});
 
 // Deterministic sample so two runs with the same mapping are comparable
 function seeded(seed: number) {
@@ -77,18 +90,22 @@ async function main() {
     const sel = { ...DEFAULT_SELECTION, ...combo.sel };
     const params: Record<string, Record<string, string>> = {};
     let total = 0;
-    const pool: Row[] = [];
+    const fetched: Row[] = [];
+    const groups: { candidates: MoodCandidate[]; total: number }[] = [];
 
     for (const media of mediaTypesFor(sel.media)) {
+      let mediaTotal = 0;
+      const start = fetched.length;
       const p = moodToDiscoverParams(sel, media, { today, providerIds: combo.providers ?? [] });
       params[media] = p;
       for (const page of PAGES) {
         type R = { id: number; title?: string; name?: string; release_date?: string; first_air_date?: string; genre_ids: number[]; vote_average: number; vote_count: number; poster_path: string | null };
         const d = await get<{ results: R[]; total_results: number }>(`/discover/${media}`, { ...p, page: String(page) });
-        if (page === 1) total += d.total_results;
+        if (page === 1) mediaTotal = d.total_results;
         for (const r of d.results.filter((r) => r.poster_path)) {
-          pool.push({
+          fetched.push({
             id: r.id,
+            genreIds: r.genre_ids,
             media,
             title: r.title ?? r.name ?? "?",
             year: (r.release_date ?? r.first_air_date ?? "").slice(0, 4),
@@ -98,29 +115,33 @@ async function main() {
           });
         }
       }
+      total += mediaTotal;
+      groups.push({ total: mediaTotal, candidates: fetched.slice(start).map(toCandidate) });
     }
+
+    // Same pool-building as app/api/mood-picks: each type's share follows its match count
+    const blended = new Set(blendPools(groups, POOL_SIZE).map(candidateKey));
+    const pool = fetched.filter((r) => blended.has(candidateKey(toCandidate(r))));
 
     const rand = seeded(42);
     const rows = [...pool].sort(() => rand() - 0.5).slice(0, SAMPLE);
     // TMDB's discover runtime filter is leaky (it has returned 3-hour films for
-    // "≤100 min"), so for Short combos look up each sampled title's real runtime.
-    if (sel.short) {
+    // "≤100 min"), so when time is limited look up each sampled title's real runtime.
+    if (sel.time !== "any") {
       for (const r of rows) {
         const d = await get<{ runtime?: number; episode_run_time?: number[] }>(`/${r.media}/${r.id}`);
         r.runtime = (r.media === "movie" ? d.runtime : d.episode_run_time?.[0]) || null;
       }
     }
-    // For "Both", check what the 5 picks a user sees look like across 20 shuffles
+    // For "Both", report the movie/TV split of the 5 picks across 20 shuffles —
+    // an outcome of the trait scoring, not a target
     let mix: string | undefined;
     if (sel.media === "both") {
-      const candidates = pool.map((r) => ({
-        id: r.id, mediaType: r.media, title: r.title, posterPath: "/x", date: r.year,
-        overview: "", popularity: 0, voteAverage: r.rating,
-      }));
+      const candidates = pool.map(toCandidate);
       const pickRand = seeded(7);
       let movies = 0, shows = 0, mixedSets = 0;
       for (let i = 0; i < 20; i++) {
-        const picks = pickRecommendations(candidates, { watchlist: new Set(), exclude: new Set(), random: pickRand });
+        const picks = pickRecommendations(candidates, { watchlist: new Set(), exclude: new Set(), selection: sel, random: pickRand });
         const m = picks.filter((p) => p.mediaType === "movie").length;
         movies += m;
         shows += picks.length - m;
