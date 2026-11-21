@@ -290,6 +290,7 @@ export default function Navbar() {
 
   const navLinks = [
     { href: "/search", label: "Discover" },
+    { href: "/what-to-watch", label: "What to Watch" },
     { href: "/new-releases", label: "New Releases" },
     { href: "/news", label: "News" },
     { href: "/watchlist", label: "My Movies" },

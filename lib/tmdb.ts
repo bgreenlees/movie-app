@@ -569,6 +569,57 @@ class TMDBClient {
     return response.json();
   }
 
+  // Generic discover for prebuilt filter params (see lib/moodPicker.ts)
+  async discover<T extends "movie" | "tv">(
+    media: T,
+    params: Record<string, string>,
+    page = 1
+  ): Promise<T extends "movie" ? TMDBSearchResponse : TMDBTVSearchResponse> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const query = new URLSearchParams({ ...params, page: String(page), api_key: this.apiKey });
+    const url = `${this.baseUrl}/discover/${media}?${query}`;
+    const response = await fetch(url, { next: { revalidate: 3600 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    return response.json();
+  }
+
+  // Details + US subscription providers in one call, for checking a known title
+  // against mood filters (lib/moodPicker.ts matchesDiscoverParams).
+  async getTitleMoodFacts(media: "movie" | "tv", id: number): Promise<{
+    id: number;
+    title: string;
+    posterPath: string | null;
+    date: string;
+    overview: string;
+    popularity: number;
+    voteAverage: number;
+    voteCount: number;
+    genreIds: number[];
+    runtime: number | null;
+    providerIds: number[];
+  }> {
+    if (!this.apiKey) throw new Error("TMDB API key is not configured");
+    const url = `${this.baseUrl}/${media}/${id}?append_to_response=watch/providers&api_key=${this.apiKey}`;
+    const response = await fetch(url, { next: { revalidate: 86400 } });
+    if (!response.ok) throw new Error("TMDB API error");
+    const d = await response.json();
+    const flatrate: TMDBWatchProvider[] = d["watch/providers"]?.results?.US?.flatrate ?? [];
+    const runtime = media === "movie" ? d.runtime : tvEpisodeRuntime(d);
+    return {
+      id: d.id,
+      title: media === "movie" ? d.title : d.name,
+      posterPath: d.poster_path ?? null,
+      date: (media === "movie" ? d.release_date : d.first_air_date) ?? "",
+      overview: d.overview ?? "",
+      popularity: d.popularity ?? 0,
+      voteAverage: d.vote_average ?? 0,
+      voteCount: d.vote_count ?? 0,
+      genreIds: (d.genres ?? []).map((g: { id: number }) => g.id),
+      runtime: typeof runtime === "number" && runtime > 0 ? runtime : null,
+      providerIds: flatrate.map((p) => p.provider_id),
+    };
+  }
+
   async discoverHiddenGemTV(genreIds: number[]): Promise<TMDBTVSearchResponse> {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
     const url =
@@ -579,6 +630,21 @@ class TMDBClient {
     if (!response.ok) throw new Error("TMDB API error");
     return response.json();
   }
+}
+
+/**
+ * Typical episode length in minutes for a TMDB TV details response. TMDB leaves
+ * `episode_run_time` empty for many current shows, so fall back to the latest
+ * episode's runtime. Null if neither is a positive number.
+ */
+export function tvEpisodeRuntime(d: {
+  episode_run_time?: number[] | null;
+  last_episode_to_air?: { runtime?: number | null } | null;
+}): number | null {
+  for (const r of [d.episode_run_time?.[0], d.last_episode_to_air?.runtime]) {
+    if (typeof r === "number" && r > 0) return r;
+  }
+  return null;
 }
 
 export const tmdb = new TMDBClient();
