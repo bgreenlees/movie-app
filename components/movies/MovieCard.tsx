@@ -21,16 +21,13 @@ export default function MovieCard({
   id,
   title,
   posterPath,
-  releaseDate,
   overview,
-  rating,
   onPlayTrailer,
   thumbRating,
   children,
 }: MovieCardProps) {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const posterUrl = tmdb.getPosterUrl(posterPath);
-  const year = releaseDate ? new Date(releaseDate).getFullYear() : null;
 
   return (
     <>

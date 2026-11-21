@@ -20,7 +20,7 @@ export async function GET(
       tmdb.getPersonTVCredits(personId),
     ]);
 
-    const sortByPopularity = (a: any, b: any) => (b.popularity || 0) - (a.popularity || 0);
+    const sortByPopularity = (a: { popularity?: number }, b: { popularity?: number }) => (b.popularity || 0) - (a.popularity || 0);
     const dedupeById = <T extends { id: number }>(arr: T[]): T[] => {
       const seen = new Set<number>();
       return arr.filter((x) => (seen.has(x.id) ? false : (seen.add(x.id), true)));

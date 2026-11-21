@@ -101,7 +101,7 @@ function DiscoverPageInner() {
           wantRes.json(), watchedRes.json(), notRes.json(),
         ]);
         const entries: Record<number, WatchlistEntry> = {};
-        [...(wantData.entries || []), ...(watchedData.entries || []), ...(notData.entries || [])].forEach((e: any) => {
+        [...(wantData.entries || []), ...(watchedData.entries || []), ...(notData.entries || [])].forEach((e: WatchlistEntry) => {
           entries[e.movieId] = { id: e.id, movieId: e.movieId, status: e.status, platform: e.platform, watchType: e.watchType, rating: e.rating, review: e.review };
         });
         setWatchlistEntries(entries);
@@ -115,7 +115,7 @@ function DiscoverPageInner() {
       if (res.ok) {
         const data = await res.json();
         const entries: Record<number, TVEntry> = {};
-        (data.entries || []).forEach((e: any) => {
+        (data.entries || []).forEach((e: TVEntry) => {
           entries[e.tvShowId] = { id: e.id, tvShowId: e.tvShowId, status: e.status, platform: e.platform, rating: e.rating, review: e.review, currentSeason: e.currentSeason, currentEpisode: e.currentEpisode };
         });
         setTVEntries(entries);

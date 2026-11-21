@@ -35,9 +35,7 @@ export default function TVShowCard({
   id,
   name,
   posterPath,
-  firstAirDate,
   overview,
-  rating,
   watchingStatus,
   seasonBanner,
   thumbRating,
@@ -45,7 +43,6 @@ export default function TVShowCard({
 }: TVShowCardProps) {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const posterUrl = tmdb.getPosterUrl(posterPath);
-  const year = firstAirDate ? new Date(firstAirDate).getFullYear() : null;
 
   return (
     <>

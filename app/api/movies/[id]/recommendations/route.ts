@@ -17,7 +17,7 @@ export async function GET(
     }
 
     const recs = await tmdb.getMovieRecommendations(movieId);
-    let results: TMDBMovie[] = (recs.results || []).filter((m) => m.poster_path);
+    const results: TMDBMovie[] = (recs.results || []).filter((m) => m.poster_path);
 
     if (results.length < MIN_RECS) {
       const similar = await tmdb.getSimilarMovies(movieId);

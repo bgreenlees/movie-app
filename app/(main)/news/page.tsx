@@ -122,7 +122,7 @@ export default function NewsPage() {
         News
       </h1>
       <p className="text-sm mb-8" style={{ color: "var(--text-muted)" }}>
-        Latest from Decider, Variety, Cord Cutters News, What's on Netflix, and more
+        Latest from Decider, Variety, Cord Cutters News, What&apos;s on Netflix, and more
       </p>
 
       {error && (

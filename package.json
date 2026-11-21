@@ -5,7 +5,7 @@
     "dev": "NODE_OPTIONS=--max-old-space-size=4096 next dev",
     "build": "prisma generate && prisma migrate deploy && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint ."
   },
   "keywords": [],
   "author": "",

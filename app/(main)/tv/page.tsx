@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import TVShowCard, { type TVSeasonBanner } from "@/components/tv/TVShowCard";
 import AddTVModal from "@/components/tv/AddTVModal";
 import ThumbRating from "@/components/ui/ThumbRating";
@@ -21,7 +21,6 @@ interface TVEntry {
 
 function TVDiscoverInner() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const urlQuery = searchParams.get("q") || "";
 
   const [shows, setShows] = useState<TMDBTVShow[]>([]);
@@ -60,7 +59,7 @@ function TVDiscoverInner() {
       if (res.ok) {
         const data = await res.json();
         const entries: Record<number, TVEntry> = {};
-        (data.entries || []).forEach((entry: any) => {
+        (data.entries || []).forEach((entry: TVEntry) => {
           entries[entry.tvShowId] = {
             id: entry.id,
             tvShowId: entry.tvShowId,
@@ -127,7 +126,7 @@ function TVDiscoverInner() {
       };
       loadShows();
     }
-  }, [urlQuery]);
+  }, [urlQuery, fetchSeasonBanners]);
 
   useEffect(() => {
     if (!gridRef.current) return;

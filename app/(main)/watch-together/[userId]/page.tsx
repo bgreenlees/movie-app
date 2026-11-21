@@ -46,7 +46,6 @@ function MovieSection({
   movies,
   watchlistEntries,
   onAdd,
-  trailerMovie,
   setTrailerMovie,
 }: {
   title: string;

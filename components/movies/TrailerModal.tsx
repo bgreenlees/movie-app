@@ -10,28 +10,33 @@ interface TrailerModalProps {
 }
 
 export default function TrailerModal({ movieId, movieTitle, mediaType = "movie", onClose }: TrailerModalProps) {
-  const [trailerKey, setTrailerKey] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [notFound, setNotFound] = useState(false);
+  // Store the result together with the request it belongs to. Loading state is
+  // derived from that, so the effect never has to reset state synchronously, and
+  // a slow response for a previous title can't overwrite the current one.
+  const requestKey = movieId ? `${mediaType}:${movieId}` : null;
+  const [result, setResult] = useState<{ requestKey: string; trailerKey: string | null } | null>(null);
+  const current = result && result.requestKey === requestKey ? result : null;
+  const isLoading = requestKey !== null && current === null;
+  const trailerKey = current?.trailerKey ?? null;
+  const notFound = current !== null && current.trailerKey === null;
 
   useEffect(() => {
     if (!movieId) return;
-
-    setTrailerKey(null);
-    setNotFound(false);
-    setIsLoading(true);
+    const key = `${mediaType}:${movieId}`;
+    let cancelled = false;
 
     fetch(`/api/${mediaType === "tv" ? "tv" : "movies"}/${movieId}/trailer`)
       .then((r) => r.json())
       .then((data) => {
-        if (data.key) {
-          setTrailerKey(data.key);
-        } else {
-          setNotFound(true);
-        }
+        if (!cancelled) setResult({ requestKey: key, trailerKey: data.key || null });
       })
-      .catch(() => setNotFound(true))
-      .finally(() => setIsLoading(false));
+      .catch(() => {
+        if (!cancelled) setResult({ requestKey: key, trailerKey: null });
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [movieId, mediaType]);
 
   useEffect(() => {

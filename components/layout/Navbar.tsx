@@ -53,6 +53,9 @@ export default function Navbar() {
 
   useEffect(() => {
     const current = document.documentElement.getAttribute("data-theme") as "light" | "dark";
+    // The theme lives on <html> (set by an inline script before hydration), so it
+    // can only be read after mount; syncing it here avoids a hydration mismatch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTheme(current || "dark");
   }, []);
 
@@ -83,12 +86,18 @@ export default function Navbar() {
     toast.success("Logged out successfully");
   };
 
-  useEffect(() => {
-    if (query.trim().length < 2) {
+  // Clear suggestions in the event handler rather than in the effect below,
+  // so a short query doesn't trigger an extra render pass.
+  const handleQueryChange = (value: string) => {
+    setQuery(value);
+    if (value.trim().length < 2) {
       setSuggestions(EMPTY_SUGGESTIONS);
       setShowSuggestions(false);
-      return;
     }
+  };
+
+  useEffect(() => {
+    if (query.trim().length < 2) return;
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(`/api/search/multi?q=${encodeURIComponent(query)}`);
@@ -325,7 +334,7 @@ export default function Navbar() {
                   <input
                     type="text"
                     value={query}
-                    onChange={(e) => setQuery(e.target.value)}
+                    onChange={(e) => handleQueryChange(e.target.value)}
                     onFocus={() => { if (hasSuggestions) setShowSuggestions(true); }}
                     onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                     placeholder="Search titles, people, genres..."
@@ -444,7 +453,7 @@ export default function Navbar() {
               <input
                 type="text"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => handleQueryChange(e.target.value)}
                 onFocus={() => { if (hasSuggestions) setShowSuggestions(true); }}
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                 placeholder="Search titles, people, genres..."
