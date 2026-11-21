@@ -155,7 +155,9 @@ export async function fuzzySearch<T extends { id: number; popularity: number }>(
   search: (q: string) => Promise<{ results: T[] }>,
   getTitle: (item: T) => string
 ): Promise<{ results: T[]; suggestion: string | null }> {
-  const responses = await Promise.allSettled(buildFallbackQueries(query).map(search));
+  // Wrap rather than `.map(search)`, which would also pass the array index as a
+  // second argument (e.g. as `page` to tmdb.searchMovies).
+  const responses = await Promise.allSettled(buildFallbackQueries(query).map((q) => search(q)));
 
   const spellings = spellingCandidates(normalize(query).split(" ").filter(Boolean));
   const corrected = spellings[0] ?? "";
@@ -184,8 +186,12 @@ export async function fuzzySearch<T extends { id: number; popularity: number }>(
 // just the corrected words when they're only part of it, so "loghtning"
 // suggests "Lightning" (all lightning titles) rather than "Lightning Point".
 function suggestionFor(title: string, spellings: string[]): string {
-  const t = normalize(title).replace(/^(the|a|an) /, "");
-  const spelling = spellings.find((s) => s !== t && ` ${t} `.includes(` ${s} `));
+  const full = normalize(title);
+  const t = full.replace(/^(the|a|an) /, "");
+  // Match against the full title, not just the article-stripped one, so a
+  // query that starts with "the" ("the loghtning") is still seen as part of
+  // "The Lightning Thief".
+  const spelling = spellings.find((s) => s !== t && s !== full && ` ${full} `.includes(` ${s} `));
   if (!spelling) return title;
   return spelling.replace(/\b[a-z]/g, (c) => c.toUpperCase());
 }

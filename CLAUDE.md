@@ -14,6 +14,7 @@ Next.js 16 (App Router, Turbopack) · TypeScript · NextAuth v5 (Google + creden
 - `npm run dev` — dev server on http://localhost:3000 (uses the Neon `dev` branch)
 - `npx tsc --noEmit` — type-check (run before every commit)
 - `npm run lint` — ESLint 9 flat config (`eslint.config.mjs`, Next core-web-vitals + TypeScript rules); must exit 0
+- `npm test` — run the Vitest suite once (`npx vitest` for watch mode)
 - `npm run build` — **runs `prisma migrate deploy` against `DATABASE_URL`; don't run locally**
 - Prisma CLI reads `.env`, not `.env.local`. For `prisma generate` alone a placeholder works: `DATABASE_URL=postgresql://x@localhost/x npx prisma generate`
 
@@ -30,7 +31,13 @@ Schema changes are applied with `prisma db push`; `prisma/migrations/*` is gitig
 `vercel env pull .env.local` fetches Development vars (dev database). `NEXTAUTH_URL` is production-only; locally NextAuth infers the host.
 
 ## Known issues
-- No tests or CI yet.
+- No CI yet — tests only run when you run `npm test`.
+
+## Testing
+Vitest; test files sit next to the code as `*.test.ts` (e.g. `lib/fuzzySearch.test.ts`).
+- Run `npm test` before every commit, alongside `npx tsc --noEmit`.
+- Add tests when you change pure logic (search, scoring, date/region helpers) and when you fix a bug: write a test that fails first, then fix it, so the bug can't quietly come back.
+- Tests must not touch the database or network. Pass fakes in (like `fuzzySearch`'s `search` argument) or use `vi.mock` for `lib/db.ts` / `lib/tmdb.ts`.
 
 ## Workflow
 Branch per change → PR → merge to `main`. Merging to `main` deploys to production; every PR gets a Vercel preview URL.
