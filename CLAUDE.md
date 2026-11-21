@@ -30,8 +30,8 @@ Schema changes are applied with `prisma db push`; `prisma/migrations/*` is gitig
 ## Env
 `vercel env pull .env.local` fetches Development vars (dev database). `NEXTAUTH_URL` is production-only; locally NextAuth infers the host.
 
-## Known issues
-- No CI yet — tests only run when you run `npm test`.
+## CI
+GitHub Actions (`.github/workflows/ci.yml`) runs on every PR and push to `main`: `npm ci` → `prisma generate` (placeholder `DATABASE_URL`, no real database or secrets) → type-check → lint → test. The job is named `ci`; it's the status check PRs must pass. It never runs `npm run build` or touches the database. Still run the checks locally before pushing — CI is the safety net, not the first line.
 
 ## Testing
 Vitest; test files sit next to the code as `*.test.ts` (e.g. `lib/fuzzySearch.test.ts`).
