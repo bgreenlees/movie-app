@@ -263,20 +263,23 @@ describe("traits, not quotas — movies and TV compete on the same terms", () =>
     );
   });
 
+  // The draw is weighted, not winner-takes-all, so "fits better" means a clear
+  // majority of picks (~65% here), not all of them. Weaker fit = a so-so dramedy,
+  // which Light allows but ranks lower.
   it("doesn't force TV in when the movies fit the mood better", () => {
     const pool = [
       ...Array.from({ length: 10 }, (_, i) => item(i + 1, "movie", [35, 10751], 8.0)), // family comedies
-      ...Array.from({ length: 10 }, (_, i) => item(i + 1, "tv", [35, 80, 10759], 6.6)), // crime-action comedies
+      ...Array.from({ length: 10 }, (_, i) => item(i + 1, "tv", [35, 18], 6.6)), // so-so dramedies
     ];
-    expect(tvShare(pool, light)).toBeLessThan(0.3);
+    expect(tvShare(pool, light)).toBeLessThan(0.4);
   });
 
   it("lets TV win when the shows fit the mood better", () => {
     const pool = [
-      ...Array.from({ length: 10 }, (_, i) => item(i + 1, "movie", [35, 28, 80], 6.6)),
+      ...Array.from({ length: 10 }, (_, i) => item(i + 1, "movie", [35, 18], 6.6)),
       ...Array.from({ length: 10 }, (_, i) => item(i + 1, "tv", [35, 10751], 8.0)),
     ];
-    expect(tvShare(pool, light)).toBeGreaterThan(0.7);
+    expect(tvShare(pool, light)).toBeGreaterThan(0.6);
   });
 
   it("gives an even split when movies and shows fit equally — no type preference", () => {
@@ -332,5 +335,49 @@ describe("blendPools — no hidden quota when building the pool", () => {
     const pool = blendPools([{ candidates: items(3, "movie"), total: 900 }, { candidates: items(60, "tv"), total: 100 }], 20);
     expect(pool).toHaveLength(20);
     expect(pool.filter((c) => c.mediaType === "movie")).toHaveLength(3);
+  });
+});
+
+describe("Light (tightened) and Heavy moods", () => {
+  const movie = (genreIds: number[]) => ({ genreIds, runtime: 110, date: "2010-01-01", voteAverage: 7.8, providerIds: [] });
+  const params = (vibe: MoodSelection["vibe"], media: "movie" | "tv" = "movie") =>
+    moodToDiscoverParams(sel({ vibe }), media, ctx);
+
+  it("Light needs Comedy or Family — Romance, Music or Animation alone isn't enough", () => {
+    for (const media of ["movie", "tv"] as const) {
+      expect(params("light", media).with_genres?.split("|").sort()).toEqual(["10751", "35"]);
+    }
+    expect(matchesDiscoverParams(params("light"), movie([18, 10749]))).toBe(false); // Titanic
+    expect(matchesDiscoverParams(params("light"), movie([18, 10402, 53]))).toBe(false); // Whiplash
+    expect(matchesDiscoverParams(params("light"), movie([16, 28, 14]))).toBe(false); // action anime
+    expect(matchesDiscoverParams(params("light"), movie([16, 35, 10751, 14]))).toBe(true); // The Grinch
+  });
+
+  it("Light keeps out thrillers and crime even when they're comedies", () => {
+    expect(params("light").without_genres?.split(",")).toEqual(expect.arrayContaining(["53", "80", "27", "10752"]));
+    expect(matchesDiscoverParams(params("light"), movie([53, 80, 35]))).toBe(false); // Pulp Fiction
+  });
+
+  it("Heavy means drama without comedy, family or animation — movies and TV alike", () => {
+    for (const media of ["movie", "tv"] as const) {
+      const p = params("heavy", media);
+      expect(p.with_genres).toBe("18");
+      expect(p.without_genres?.split(",")).toEqual(expect.arrayContaining(["35", "10751", "16"]));
+    }
+    expect(matchesDiscoverParams(params("heavy"), movie([18, 80]))).toBe(true); // Shawshank
+    expect(matchesDiscoverParams(params("heavy"), movie([18, 10749]))).toBe(true); // Titanic
+    expect(matchesDiscoverParams(params("heavy"), movie([35, 18, 10749]))).toBe(false); // Forrest Gump
+  });
+
+  it("Heavy favours a pure drama over an action spectacle with a drama tag", () => {
+    const heavy = sel({ vibe: "heavy" });
+    const base = { id: 1, mediaType: "movie" as const, title: "", posterPath: "/p", date: "", overview: "", popularity: 1, voteAverage: 7.8, voteCount: 5000 };
+    expect(traitScore({ ...base, genreIds: [18] }, heavy)).toBeGreaterThan(
+      traitScore({ ...base, genreIds: [18, 28, 12, 878] }, heavy)
+    );
+  });
+
+  it("parses heavy from the URL", () => {
+    expect(parseMoodSelection(new URLSearchParams("vibe=heavy")).vibe).toBe("heavy");
   });
 });

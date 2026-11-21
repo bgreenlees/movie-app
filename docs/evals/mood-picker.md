@@ -39,6 +39,31 @@ time-available rule (see below). Tone results are unaffected.
 | Light + On Netflix · Both | 625 | **71%** | 365 Days, Cruel Intentions, JoJo |
 | Everything ticked · Movies | 13 | 83% | ~4 true-crime documentaries |
 
+## After the Light fix and the new Heavy mood — 2026-11-21
+
+Light now needs **Comedy or Family** and excludes Thriller and Crime (plus Horror/War).
+Heavy is new: **Drama**, without Comedy, Family or Animation, ranked lower when it is
+also Action/Adventure/Sci-Fi/Fantasy. The eval now samples **through the picker** (the
+tone- and rating-weighted draw), so these scores reflect what users are offered. The
+baseline above sampled the raw pool.
+
+| Combination | Fit | Notes |
+|---|---|---|
+| Light · Movies | **100%** (was 46%) | Toy Story, Shrek, Back to the Future, Totoro |
+| Light · TV | **79%** (was 71%) | ~Shameless, Rebelde, Ally McBeal, Buffy, One Piece: dramedies are allowed, just ranked lower |
+| Light · Both | 100% | |
+| Light + Under 2 hrs · Movies | 100% | |
+| Light + ~30 min · Both | 92% | ~Mob Psycho 100, You're the Worst |
+| Light + On Netflix · Both | **96%** (was 71%) | ~Don't Look Up |
+| Heavy · Movies | 79% | Godfather II, Joker, In the Mood for Love; ✗ F1; ~The Death of Robin Hood, Django, Michael |
+| Heavy · TV | 71% | Breaking Bad, The Wire, Slow Horses, ER; ✗ The Vampire Diaries; ~Suits, House, The 100 |
+| Heavy · Both | 67% | as above |
+
+**Heavy's limit:** on TMDB nearly every scripted series and many blockbusters carry a
+Drama tag, so genres alone can't tell *Breaking Bad* from *The Vampire Diaries*, or
+*Fury* from *F1*. Next ideas: TMDB keywords (e.g. "based on true story", "grief"), or a
+higher rating floor for Heavy.
+
 ### Movie / TV mix ("Both")
 
 Movies and TV are one catalogue judged on the same traits, so the split is an
@@ -79,19 +104,19 @@ genuine short films (checked: 7–30 min).
 
 ## Findings
 
-1. **"Light" is the weak spot.** It matches *any* of Comedy/Animation/Family/Romance/Music,
+1. ~~**"Light" is the weak spot.**~~ *Fixed. See "After" above.* It matches *any* of Comedy/Animation/Family/Romance/Music,
    so a single loose genre lets in tragedies (Titanic: Romance), crime (Pulp Fiction:
    Comedy), action anime (Animation) and Whiplash (Music).
 2. **Experiment:** requiring **Comedy or Family** and excluding **Thriller and Crime**
    (plus the existing Horror/War) raised Light · Movies to ~96%, Light · TV to ~96%,
    Light + short TV to ~92% and Light + Netflix to ~100%. Pools stayed large (2025 /
    935 / 485 / 418). Trade-off: some light-ish titles drop out (Spider-Verse, About
-   Time, Glass Onion). *Not applied yet.*
+   Time, Glass Onion). *Applied.*
 3. **"Intense" TV includes comfort procedurals** because Crime covers both *Luther* and
    *NCIS*. Genres can't separate these; TMDB keywords might.
 4. **Time-limited movies need a runtime check** on the 5 titles actually shown (5 cached
    detail calls) if 3-hour films are unacceptable.
-5. **"Heavy drama" has no home.** "Intense" means thrillers, action, horror and crime, and
+5. ~~**"Heavy drama" has no home.**~~ *Added the Heavy mood; see its limit above.* "Intense" means thrillers, action, horror and crime, and
    leans towards blockbusters (Avatar, Infinity War). A serious drama (Drama without
    Comedy) only appears by accident. A separate "Heavy" mood may fit "we have the
    evening and the energy" better.

@@ -48,6 +48,7 @@ const MEDIA: { value: MediaChoice; label: string }[] = [
 
 const VIBES: { value: Exclude<Vibe, "any">; label: string }[] = [
   { value: "light", label: "Light" },
+  { value: "heavy", label: "Heavy" },
   { value: "intense", label: "Intense" },
 ];
 

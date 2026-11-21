@@ -32,6 +32,8 @@ const NETFLIX = 8;
 const COMBOS: Array<{ name: string; sel: Partial<MoodSelection>; providers?: number[] }> = [
   { name: "Light · Movies", sel: { vibe: "light", media: "movie" } },
   { name: "Light · TV", sel: { vibe: "light", media: "tv" } },
+  { name: "Heavy · Movies", sel: { vibe: "heavy", media: "movie" } },
+  { name: "Heavy · TV", sel: { vibe: "heavy", media: "tv" } },
   { name: "Intense · Movies", sel: { vibe: "intense", media: "movie" } },
   { name: "Intense · TV", sel: { vibe: "intense", media: "tv" } },
   { name: "Light + Under 2 hrs · Movies", sel: { vibe: "light", time: "120", media: "movie" } },
@@ -50,6 +52,8 @@ const COMBOS: Array<{ name: string; sel: Partial<MoodSelection>; providers?: num
   { name: "~30 min · Both", sel: { time: "30", media: "both" } },
   { name: "Light + ~30 min · Both", sel: { vibe: "light", time: "30", media: "both" } },
   { name: "Intense + Under 2 hrs · Both", sel: { vibe: "intense", time: "120", media: "both" } },
+  // Thursday night with the evening free and the energy for something serious
+  { name: "Heavy · Both", sel: { vibe: "heavy", media: "both" } },
   { name: "Something new · Both", sel: { fresh: true, media: "both" } },
   { name: "Everything ticked · Movies (sparse)", sel: { vibe: "intense", time: "120", fresh: true, onMyServices: true, media: "movie" }, providers: [NETFLIX] },
 ];
@@ -68,7 +72,7 @@ const toCandidate = (r: Row): MoodCandidate => ({
   overview: "", popularity: 0, voteAverage: r.rating, voteCount: r.votes, genreIds: r.genreIds,
 });
 
-// Deterministic sample so two runs with the same mapping are comparable
+// Deterministic draws so two runs with the same mapping are comparable
 function seeded(seed: number) {
   return () => ((seed = (seed * 1664525 + 1013904223) % 2 ** 32) / 2 ** 32);
 }
@@ -123,8 +127,12 @@ async function main() {
     const blended = new Set(blendPools(groups, POOL_SIZE).map(candidateKey));
     const pool = fetched.filter((r) => blended.has(candidateKey(toCandidate(r))));
 
-    const rand = seeded(42);
-    const rows = [...pool].sort(() => rand() - 0.5).slice(0, SAMPLE);
+    // Sample through the real picker (tone/quality-weighted draw) so the table
+    // shows what users would actually be offered, not the raw pool
+    const byKey = new Map(pool.map((r) => [candidateKey(toCandidate(r)), r]));
+    const rows = pickRecommendations(pool.map(toCandidate), {
+      watchlist: new Set(), exclude: new Set(), selection: sel, count: SAMPLE, random: seeded(42),
+    }).map((p) => byKey.get(candidateKey(p))!);
     // TMDB's discover runtime filter is leaky (it has returned 3-hour films for
     // "≤100 min"), so when time is limited look up each sampled title's real runtime.
     if (sel.time !== "any") {

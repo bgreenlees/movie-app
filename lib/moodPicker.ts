@@ -10,7 +10,7 @@ import { providerTierIds } from "./providers";
 
 export type MediaType = "movie" | "tv";
 export type MediaChoice = MediaType | "both";
-export type Vibe = "any" | "light" | "intense";
+export type Vibe = "any" | "light" | "heavy" | "intense";
 /** Minutes available for one sitting: a film's runtime or one episode's */
 export type TimeAvailable = "any" | "30" | "120";
 
@@ -37,22 +37,33 @@ export const DEFAULT_SELECTION: MoodSelection = {
   media: "both",
 };
 
-// TMDB genre IDs differ between movies and TV (e.g. TV has no "Thriller" or
-// "Horror", and merges Action & Adventure / Sci-Fi & Fantasy).
-const GENRES = {
+// What each mood means in TMDB genres, per media type (IDs differ: TV has no
+// "Thriller" or "Horror", and merges Action & Adventure / Sci-Fi & Fantasy).
+//  - any:     a title needs at least one of these (discover with_genres, "|")
+//  - none:    a title with any of these is out (without_genres)
+//  - against: allowed, but lowers the tone score (see traitScore), so e.g. a pure
+//             drama ranks above an action blockbuster with a drama tag for "Heavy"
+// Light was tightened after the eval (docs/evals/mood-picker.md): Romance, Music or
+// Animation alone let in Titanic, Whiplash and action anime.
+type VibeGenres = { any: number[]; none: number[]; against: number[] };
+const VIBE_GENRES: Record<MediaType, Record<Exclude<Vibe, "any">, VibeGenres>> = {
   movie: {
-    light: [35, 16, 10751, 10749, 10402], // Comedy, Animation, Family, Romance, Music
-    intense: [53, 28, 27, 80, 10752, 9648], // Thriller, Action, Horror, Crime, War, Mystery
-    heavy: [27, 10752], // Horror, War — kept out of "light"
-    soft: [10751, 16], // Family, Animation — kept out of "intense"
+    // Comedy, Family | not Horror, War, Thriller, Crime | dramedies rank lower
+    light: { any: [35, 10751], none: [27, 10752, 53, 80], against: [18] },
+    // Drama | not Comedy, Family, Animation | less: Action, Adventure, Sci-Fi, Fantasy
+    heavy: { any: [18], none: [35, 10751, 16], against: [28, 12, 878, 14] },
+    // Thriller, Action, Horror, Crime, War, Mystery | not Family, Animation, Comedy
+    intense: { any: [53, 28, 27, 80, 10752, 9648], none: [10751, 16, 35], against: [] },
   },
   tv: {
-    light: [35, 16, 10751], // Comedy, Animation, Family
-    intense: [80, 10759, 9648, 10768, 10765], // Crime, Action & Adventure, Mystery, War & Politics, Sci-Fi & Fantasy
-    heavy: [80, 10768], // Crime, War & Politics
-    soft: [10751, 16, 10762], // Family, Animation, Kids
+    // Comedy, Family | not Crime, War & Politics | dramedies rank lower
+    light: { any: [35, 10751], none: [80, 10768], against: [18] },
+    // Drama | not Comedy, Family, Animation, Kids | less: Action & Adv., Sci-Fi & Fantasy
+    heavy: { any: [18], none: [35, 10751, 16, 10762], against: [10759, 10765] },
+    // Crime, Action & Adv., Mystery, War & Politics, Sci-Fi & Fantasy | not Family, Animation, Kids, Comedy
+    intense: { any: [80, 10759, 9648, 10768, 10765], none: [10751, 16, 10762, 35], against: [] },
   },
-} as const;
+};
 
 // Kids, News, Reality, Soap, Talk — daily shows otherwise crowd out scripted series
 // (same exclusion as getNewOnStreamingTV in lib/tmdb.ts).
@@ -87,7 +98,6 @@ export function moodToDiscoverParams(
   media: MediaType,
   ctx: DiscoverContext
 ): Record<string, string> {
-  const genres = GENRES[media];
   const params: Record<string, string> = {
     sort_by: "popularity.desc",
     "vote_average.gte": "6.5",
@@ -97,14 +107,10 @@ export function moodToDiscoverParams(
 
   const without = new Set<number>(media === "tv" ? TV_ALWAYS_EXCLUDED : []);
 
-  if (selection.vibe === "light") {
-    params.with_genres = genres.light.join("|"); // "|" = any of
-    genres.heavy.forEach((g) => without.add(g));
-  } else if (selection.vibe === "intense") {
-    params.with_genres = genres.intense.join("|");
-    genres.soft.forEach((g) => without.add(g));
-    // Comedy-thrillers exist, but "intense" shouldn't lead with sitcoms
-    without.add(35);
+  if (selection.vibe !== "any") {
+    const g = VIBE_GENRES[media][selection.vibe];
+    params.with_genres = g.any.join("|"); // "|" = any of
+    g.none.forEach((id) => without.add(id));
   }
 
   if (without.size > 0) params.without_genres = [...without].join(",");
@@ -141,7 +147,7 @@ export function parseMoodSelection(params: URLSearchParams): MoodSelection {
   const time = params.get("time");
   const flag = (k: string) => params.get(k) === "1";
   return {
-    vibe: vibe === "light" || vibe === "intense" ? vibe : "any",
+    vibe: vibe === "light" || vibe === "heavy" || vibe === "intense" ? vibe : "any",
     time: time === "30" || time === "120" ? time : "any",
     fresh: flag("fresh"),
     onMyServices: flag("services"),
@@ -199,7 +205,7 @@ const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
  * it's a movie or a show. Time available is already a hard filter on runtime /
  * episode length, so here it's:
  *  - tone: how strongly its genres match the mood (a pure sitcom is "lighter"
- *    than a romance; a crime-thriller more "intense" than an action comedy)
+ *    than a dramedy; a pure drama "heavier" than an action film with a drama tag)
  *  - quality: rating, shrunk towards average when there are few votes, so a 9.0
  *    from 40 votes doesn't beat an 8.4 from 20,000
  */
@@ -212,11 +218,9 @@ export function traitScore(c: MoodCandidate, selection?: MoodSelection): number 
 
   let tone = 0.5; // no vibe picked: tone doesn't matter
   if (selection && selection.vibe !== "any" && c.genreIds && c.genreIds.length > 0) {
-    const g = GENRES[c.mediaType];
-    const want: readonly number[] = selection.vibe === "light" ? g.light : g.intense;
-    const against: readonly number[] = selection.vibe === "light" ? g.intense : g.light;
-    const hits = c.genreIds.filter((id) => want.includes(id)).length;
-    const misses = c.genreIds.filter((id) => against.includes(id)).length;
+    const g = VIBE_GENRES[c.mediaType][selection.vibe];
+    const hits = c.genreIds.filter((id) => g.any.includes(id)).length;
+    const misses = c.genreIds.filter((id) => g.against.includes(id) || g.none.includes(id)).length;
     tone = clamp01(0.5 + 0.25 * hits - 0.25 * misses);
   }
 
