@@ -47,6 +47,42 @@ interface TVEntry {
   currentEpisode?: number | null;
 }
 
+async function loadWatchlistEntries(): Promise<Record<number, WatchlistEntry> | null> {
+  try {
+    const [wantRes, watchedRes, notRes] = await Promise.all([
+      fetch("/api/watchlist?status=WANT_TO_WATCH"),
+      fetch("/api/watchlist?status=WATCHED"),
+      fetch("/api/watchlist?status=NOT_INTERESTED"),
+    ]);
+    if (wantRes.ok && watchedRes.ok && notRes.ok) {
+      const [wantData, watchedData, notData] = await Promise.all([
+        wantRes.json(), watchedRes.json(), notRes.json(),
+      ]);
+      const entries: Record<number, WatchlistEntry> = {};
+      [...(wantData.entries || []), ...(watchedData.entries || []), ...(notData.entries || [])].forEach((e: WatchlistEntry) => {
+        entries[e.movieId] = { id: e.id, movieId: e.movieId, status: e.status, platform: e.platform, watchType: e.watchType, rating: e.rating, review: e.review };
+      });
+      return entries;
+    }
+  } catch {}
+  return null;
+}
+
+async function loadTVEntries(): Promise<Record<number, TVEntry> | null> {
+  try {
+    const res = await fetch("/api/tv/watchlist");
+    if (res.ok) {
+      const data = await res.json();
+      const entries: Record<number, TVEntry> = {};
+      (data.entries || []).forEach((e: TVEntry) => {
+        entries[e.tvShowId] = { id: e.id, tvShowId: e.tvShowId, status: e.status, platform: e.platform, rating: e.rating, review: e.review, currentSeason: e.currentSeason, currentEpisode: e.currentEpisode };
+      });
+      return entries;
+    }
+  } catch {}
+  return null;
+}
+
 function DiscoverPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -89,44 +125,30 @@ function DiscoverPageInner() {
 
   // ── Watchlist fetches ─────────────────────────────────────────────────────
 
+  // Pure loaders return data instead of setting state, so the mount effect can
+  // set state in a promise callback (with a cancellation flag) rather than synchronously.
   const fetchWatchlist = useCallback(async () => {
-    try {
-      const [wantRes, watchedRes, notRes] = await Promise.all([
-        fetch("/api/watchlist?status=WANT_TO_WATCH"),
-        fetch("/api/watchlist?status=WATCHED"),
-        fetch("/api/watchlist?status=NOT_INTERESTED"),
-      ]);
-      if (wantRes.ok && watchedRes.ok && notRes.ok) {
-        const [wantData, watchedData, notData] = await Promise.all([
-          wantRes.json(), watchedRes.json(), notRes.json(),
-        ]);
-        const entries: Record<number, WatchlistEntry> = {};
-        [...(wantData.entries || []), ...(watchedData.entries || []), ...(notData.entries || [])].forEach((e: WatchlistEntry) => {
-          entries[e.movieId] = { id: e.id, movieId: e.movieId, status: e.status, platform: e.platform, watchType: e.watchType, rating: e.rating, review: e.review };
-        });
-        setWatchlistEntries(entries);
-      }
-    } catch {}
+    const entries = await loadWatchlistEntries();
+    if (entries) setWatchlistEntries(entries);
   }, []);
 
   const fetchTVEntries = useCallback(async () => {
-    try {
-      const res = await fetch("/api/tv/watchlist");
-      if (res.ok) {
-        const data = await res.json();
-        const entries: Record<number, TVEntry> = {};
-        (data.entries || []).forEach((e: TVEntry) => {
-          entries[e.tvShowId] = { id: e.id, tvShowId: e.tvShowId, status: e.status, platform: e.platform, rating: e.rating, review: e.review, currentSeason: e.currentSeason, currentEpisode: e.currentEpisode };
-        });
-        setTVEntries(entries);
-      }
-    } catch {}
+    const entries = await loadTVEntries();
+    if (entries) setTVEntries(entries);
   }, []);
 
   useEffect(() => {
-    fetchWatchlist();
-    fetchTVEntries();
-  }, [fetchWatchlist, fetchTVEntries]);
+    let cancelled = false;
+    loadWatchlistEntries().then((entries) => {
+      if (!cancelled && entries) setWatchlistEntries(entries);
+    });
+    loadTVEntries().then((entries) => {
+      if (!cancelled && entries) setTVEntries(entries);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     fetch("/api/user").then((r) => r.json()).then((d) => {
@@ -159,136 +181,177 @@ function DiscoverPageInner() {
 
   // ── Content loading ───────────────────────────────────────────────────────
 
-  useEffect(() => {
+  // Reset state when the load inputs change, during render rather than in the
+  // effect (https://react.dev/learn/you-might-not-need-an-effect). Every mode
+  // starts a fetch, so isLoading is true until the effect's request settles.
+  const loadKey = [urlQuery, mediaType, personId, genreId, genreMedia, country].join("|");
+  const [prevLoadKey, setPrevLoadKey] = useState<string | null>(null);
+  if (prevLoadKey !== loadKey) {
+    setPrevLoadKey(loadKey);
     setSuggestion(null);
+    setIsLoading(true);
+    if (personId) {
+      setPersonData(null);
+    } else if (!genreId && country) {
+      setIsPersonalized(false);
+      setTVPersonalized(false);
+      setShowNudge(false);
+    }
+  }
+
+  useEffect(() => {
+    // Ignore responses that arrive after the inputs changed or the page unmounted.
+    let cancelled = false;
+    const settle = (request: Promise<unknown>, errorMessage: string) => {
+      request
+        .catch(() => {
+          if (!cancelled) toast.error(errorMessage);
+        })
+        .finally(() => {
+          if (!cancelled) setIsLoading(false);
+        });
+    };
 
     // Person mode
     if (personId) {
-      setIsLoading(true);
-      setPersonData(null);
-      fetch(`/api/person/${personId}`)
-        .then((r) => r.json())
-        .then((data: PersonData) => {
-          setPersonData(data);
-          fetchSeasonBanners([...(data.tvCast || []), ...(data.tvCrewDirected || [])]);
-        })
-        .catch(() => toast.error("Failed to load person"))
-        .finally(() => setIsLoading(false));
-      return;
+      settle(
+        fetch(`/api/person/${personId}`)
+          .then((r) => r.json())
+          .then((data: PersonData) => {
+            if (cancelled) return;
+            setPersonData(data);
+            fetchSeasonBanners([...(data.tvCast || []), ...(data.tvCrewDirected || [])]);
+          }),
+        "Failed to load person"
+      );
+      return () => {
+        cancelled = true;
+      };
     }
 
     // Genre mode
     if (genreId) {
       const media = genreMedia || "movie";
-      setIsLoading(true);
       const countryQs = country ? `&country=${country}` : "";
       const endpoint =
         media === "movie"
           ? `/api/discover/movie?genreId=${genreId}${countryQs}`
           : `/api/discover/tv?genreId=${genreId}${countryQs}`;
-      fetch(endpoint)
-        .then((r) => r.json())
-        .then((data) => {
-          if (media === "movie") {
-            setMovies((data.results || []).sort((a: TMDBMovie, b: TMDBMovie) => b.popularity - a.popularity));
-          } else {
-            const results: TMDBTVShow[] = (data.results || [])
-              .sort((a: TMDBTVShow, b: TMDBTVShow) => b.popularity - a.popularity);
-            setTVShows(results);
-            fetchSeasonBanners(results);
-          }
-        })
-        .catch(() => toast.error("Failed to load genre results"))
-        .finally(() => setIsLoading(false));
-      return;
+      settle(
+        fetch(endpoint)
+          .then((r) => r.json())
+          .then((data) => {
+            if (cancelled) return;
+            if (media === "movie") {
+              setMovies((data.results || []).sort((a: TMDBMovie, b: TMDBMovie) => b.popularity - a.popularity));
+            } else {
+              const results: TMDBTVShow[] = (data.results || [])
+                .sort((a: TMDBTVShow, b: TMDBTVShow) => b.popularity - a.popularity);
+              setTVShows(results);
+              fetchSeasonBanners(results);
+            }
+          }),
+        "Failed to load genre results"
+      );
+      return () => {
+        cancelled = true;
+      };
     }
 
     // Country browse mode
     if (country) {
-      setIsLoading(true);
-      setIsPersonalized(false);
-      setTVPersonalized(false);
-      setShowNudge(false);
-      fetch(`/api/discover/${mediaType}?country=${country}`)
-        .then((r) => r.json())
-        .then((data) => {
-          if (mediaType === "movie") {
-            setMovies(data.results || []);
-          } else {
-            const results: TMDBTVShow[] = data.results || [];
-            setTVShows(results);
-            fetchSeasonBanners(results);
-          }
-        })
-        .catch(() => toast.error("Failed to load results"))
-        .finally(() => setIsLoading(false));
-      return;
+      settle(
+        fetch(`/api/discover/${mediaType}?country=${country}`)
+          .then((r) => r.json())
+          .then((data) => {
+            if (cancelled) return;
+            if (mediaType === "movie") {
+              setMovies(data.results || []);
+            } else {
+              const results: TMDBTVShow[] = data.results || [];
+              setTVShows(results);
+              fetchSeasonBanners(results);
+            }
+          }),
+        "Failed to load results"
+      );
+      return () => {
+        cancelled = true;
+      };
     }
 
     if (mediaType === "movie") {
       if (urlQuery) {
-        setIsLoading(true);
-        fetch(`/api/movies/search?q=${encodeURIComponent(urlQuery)}`)
-          .then((r) => r.json())
-          .then((data) => {
-            const results: TMDBMovie[] = data.results || [];
-            // Fuzzy results are already ranked by closeness to the query
-            if (!data.fuzzy) results.sort((a, b) => b.popularity - a.popularity);
-            setMovies(results);
-            setSuggestion(data.fuzzy ? data.suggestion ?? null : null);
-          })
-          .catch(() => toast.error("Search failed"))
-          .finally(() => setIsLoading(false));
+        settle(
+          fetch(`/api/movies/search?q=${encodeURIComponent(urlQuery)}`)
+            .then((r) => r.json())
+            .then((data) => {
+              if (cancelled) return;
+              const results: TMDBMovie[] = data.results || [];
+              // Fuzzy results are already ranked by closeness to the query
+              if (!data.fuzzy) results.sort((a, b) => b.popularity - a.popularity);
+              setMovies(results);
+              setSuggestion(data.fuzzy ? data.suggestion ?? null : null);
+            }),
+          "Search failed"
+        );
       } else {
-        setIsLoading(true);
-        fetch("/api/movies/recommended")
-          .then((r) => r.json())
-          .then((recData) => {
-            if (recData.personalized && recData.results.length >= 6) {
-              setMovies(recData.results);
-              setIsPersonalized(true);
-              setIsLoading(false);
-              return;
-            }
-            setIsPersonalized(false);
-            return fetch("/api/movies/contextual").then((r) => r.json()).then((ctxData) => {
-              setMovies((ctxData.results || []).sort(() => Math.random() - 0.5));
-              setShowNudge(true);
-            });
-          })
-          .catch(() => toast.error("Failed to load movies"))
-          .finally(() => setIsLoading(false));
+        settle(
+          fetch("/api/movies/recommended")
+            .then((r) => r.json())
+            .then((recData) => {
+              if (cancelled) return;
+              if (recData.personalized && recData.results.length >= 6) {
+                setMovies(recData.results);
+                setIsPersonalized(true);
+                setIsLoading(false);
+                return;
+              }
+              setIsPersonalized(false);
+              return fetch("/api/movies/contextual").then((r) => r.json()).then((ctxData) => {
+                if (cancelled) return;
+                setMovies((ctxData.results || []).sort(() => Math.random() - 0.5));
+                setShowNudge(true);
+              });
+            }),
+          "Failed to load movies"
+        );
       }
     } else {
       // TV mode
       if (urlQuery) {
-        setIsLoading(true);
-        fetch(`/api/tv/search?q=${encodeURIComponent(urlQuery)}`)
-          .then((r) => r.json())
-          .then((data) => {
-            const results: TMDBTVShow[] = (data.results || []).filter((s: TMDBTVShow) => s.poster_path);
-            // Fuzzy results are already ranked by closeness to the query
-            if (!data.fuzzy) results.sort((a, b) => b.popularity - a.popularity);
-            setTVShows(results);
-            setSuggestion(data.fuzzy ? data.suggestion ?? null : null);
-            fetchSeasonBanners(results);
-          })
-          .catch(() => toast.error("Search failed"))
-          .finally(() => setIsLoading(false));
+        settle(
+          fetch(`/api/tv/search?q=${encodeURIComponent(urlQuery)}`)
+            .then((r) => r.json())
+            .then((data) => {
+              if (cancelled) return;
+              const results: TMDBTVShow[] = (data.results || []).filter((s: TMDBTVShow) => s.poster_path);
+              // Fuzzy results are already ranked by closeness to the query
+              if (!data.fuzzy) results.sort((a, b) => b.popularity - a.popularity);
+              setTVShows(results);
+              setSuggestion(data.fuzzy ? data.suggestion ?? null : null);
+              fetchSeasonBanners(results);
+            }),
+          "Search failed"
+        );
       } else {
-        setIsLoading(true);
-        fetch("/api/tv/recommended")
-          .then((r) => r.json())
-          .then((data) => {
-            const results: TMDBTVShow[] = data.results || [];
-            setTVShows(results);
-            setTVPersonalized(data.personalized);
-            fetchSeasonBanners(results);
-          })
-          .catch(() => toast.error("Failed to load TV shows"))
-          .finally(() => setIsLoading(false));
+        settle(
+          fetch("/api/tv/recommended")
+            .then((r) => r.json())
+            .then((data) => {
+              if (cancelled) return;
+              const results: TMDBTVShow[] = data.results || [];
+              setTVShows(results);
+              setTVPersonalized(data.personalized);
+              fetchSeasonBanners(results);
+            }),
+          "Failed to load TV shows"
+        );
       }
     }
+    return () => {
+      cancelled = true;
+    };
   }, [urlQuery, mediaType, personId, genreId, genreMedia, country, fetchSeasonBanners]);
 
   useEffect(() => {

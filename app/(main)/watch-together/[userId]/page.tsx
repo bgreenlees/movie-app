@@ -93,6 +93,26 @@ function MovieSection({
   );
 }
 
+async function loadWatchlistEntries(): Promise<Record<number, WatchlistEntry> | null> {
+  try {
+    const [wantRes, watchedRes] = await Promise.all([
+      fetch("/api/watchlist?status=WANT_TO_WATCH"),
+      fetch("/api/watchlist?status=WATCHED"),
+    ]);
+    if (wantRes.ok && watchedRes.ok) {
+      const [wantData, watchedData] = await Promise.all([wantRes.json(), watchedRes.json()]);
+      const entries: Record<number, WatchlistEntry> = {};
+      [...(wantData.entries || []), ...(watchedData.entries || [])].forEach((entry: WatchlistEntry & { movieId: number }) => {
+        entries[entry.movieId] = entry;
+      });
+      return entries;
+    }
+  } catch {
+    // silently fail
+  }
+  return null;
+}
+
 export default function WatchTogetherPage({ params }: { params: Promise<{ userId: string }> }) {
   const { userId } = use(params);
   const [data, setData] = useState<WatchTogetherData | null>(null);
@@ -102,26 +122,15 @@ export default function WatchTogetherPage({ params }: { params: Promise<{ userId
   const [selectedMovie, setSelectedMovie] = useState<{ id: number; title: string } | null>(null);
   const [trailerMovie, setTrailerMovie] = useState<{ id: number; title: string } | null>(null);
 
+  // Refresh after a mutation (called from event handlers).
   const fetchWatchlist = async () => {
-    try {
-      const [wantRes, watchedRes] = await Promise.all([
-        fetch("/api/watchlist?status=WANT_TO_WATCH"),
-        fetch("/api/watchlist?status=WATCHED"),
-      ]);
-      if (wantRes.ok && watchedRes.ok) {
-        const [wantData, watchedData] = await Promise.all([wantRes.json(), watchedRes.json()]);
-        const entries: Record<number, WatchlistEntry> = {};
-        [...(wantData.entries || []), ...(watchedData.entries || [])].forEach((entry: WatchlistEntry & { movieId: number }) => {
-          entries[entry.movieId] = entry;
-        });
-        setWatchlistEntries(entries);
-      }
-    } catch {
-      // silently fail
-    }
+    const entries = await loadWatchlistEntries();
+    if (entries) setWatchlistEntries(entries);
   };
 
   useEffect(() => {
+    // Ignore responses that arrive after userId changed or the page unmounted.
+    let cancelled = false;
     const load = async () => {
       try {
         const res = await fetch(`/api/watch-together/${userId}`);
@@ -129,17 +138,24 @@ export default function WatchTogetherPage({ params }: { params: Promise<{ userId
           const d = await res.json().catch(() => ({}));
           throw new Error(d.error || "Failed to load");
         }
-        setData(await res.json());
+        const loaded = await res.json();
+        if (!cancelled) setData(loaded);
       } catch (err) {
+        if (cancelled) return;
         setError(err instanceof Error ? err.message : "Failed to load");
         toast.error("Failed to load Watch Together data");
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
 
     load();
-    fetchWatchlist();
+    loadWatchlistEntries().then((entries) => {
+      if (!cancelled && entries) setWatchlistEntries(entries);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [userId]);
 
   // Normalise freshPicks (TMDB snake_case) to DbMovie shape

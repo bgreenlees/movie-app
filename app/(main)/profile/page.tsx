@@ -17,6 +17,19 @@ interface PendingRequest {
   requester: { id: string; name: string | null; email: string };
 }
 
+async function fetchConnections(): Promise<{ friends: Friend[]; pending: PendingRequest[] } | null> {
+  try {
+    const res = await fetch("/api/connections");
+    if (res.ok) {
+      const data = await res.json();
+      return { friends: data.friends || [], pending: data.pending || [] };
+    }
+  } catch {
+    // silently fail
+  }
+  return null;
+}
+
 export default function ProfilePage() {
   const [allProviders, setAllProviders] = useState<TMDBWatchProvider[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -33,41 +46,42 @@ export default function ProfilePage() {
   const [friendEmail, setFriendEmail] = useState("");
   const [isSendingRequest, setIsSendingRequest] = useState(false);
 
+  // Refresh after a mutation (called from event handlers).
   const loadConnections = async () => {
-    try {
-      const res = await fetch("/api/connections");
-      if (res.ok) {
-        const data = await res.json();
-        setFriends(data.friends || []);
-        setPending(data.pending || []);
-      }
-    } catch {
-      // silently fail
+    const connections = await fetchConnections();
+    if (connections) {
+      setFriends(connections.friends);
+      setPending(connections.pending);
     }
   };
 
   useEffect(() => {
+    // Ignore responses that arrive after the page unmounted.
+    let cancelled = false;
     const load = async () => {
       const [providersRes, userRes] = await Promise.all([
         fetch("/api/movies/providers"),
         fetch("/api/user/streaming"),
       ]);
+      const providers = providersRes.ok ? await providersRes.json() : null;
+      const user = userRes.ok ? await userRes.json() : null;
+      if (cancelled) return;
 
-      if (providersRes.ok) {
-        const data = await providersRes.json();
-        setAllProviders(data.providers || []);
-      }
-
-      if (userRes.ok) {
-        const data = await userRes.json();
-        setSelected(new Set(data.streamingServices || []));
-      }
-
+      if (providers) setAllProviders(providers.providers || []);
+      if (user) setSelected(new Set(user.streamingServices || []));
       setIsLoading(false);
     };
 
     load();
-    loadConnections();
+    fetchConnections().then((connections) => {
+      if (!cancelled && connections) {
+        setFriends(connections.friends);
+        setPending(connections.pending);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const toggle = async (providerId: number) => {

@@ -66,6 +66,20 @@ const EMPTY_MESSAGES: Record<Tab, string> = {
   finished: "No finished shows yet.",
 };
 
+// Returns null (after toasting) when the request fails.
+async function loadEntries(tab: Tab): Promise<TVEntry[] | null> {
+  try {
+    const res = await fetch(`/api/tv/watchlist?status=${STATUS_MAP[tab]}`);
+    if (res.ok) {
+      const data = await res.json();
+      return data.entries || [];
+    }
+  } catch {
+    toast.error("Failed to load TV shows");
+  }
+  return null;
+}
+
 export default function MyTVPage() {
   const [activeTab, setActiveTab] = useState<Tab>("watching");
   const [entries, setEntries] = useState<TVEntry[]>([]);
@@ -73,35 +87,40 @@ export default function MyTVPage() {
   const [nextEpisodes, setNextEpisodes] = useState<Record<number, NextEpisodeInfo["next_episode_to_air"]>>({});
   const [selectedShow, setSelectedShow] = useState<TVEntry | null>(null);
 
+  // Reset per-tab state while rendering, when the tab changes
+  // (https://react.dev/learn/you-might-not-need-an-effect), not in the effect.
+  const [prevTab, setPrevTab] = useState(activeTab);
+  if (prevTab !== activeTab) {
+    setPrevTab(activeTab);
+    setNextEpisodes({});
+    setIsLoading(true);
+  }
+
+  // Refresh after a mutation (called from event handlers); shows the spinner like a tab switch.
   const fetchEntries = useCallback(async (tab: Tab) => {
     setIsLoading(true);
-    try {
-      const res = await fetch(`/api/tv/watchlist?status=${STATUS_MAP[tab]}`);
-      if (res.ok) {
-        const data = await res.json();
-        const loaded: TVEntry[] = data.entries || [];
-        setEntries(loaded);
-        return loaded;
-      }
-    } catch {
-      toast.error("Failed to load TV shows");
-    } finally {
-      setIsLoading(false);
-    }
-    return [];
+    const loaded = await loadEntries(tab);
+    if (loaded) setEntries(loaded);
+    setIsLoading(false);
+    return loaded ?? [];
   }, []);
 
   useEffect(() => {
-    setNextEpisodes({});
-    fetchEntries(activeTab).then((loadedEntries: TVEntry[]) => {
-      if (activeTab !== "watching" || loadedEntries.length === 0) return;
+    // Ignore responses that arrive after the tab changed or the page unmounted.
+    let cancelled = false;
+    loadEntries(activeTab).then((loaded) => {
+      if (cancelled) return;
+      if (loaded) setEntries(loaded);
+      setIsLoading(false);
+      if (activeTab !== "watching" || !loaded || loaded.length === 0) return;
       Promise.allSettled(
-        loadedEntries.map((entry) =>
+        loaded.map((entry) =>
           fetch(`/api/tv/${entry.tvShowId}/credits`)
             .then((r) => r.json())
             .then((data) => ({ tvShowId: entry.tvShowId, next_episode_to_air: data.next_episode_to_air ?? null }))
         )
       ).then((results) => {
+        if (cancelled) return;
         const map: Record<number, NextEpisodeInfo["next_episode_to_air"]> = {};
         results.forEach((r) => {
           if (r.status === "fulfilled") {
@@ -111,7 +130,10 @@ export default function MyTVPage() {
         setNextEpisodes(map);
       });
     });
-  }, [activeTab, fetchEntries]);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab]);
 
   const handleRating = async (entry: TVEntry, rating: number) => {
     setEntries((prev) => prev.map((e) => e.id === entry.id ? { ...e, rating: rating || null } : e));

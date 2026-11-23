@@ -141,6 +141,45 @@ function ScrollRow({
   );
 }
 
+async function loadWatchlistEntries(): Promise<Record<number, WatchlistEntry> | null> {
+  try {
+    const [wantRes, watchedRes] = await Promise.all([
+      fetch("/api/watchlist?status=WANT_TO_WATCH"),
+      fetch("/api/watchlist?status=WATCHED"),
+    ]);
+    if (wantRes.ok && watchedRes.ok) {
+      const [wantData, watchedData] = await Promise.all([wantRes.json(), watchedRes.json()]);
+      const entries: Record<number, WatchlistEntry> = {};
+      [...(wantData.entries || []), ...(watchedData.entries || [])].forEach(
+        (entry: WatchlistEntry & { movieId: number }) => {
+          entries[entry.movieId] = entry;
+        }
+      );
+      return entries;
+    }
+  } catch {
+    // silently fail
+  }
+  return null;
+}
+
+async function loadTVEntries(): Promise<Record<number, TVEntry> | null> {
+  try {
+    const res = await fetch("/api/tv/watchlist");
+    if (res.ok) {
+      const data = await res.json();
+      const entries: Record<number, TVEntry> = {};
+      (data.entries || []).forEach((entry: TVEntry & { tvShowId: number }) => {
+        entries[entry.tvShowId] = entry;
+      });
+      return entries;
+    }
+  } catch {
+    // silently fail
+  }
+  return null;
+}
+
 export default function NewsPage() {
   const [data, setData] = useState<NewsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -151,66 +190,51 @@ export default function NewsPage() {
   const [selectedShow, setSelectedShow] = useState<Selected | null>(null);
   const [trailerMovie, setTrailerMovie] = useState<Selected | null>(null);
 
+  // Refresh after a mutation (called from event handlers).
   const fetchWatchlist = async () => {
-    try {
-      const [wantRes, watchedRes] = await Promise.all([
-        fetch("/api/watchlist?status=WANT_TO_WATCH"),
-        fetch("/api/watchlist?status=WATCHED"),
-      ]);
-      if (wantRes.ok && watchedRes.ok) {
-        const [wantData, watchedData] = await Promise.all([wantRes.json(), watchedRes.json()]);
-        const entries: Record<number, WatchlistEntry> = {};
-        [...(wantData.entries || []), ...(watchedData.entries || [])].forEach(
-          (entry: WatchlistEntry & { movieId: number }) => {
-            entries[entry.movieId] = entry;
-          }
-        );
-        setWatchlistEntries(entries);
-      }
-    } catch {
-      // silently fail
-    }
+    const entries = await loadWatchlistEntries();
+    if (entries) setWatchlistEntries(entries);
   };
 
   const fetchTVEntries = async () => {
-    try {
-      const res = await fetch("/api/tv/watchlist");
-      if (res.ok) {
-        const data = await res.json();
-        const entries: Record<number, TVEntry> = {};
-        (data.entries || []).forEach((entry: TVEntry & { tvShowId: number }) => {
-          entries[entry.tvShowId] = entry;
-        });
-        setTVEntries(entries);
-      }
-    } catch {
-      // silently fail
-    }
+    const entries = await loadTVEntries();
+    if (entries) setTVEntries(entries);
   };
 
   useEffect(() => {
+    // Ignore responses that arrive after the page unmounted.
+    let cancelled = false;
     const load = async () => {
       try {
         const res = await fetch("/api/movies/news");
         if (!res.ok) throw new Error();
-        setData(await res.json());
+        const loaded = await res.json();
+        if (!cancelled) setData(loaded);
       } catch {
-        toast.error("Failed to load news");
+        if (!cancelled) toast.error("Failed to load news");
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
 
     try {
       const saved = localStorage.getItem("newReleasesFilter");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is an external system that doesn't exist during SSR; reading it in render or in the useState initializer would cause a hydration mismatch, so we sync it once after mount.
       if (saved === "movie" || saved === "tv" || saved === "both") setFilter(saved);
     } catch {
       // storage unavailable
     }
 
     load();
-    fetchWatchlist();
-    fetchTVEntries();
+    loadWatchlistEntries().then((entries) => {
+      if (!cancelled && entries) setWatchlistEntries(entries);
+    });
+    loadTVEntries().then((entries) => {
+      if (!cancelled && entries) setTVEntries(entries);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const changeFilter = (next: MediaFilter) => {
