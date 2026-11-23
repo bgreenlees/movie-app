@@ -63,27 +63,26 @@ export default function AddMovieModal({
     }
   }, [isOpen, movieId]);
 
-  useEffect(() => {
+  // Reset the form when the modal opens or its entry changes. Adjusting state
+  // during render avoids an extra effect-driven render
+  // (https://react.dev/learn/you-might-not-need-an-effect).
+  const [formSource, setFormSource] = useState<{ isOpen: boolean; entry: ExistingEntry | undefined } | null>(null);
+  if (formSource === null || formSource.isOpen !== isOpen || formSource.entry !== existingEntry) {
+    setFormSource({ isOpen, entry: existingEntry });
     if (isOpen) {
-      if (existingEntry) {
-        setFormData({
-          status: existingEntry.status,
-          platform: existingEntry.platform || "",
-          watchType: existingEntry.watchType || "",
-          rating: existingEntry.rating || 0,
-          review: existingEntry.review || "",
-        });
-      } else {
-        setFormData({
-          status: "WANT_TO_WATCH",
-          platform: "",
-          watchType: "",
-          rating: 0,
-          review: "",
-        });
-      }
+      setFormData(
+        existingEntry
+          ? {
+              status: existingEntry.status,
+              platform: existingEntry.platform || "",
+              watchType: existingEntry.watchType || "",
+              rating: existingEntry.rating || 0,
+              review: existingEntry.review || "",
+            }
+          : { status: "WANT_TO_WATCH", platform: "", watchType: "", rating: 0, review: "" }
+      );
     }
-  }, [isOpen, existingEntry]);
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

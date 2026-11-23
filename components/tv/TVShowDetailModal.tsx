@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { TMDBWatchProvider, TMDBEpisode, TMDBSeason, TMDBNextEpisode, TMDBTVShow } from "@/lib/tmdb";
@@ -72,8 +72,6 @@ export default function TVShowDetailModal({
   const [currentId, setCurrentId] = useState<number | null>(tvId);
   const [currentName, setCurrentName] = useState<string>(tvName);
   const [history, setHistory] = useState<Array<{ id: number; name: string }>>([]);
-  const rootPosterRef = useRef<string | null | undefined>(posterPath);
-  const rootOverviewRef = useRef<string | undefined>(overview);
 
   const [details, setDetails] = useState<TVDetails | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -88,14 +86,24 @@ export default function TVShowDetailModal({
   const [watchlistEntries, setWatchlistEntries] = useState<Record<number, TVWatchlistEntry>>({});
   const [showAddModal, setShowAddModal] = useState(false);
 
-  useEffect(() => {
-    if (tvId === null) return;
-    setCurrentId(tvId);
-    setCurrentName(tvName);
-    setHistory([]);
-    rootPosterRef.current = posterPath;
-    rootOverviewRef.current = overview;
-  }, [tvId, tvName, posterPath, overview]);
+  // When the parent passes a different show, reset navigation to it. Adjusting state
+  // during render (not in an effect) avoids a render with stale state
+  // (https://react.dev/learn/you-might-not-need-an-effect). The root show's poster and
+  // overview come straight from props, so no ref is needed to remember them.
+  const [prevProps, setPrevProps] = useState({ tvId, tvName, posterPath, overview });
+  if (
+    prevProps.tvId !== tvId ||
+    prevProps.tvName !== tvName ||
+    prevProps.posterPath !== posterPath ||
+    prevProps.overview !== overview
+  ) {
+    setPrevProps({ tvId, tvName, posterPath, overview });
+    if (tvId !== null) {
+      setCurrentId(tvId);
+      setCurrentName(tvName);
+      setHistory([]);
+    }
+  }
 
   const fetchWatchlistEntries = useCallback(() => {
     fetch("/api/tv/watchlist")
@@ -117,8 +125,10 @@ export default function TVShowDetailModal({
     fetchWatchlistEntries();
   }, [tvId, fetchWatchlistEntries]);
 
-  useEffect(() => {
-    if (!currentId) return;
+  // Clear the previous show's data as soon as currentId changes, during render.
+  const [loadedForId, setLoadedForId] = useState<number | null>(null);
+  if (currentId && loadedForId !== currentId) {
+    setLoadedForId(currentId);
     setDetails(null);
     setProviders({ flatrate: [], rent: [] });
     setExpandedSeason(null);
@@ -126,6 +136,12 @@ export default function TVShowDetailModal({
     setRecs([]);
     setIsLoading(true);
     setRecsLoading(true);
+  }
+
+  useEffect(() => {
+    if (!currentId) return;
+    // Ignore responses for a show we've already navigated away from.
+    let cancelled = false;
 
     Promise.all([
       fetch(`/api/tv/${currentId}/credits`).then((r) => r.json()),
@@ -133,18 +149,33 @@ export default function TVShowDetailModal({
       fetch("/api/user/streaming").then((r) => r.json()),
     ])
       .then(([creditsData, providerData, userData]) => {
+        if (cancelled) return;
         setDetails(creditsData);
         setProviders({ flatrate: providerData.flatrate || [], rent: providerData.rent || [] });
         setUserServices(new Set(userData.streamingServices || []));
       })
-      .catch(() => setDetails(null))
-      .finally(() => setIsLoading(false));
+      .catch(() => {
+        if (!cancelled) setDetails(null);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
 
     fetch(`/api/tv/${currentId}/recommendations`)
       .then((r) => r.json())
-      .then((d) => setRecs(d.results || []))
-      .catch(() => setRecs([]))
-      .finally(() => setRecsLoading(false));
+      .then((d) => {
+        if (!cancelled) setRecs(d.results || []);
+      })
+      .catch(() => {
+        if (!cancelled) setRecs([]);
+      })
+      .finally(() => {
+        if (!cancelled) setRecsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [currentId]);
 
   useEffect(() => {
@@ -207,8 +238,8 @@ export default function TVShowDetailModal({
   if (!tvId || !currentId) return null;
 
   const isRootShow = currentId === tvId;
-  const displayPoster = details?.poster_path ?? (isRootShow ? rootPosterRef.current : null);
-  const displayOverview = details?.overview ?? (isRootShow ? rootOverviewRef.current : undefined);
+  const displayPoster = details?.poster_path ?? (isRootShow ? posterPath : null);
+  const displayOverview = details?.overview ?? (isRootShow ? overview : undefined);
   const currentEntry = watchlistEntries[currentId];
   const mainSeasons = details?.seasons.filter((s) => s.season_number > 0) ?? [];
   const nextEp = details?.next_episode_to_air;

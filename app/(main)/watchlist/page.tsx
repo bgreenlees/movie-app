@@ -27,6 +27,21 @@ interface WatchlistEntry {
   };
 }
 
+// Returns null (after toasting) when the request fails.
+async function loadEntries(tab: Tab): Promise<WatchlistEntry[] | null> {
+  try {
+    const status = tab === "want" ? "WANT_TO_WATCH" : "WATCHED";
+    const response = await fetch(`/api/watchlist?status=${status}`);
+    if (!response.ok) throw new Error("Failed to fetch");
+    const data = await response.json();
+    return data.entries || [];
+  } catch (error) {
+    toast.error("Failed to load movies");
+    console.error(error);
+    return null;
+  }
+}
+
 export default function MyMoviesPage() {
   const [activeTab, setActiveTab] = useState<Tab>("want");
   const [entries, setEntries] = useState<WatchlistEntry[]>([]);
@@ -34,24 +49,33 @@ export default function MyMoviesPage() {
   const [selectedEntry, setSelectedEntry] = useState<WatchlistEntry | null>(null);
   const [trailerMovie, setTrailerMovie] = useState<{ id: number; title: string } | null>(null);
 
+  // Reset the spinner while rendering when the tab changes
+  // (https://react.dev/learn/you-might-not-need-an-effect), not in the effect.
+  const [prevTab, setPrevTab] = useState(activeTab);
+  if (prevTab !== activeTab) {
+    setPrevTab(activeTab);
+    setIsLoading(true);
+  }
+
+  // Refresh after a mutation (called from event handlers); shows the spinner like a tab switch.
   const fetchEntries = async (tab: Tab) => {
     setIsLoading(true);
-    try {
-      const status = tab === "want" ? "WANT_TO_WATCH" : "WATCHED";
-      const response = await fetch(`/api/watchlist?status=${status}`);
-      if (!response.ok) throw new Error("Failed to fetch");
-      const data = await response.json();
-      setEntries(data.entries || []);
-    } catch (error) {
-      toast.error("Failed to load movies");
-      console.error(error);
-    } finally {
-      setIsLoading(false);
-    }
+    const loaded = await loadEntries(tab);
+    if (loaded) setEntries(loaded);
+    setIsLoading(false);
   };
 
   useEffect(() => {
-    fetchEntries(activeTab);
+    // Ignore responses that arrive after the tab changed or the page unmounted.
+    let cancelled = false;
+    loadEntries(activeTab).then((loaded) => {
+      if (cancelled) return;
+      if (loaded) setEntries(loaded);
+      setIsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [activeTab]);
 
   const handleRating = async (entryId: string, rating: number) => {

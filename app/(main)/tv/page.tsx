@@ -19,6 +19,30 @@ interface TVEntry {
   currentEpisode?: number | null;
 }
 
+async function loadTVEntries(): Promise<Record<number, TVEntry> | null> {
+  try {
+    const res = await fetch("/api/tv/watchlist");
+    if (res.ok) {
+      const data = await res.json();
+      const entries: Record<number, TVEntry> = {};
+      (data.entries || []).forEach((entry: TVEntry) => {
+        entries[entry.tvShowId] = {
+          id: entry.id,
+          tvShowId: entry.tvShowId,
+          status: entry.status,
+          platform: entry.platform,
+          rating: entry.rating,
+          review: entry.review,
+          currentSeason: entry.currentSeason,
+          currentEpisode: entry.currentEpisode,
+        };
+      });
+      return entries;
+    }
+  } catch {}
+  return null;
+}
+
 function TVDiscoverInner() {
   const searchParams = useSearchParams();
   const urlQuery = searchParams.get("q") || "";
@@ -53,32 +77,22 @@ function TVDiscoverInner() {
     setSeasonBanners((prev) => ({ ...prev, ...map }));
   }, []);
 
+  // Refresh after a mutation (called from event handlers).
   const fetchTVEntries = useCallback(async () => {
-    try {
-      const res = await fetch("/api/tv/watchlist");
-      if (res.ok) {
-        const data = await res.json();
-        const entries: Record<number, TVEntry> = {};
-        (data.entries || []).forEach((entry: TVEntry) => {
-          entries[entry.tvShowId] = {
-            id: entry.id,
-            tvShowId: entry.tvShowId,
-            status: entry.status,
-            platform: entry.platform,
-            rating: entry.rating,
-            review: entry.review,
-            currentSeason: entry.currentSeason,
-            currentEpisode: entry.currentEpisode,
-          };
-        });
-        setTVEntries(entries);
-      }
-    } catch {}
+    const entries = await loadTVEntries();
+    if (entries) setTVEntries(entries);
   }, []);
 
+  // On mount, set state from the promise callback, not synchronously in the effect.
   useEffect(() => {
-    fetchTVEntries();
-  }, [fetchTVEntries]);
+    let cancelled = false;
+    loadTVEntries().then((entries) => {
+      if (!cancelled && entries) setTVEntries(entries);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (urlQuery) {

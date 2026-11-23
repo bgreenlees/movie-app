@@ -64,22 +64,27 @@ export default function AddTVModal({
     }
   }, [isOpen, tvShowId]);
 
-  useEffect(() => {
+  // Reset the form when the modal opens or its entry changes. Adjusting state
+  // during render avoids an extra effect-driven render
+  // (https://react.dev/learn/you-might-not-need-an-effect).
+  const [formSource, setFormSource] = useState<{ isOpen: boolean; entry: ExistingTVEntry | undefined } | null>(null);
+  if (formSource === null || formSource.isOpen !== isOpen || formSource.entry !== existingEntry) {
+    setFormSource({ isOpen, entry: existingEntry });
     if (isOpen) {
-      if (existingEntry) {
-        setFormData({
-          status: existingEntry.status,
-          platform: existingEntry.platform || "",
-          rating: existingEntry.rating || 0,
-          review: existingEntry.review || "",
-          currentSeason: existingEntry.currentSeason ? String(existingEntry.currentSeason) : "",
-          currentEpisode: existingEntry.currentEpisode ? String(existingEntry.currentEpisode) : "",
-        });
-      } else {
-        setFormData({ status: "WANT_TO_WATCH", platform: "", rating: 0, review: "", currentSeason: "", currentEpisode: "" });
-      }
+      setFormData(
+        existingEntry
+          ? {
+              status: existingEntry.status,
+              platform: existingEntry.platform || "",
+              rating: existingEntry.rating || 0,
+              review: existingEntry.review || "",
+              currentSeason: existingEntry.currentSeason ? String(existingEntry.currentSeason) : "",
+              currentEpisode: existingEntry.currentEpisode ? String(existingEntry.currentEpisode) : "",
+            }
+          : { status: "WANT_TO_WATCH", platform: "", rating: 0, review: "", currentSeason: "", currentEpisode: "" }
+      );
     }
-  }, [isOpen, existingEntry]);
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
