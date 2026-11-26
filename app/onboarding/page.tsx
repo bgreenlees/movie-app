@@ -216,7 +216,7 @@ export default function OnboardingPage() {
                     key={movie.id}
                     onClick={() => toggle(movie.id)}
                     disabled={!isSelected && count >= 5}
-                    className="relative rounded-lg overflow-hidden group transition-all duration-200 focus:outline-none"
+                    className="relative rounded-lg overflow-hidden group transition-all duration-200"
                     style={{
                       boxShadow: isSelected ? `0 0 0 3px var(--accent), 0 0 20px color-mix(in srgb, var(--accent) 40%, transparent)` : "none",
                       opacity: !isSelected && count >= 5 ? 0.4 : 1,
@@ -249,7 +249,7 @@ export default function OnboardingPage() {
 
                       {/* Hover overlay for unselected */}
                       {!isSelected && (
-                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.7), transparent)" }}>
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity flex items-end p-2" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.7), transparent)" }}>
                           <span className="text-white text-xs font-medium leading-tight">{movie.title}</span>
                         </div>
                       )}

@@ -337,7 +337,7 @@ export default function AddMovieModal({
                     setFormData({ ...formData, review: e.target.value })
                   }
                   rows={3}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 resize-y"
+                  className="w-full px-3 py-2 border rounded-md resize-y"
                   style={{
                     borderColor: "var(--border)",
                     backgroundColor: "var(--background)",
@@ -364,7 +364,7 @@ export default function AddMovieModal({
                   onChange={(e) =>
                     setFormData({ ...formData, platform: e.target.value })
                   }
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 appearance-none"
+                  className="w-full px-3 py-2 border rounded-md appearance-none"
                   style={{
                     borderColor: "var(--border)",
                     backgroundColor: "var(--background)",

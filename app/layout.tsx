@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Playfair_Display, Lato } from "next/font/google";
 import { Toaster } from "react-hot-toast";
+import SkipLink from "@/components/ui/SkipLink";
 import Providers from "@/components/Providers";
 import "./globals.css";
 
@@ -37,6 +38,7 @@ export default function RootLayout({
         />
       </head>
       <body className={`${playfair.variable} ${lato.variable}`}>
+        <SkipLink />
         <Providers>
           {children}
           <Toaster position="top-right" />

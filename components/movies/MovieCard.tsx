@@ -49,7 +49,7 @@ export default function MovieCard({
           {/* Info button — always visible on touch, hover-only on desktop */}
           <button
             onClick={(e) => { e.stopPropagation(); setIsDetailOpen(true); }}
-            className="absolute top-1.5 right-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold leading-none"
+            className="absolute top-1.5 right-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 sm:focus-visible:opacity-100 transition-opacity flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold leading-none"
             style={{ backgroundColor: "rgba(0,0,0,0.55)", color: "rgba(255,255,255,0.85)" }}
             aria-label={`Info for ${title}`}
           >
