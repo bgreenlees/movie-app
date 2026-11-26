@@ -167,7 +167,7 @@ export function pickForUs<T extends ScoredCandidate>(
 // ---------------------------------------------------------------------------
 
 /** A cuid-like id: what Prisma's @default(cuid()) produces. */
-const idSchema = z
+export const idSchema = z
   .string()
   .min(1)
   .max(40)
