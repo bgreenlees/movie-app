@@ -92,7 +92,7 @@ function ScrollRow({
         {title}
       </h2>
       <div
-        className="flex gap-3 overflow-x-auto pb-3"
+        className="flex gap-3 overflow-x-auto py-1 pb-3"
         style={{ scrollbarWidth: "thin", scrollbarColor: "var(--border) transparent" }}
       >
         {visible.map((item) => {
