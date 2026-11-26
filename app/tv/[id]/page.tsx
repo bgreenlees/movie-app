@@ -231,7 +231,7 @@ export default async function TVShowPage({ params }: Props) {
         {recs.length > 0 && (
           <div className="mt-6">
             <h2 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>More like this</h2>
-            <div className="flex gap-3 overflow-x-auto pb-2">
+            <div className="flex gap-3 overflow-x-auto py-1 pb-2">
               {recs.map((rec) => (
                 <Link key={rec.id} href={`/tv/${rec.id}`} className="shrink-0 group" style={{ width: 110 }} title={rec.name}>
                   <div className="relative rounded-md overflow-hidden mb-1.5" style={{ width: 110, aspectRatio: "2/3", backgroundColor: "var(--border)" }}>

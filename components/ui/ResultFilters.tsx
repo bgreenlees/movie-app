@@ -238,7 +238,7 @@ export default function ResultFilters({
 
       {/* Active filters as removable chips (scrolls sideways on narrow screens) */}
       {!disabled && badgeCount > 0 && (
-        <div className="flex items-center gap-2 mt-3 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap [scrollbar-width:none]">
+        <div className="flex items-center gap-2 mt-3 overflow-x-auto py-1 pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap [scrollbar-width:none]">
           {narrowingCount > 0 && (
             <span className="shrink-0 text-xs whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
               {shownCount} of {totalCount}

@@ -217,7 +217,7 @@ export default async function MoviePage({ params }: Props) {
             <h2 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
               More like this
             </h2>
-            <div className="flex gap-3 overflow-x-auto pb-2">
+            <div className="flex gap-3 overflow-x-auto py-1 pb-2">
               {recs.map((rec) => (
                 <Link key={rec.id} href={`/movie/${rec.id}`} className="shrink-0 group" style={{ width: 110 }} title={rec.title}>
                   <div

@@ -54,6 +54,16 @@ input, select, textarea {
   outline-offset: 2px;
 }
 
+/* Pages with a hard-coded black background keep the light-on-dark ring even in light theme. */
+.force-dark {
+  --focus-ring: #c084fc;
+}
+
+/* After "Skip to content", <main> is focused programmatically: no ring on the whole page. */
+main[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
 /* Skip-to-content link: off-screen until focused. */
 .skip-link {
   position: fixed;
