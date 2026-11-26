@@ -47,6 +47,11 @@ describe("buildShelves", () => {
     expect(keys(buildShelves([], theirs).friendLovedForMe)).toEqual(["movie-3"]);
   });
 
+  it("doesn't count a not-interested title with an old Like as loved", () => {
+    expect(buildShelves([], [e("tv", 1, "NOT_INTERESTED", 3)]).friendLovedForMe).toEqual([]);
+    expect(freshSeeds([e("tv", 1, "WATCHED", 3)], [e("tv", 1, "NOT_INTERESTED", 3)])).toEqual([]);
+  });
+
   it("orders Loves before Likes, then newest, capped", () => {
     const theirs = [
       e("movie", 1, "WATCHED", 2, 100),

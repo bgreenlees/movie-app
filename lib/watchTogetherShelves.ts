@@ -51,6 +51,12 @@ export const shelfKey = (x: { mediaType: ShelfMedia; tmdbId?: number; id?: numbe
  */
 export const isLiked = (rating: number | null) => rating === 2 || rating === 3;
 
+/**
+ * Liked and not since ruled out. An entry marked not interested can keep an
+ * old Like rating (PATCH doesn't clear it), so it mustn't count as "loved".
+ */
+const isLikedEntry = (e: ShelfEntry) => e.status !== "NOT_INTERESTED" && isLiked(e.rating);
+
 const toItem = (e: ShelfEntry): ShelfItem => ({
   id: e.tmdbId,
   mediaType: e.mediaType,
@@ -77,7 +83,7 @@ export function buildShelves(mine: readonly ShelfEntry[], theirs: readonly Shelf
   // marked not interested shouldn't be pushed at me as "Sam loved".
   const lovedNotOn = (from: readonly ShelfEntry[], other: Set<string>) =>
     from
-      .filter((e) => isLiked(e.rating) && !other.has(shelfKey(e)))
+      .filter((e) => isLikedEntry(e) && !other.has(shelfKey(e)))
       .sort(byRatingThenRecent)
       .slice(0, SHELF_SIZE)
       .map(toItem);
@@ -97,9 +103,9 @@ export function freshSeeds(
   mine: readonly ShelfEntry[],
   theirs: readonly ShelfEntry[]
 ): { mediaType: ShelfMedia; tmdbId: number }[] {
-  const theirLiked = new Map(theirs.filter((e) => isLiked(e.rating)).map((e) => [shelfKey(e), e]));
+  const theirLiked = new Map(theirs.filter(isLikedEntry).map((e) => [shelfKey(e), e]));
   return mine
-    .filter((e) => isLiked(e.rating) && theirLiked.has(shelfKey(e)))
+    .filter((e) => isLikedEntry(e) && theirLiked.has(shelfKey(e)))
     .map((e) => ({ e, sum: (e.rating ?? 0) + (theirLiked.get(shelfKey(e))!.rating ?? 0) }))
     .sort((a, b) => b.sum - a.sum || b.e.addedAt - a.e.addedAt)
     .slice(0, FRESH_SEEDS)
