@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { requireConnection } from "@/lib/connections";
 import { tmdb } from "@/lib/tmdb";
 import type { TMDBMovie } from "@/lib/tmdb";
 
@@ -11,16 +12,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
   const { userId: friendId } = await params;
 
   // Verify these two users are actually connected
-  const connection = await prisma.userConnection.findFirst({
-    where: {
-      status: "ACCEPTED",
-      OR: [
-        { requesterId: myId, addresseeId: friendId },
-        { requesterId: friendId, addresseeId: myId },
-      ],
-    },
-  });
-  if (!connection) return NextResponse.json({ error: "Not connected" }, { status: 403 });
+  // 404 (not 403) for "no such user" and "not connected" alike, so ids can't be probed.
+  const connection = await requireConnection(myId, friendId);
+  if (!connection) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // Fetch both users' watchlist entries
   const [myEntries, friendEntries] = await Promise.all([
