@@ -52,11 +52,16 @@ export default function Navbar() {
   const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const current = document.documentElement.getAttribute("data-theme") as "light" | "dark";
+    const current = document.documentElement.getAttribute("data-theme");
     // The theme lives on <html> (set by an inline script before hydration), so it
     // can only be read after mount; syncing it here avoids a hydration mismatch.
+    // No saved choice means the OS setting decides (prefers-color-scheme in globals.css).
+    const effective =
+      current === "light" || current === "dark"
+        ? current
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTheme(current || "dark");
+    setTheme(effective);
   }, []);
 
   useEffect(() => {
@@ -273,7 +278,7 @@ export default function Navbar() {
                   className="px-2.5 py-1 rounded-full text-xs transition-colors hover:opacity-80"
                   style={{
                     backgroundColor: "color-mix(in srgb, var(--accent) 12%, var(--card-bg))",
-                    color: "var(--accent)",
+                    color: "var(--color-accent-text)",
                     border: "1px solid var(--accent)",
                   }}
                 >

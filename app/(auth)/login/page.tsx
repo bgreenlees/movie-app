@@ -4,7 +4,7 @@ import { isDevLoginEnabled } from "@/lib/devLogin";
 
 export default function LoginPage() {
   return (
-    <main className="force-dark relative flex min-h-screen flex-col items-center justify-center overflow-hidden" style={{ backgroundColor: "#000" }}>
+    <main className="force-dark relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-bg">
 
       {/* Animated colour orbs */}
       <div style={{
@@ -55,12 +55,12 @@ export default function LoginPage() {
                 </linearGradient>
               </defs>
             </svg>
-            <span className="text-2xl font-bold tracking-tight" style={{ color: "#fff" }}>What&apos;s Up Next</span>
+            <span className="text-2xl font-bold tracking-tight text-text">What&apos;s Up Next</span>
           </div>
-          <h1 className="text-4xl font-bold mb-3 tracking-tight" style={{ color: "#fff" }}>
+          <h1 className="text-4xl font-bold mb-3 tracking-tight text-text">
             Welcome back.
           </h1>
-          <p className="text-base" style={{ color: "#6e6e73" }}>
+          <p className="text-base text-muted">
             Your personal cinema, personalised.
           </p>
         </div>
@@ -77,12 +77,11 @@ export default function LoginPage() {
           <LoginForm devLogin={isDevLoginEnabled()} />
 
           <div className="mt-6 text-center">
-            <p className="text-sm" style={{ color: "#6e6e73" }}>
+            <p className="text-sm text-muted">
               New here?{" "}
               <Link
                 href="/register"
-                className="font-medium hover:underline"
-                style={{ color: "#a855f7" }}
+                className="font-medium hover:underline text-accent-text"
               >
                 Create an account
               </Link>
@@ -90,7 +89,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="text-center text-xs mt-8" style={{ color: "#3a3a3c" }}>
+        <p className="text-center text-xs mt-8 text-muted">
           Your watchlist. Your taste. Your picks.
         </p>
       </div>

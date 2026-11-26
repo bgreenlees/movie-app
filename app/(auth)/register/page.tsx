@@ -6,7 +6,7 @@ import RegisterForm from "@/components/auth/RegisterForm";
 // invisible. See issue #66.)
 export default function RegisterPage() {
   return (
-    <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden p-8" style={{ backgroundColor: "#000" }}>
+    <main className="force-dark relative flex min-h-screen flex-col items-center justify-center overflow-hidden p-8 bg-bg">
 
       {/* Animated colour orbs */}
       <div style={{
@@ -43,10 +43,10 @@ export default function RegisterPage() {
 
       <div className="relative z-10 w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2 tracking-tight" style={{ color: "#fff" }}>
+          <h1 className="text-3xl font-bold mb-2 tracking-tight text-text">
             Create Account
           </h1>
-          <p className="text-sm" style={{ color: "#8e8e93" }}>
+          <p className="text-sm text-muted">
             Start tracking your movie watchlist
           </p>
         </div>
@@ -62,12 +62,11 @@ export default function RegisterPage() {
           <RegisterForm />
 
           <div className="mt-6 text-center">
-            <p className="text-sm" style={{ color: "#8e8e93" }}>
+            <p className="text-sm text-muted">
               Already have an account?{" "}
               <Link
                 href="/login"
-                className="font-medium hover:underline"
-                style={{ color: "#a855f7" }}
+                className="font-medium hover:underline text-accent-text"
               >
                 Log in
               </Link>

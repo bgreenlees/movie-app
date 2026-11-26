@@ -175,7 +175,7 @@ export default function OnboardingPage() {
               className="text-sm font-semibold px-3 py-1 rounded-full"
               style={{
                 backgroundColor: canSubmit ? "color-mix(in srgb, var(--accent) 20%, transparent)" : "var(--border)",
-                color: canSubmit ? "var(--accent)" : "var(--text-muted)",
+                color: canSubmit ? "var(--color-accent-text)" : "var(--text-muted)",
               }}
             >
               {count} / 5 selected

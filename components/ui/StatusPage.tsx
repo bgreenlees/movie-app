@@ -13,7 +13,7 @@ interface StatusPageProps {
 export default function StatusPage({ eyebrow, title, message, children }: StatusPageProps) {
   return (
     <div className="flex flex-col items-center justify-center text-center px-6 py-20 sm:py-28 max-w-xl mx-auto">
-      <p className="text-sm font-bold tracking-widest mb-3" style={{ color: "var(--accent)" }}>
+      <p className="text-sm font-bold tracking-widest mb-3" style={{ color: "var(--color-accent-text)" }}>
         {eyebrow}
       </p>
       <h1 className="text-3xl sm:text-4xl font-bold mb-3" style={{ color: "var(--primary)" }}>

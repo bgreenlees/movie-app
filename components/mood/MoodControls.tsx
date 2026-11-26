@@ -35,7 +35,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
         active
           ? {
               backgroundColor: "color-mix(in srgb, var(--accent) 12%, var(--card-bg))",
-              color: "var(--accent)",
+              color: "var(--color-accent-text)",
               border: "1px solid var(--accent)",
             }
           : { color: "var(--foreground)", border: "1px solid var(--border)" }

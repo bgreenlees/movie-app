@@ -112,7 +112,7 @@ function CoStarSearch({ excludeIds, onPick }: { excludeIds: Set<number>; onPick:
                     {departmentLabel(p.known_for_department)}
                   </span>
                 )}
-                <span className="text-lg leading-none" style={{ color: "var(--accent)" }} aria-hidden="true">+</span>
+                <span className="text-lg leading-none" style={{ color: "var(--color-accent-text)" }} aria-hidden="true">+</span>
               </button>
             </li>
           ))}
@@ -255,7 +255,7 @@ export default function ResultFilters({
             <RemovableChip key={`g${id}`} label={genreName(id)} ariaLabel={`Remove genre ${genreName(id)}`} onRemove={() => onToggleGenre(id)} />
           ))}
           {badgeCount > 1 && (
-            <button type="button" onClick={clearAll} className="shrink-0 text-xs font-medium px-1 cursor-pointer whitespace-nowrap" style={{ color: "var(--accent)" }}>
+            <button type="button" onClick={clearAll} className="shrink-0 text-xs font-medium px-1 cursor-pointer whitespace-nowrap" style={{ color: "var(--color-accent-text)" }}>
               Clear all
             </button>
           )}

@@ -707,7 +707,7 @@ function DiscoverPageInner() {
                 <Link
                   href={`/search?q=${encodeURIComponent(suggestion)}`}
                   className="font-semibold underline"
-                  style={{ color: "var(--accent)" }}
+                  style={{ color: "var(--color-accent-text)" }}
                 >
                   {suggestion}
                 </Link>
@@ -755,7 +755,7 @@ function DiscoverPageInner() {
         >
           <span style={{ color: "var(--foreground)" }}>
             ✨ Get personalised picks —{" "}
-            <button onClick={() => setShowOnboarding(true)} className="font-semibold underline" style={{ color: "var(--accent)" }}>
+            <button onClick={() => setShowOnboarding(true)} className="font-semibold underline" style={{ color: "var(--color-accent-text)" }}>
               tell us what you love
             </button>
           </span>
@@ -866,7 +866,7 @@ function DiscoverPageInner() {
             type="button"
             onClick={handleClearFilters}
             className="text-sm font-semibold underline cursor-pointer"
-            style={{ color: "var(--accent)" }}
+            style={{ color: "var(--color-accent-text)" }}
           >
             Clear filters
           </button>

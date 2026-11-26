@@ -23,7 +23,7 @@ export default function StarRating({ rating, onChange }: StarRatingProps) {
           onMouseLeave={() => setHoverRating(0)}
           className="text-3xl transition-colors rounded"
           style={{
-            color: star <= displayRating ? "var(--accent)" : "var(--border)",
+            color: star <= displayRating ? "var(--color-accent-text)" : "var(--border)",
 
           }}
           aria-label={`Rate ${star} star${star > 1 ? "s" : ""}`}

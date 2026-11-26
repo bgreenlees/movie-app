@@ -172,7 +172,7 @@ export default function OnboardingModal({ onClose }: OnboardingModalProps) {
                 backgroundColor: canSubmit
                   ? "color-mix(in srgb, var(--accent) 20%, transparent)"
                   : "var(--border)",
-                color: canSubmit ? "var(--accent)" : "var(--text-muted)",
+                color: canSubmit ? "var(--color-accent-text)" : "var(--text-muted)",
               }}
             >
               {count} selected{count < 3 ? ` (pick ${3 - count} more)` : ""}

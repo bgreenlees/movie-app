@@ -5,16 +5,19 @@ import SkipLink from "@/components/ui/SkipLink";
 import Providers from "@/components/Providers";
 import "./globals.css";
 
+// next/font self-hosts both fonts. The variables are set on <html> so the
+// --font-sans / --font-display tokens in globals.css (declared on :root) can use them.
 const playfair = Playfair_Display({
+  weight: ["700"],
   subsets: ["latin"],
-  variable: "--font-display",
+  variable: "--font-playfair",
   display: "swap",
 });
 
 const lato = Lato({
   weight: ["300", "400", "700"],
   subsets: ["latin"],
-  variable: "--font-body",
+  variable: "--font-lato",
   display: "swap",
 });
 
@@ -29,15 +32,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={`${playfair.variable} ${lato.variable}`} suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){var t=localStorage.getItem('theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');})();`,
+            // Apply a saved theme choice before paint. With no choice saved, there's
+            // no data-theme and globals.css follows prefers-color-scheme.
+            __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`,
           }}
         />
       </head>
-      <body className={`${playfair.variable} ${lato.variable}`}>
+      <body>
         <SkipLink />
         <Providers>
           {children}
