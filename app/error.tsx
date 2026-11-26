@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useTransition } from "react";
 import StatusPage, { primaryActionClass, secondaryActionClass } from "@/components/ui/StatusPage";
 
 // Catches errors outside the (main) layout (e.g. /movie/[id], /login). No session lookup here:
@@ -13,6 +14,9 @@ export default function RootError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+
   useEffect(() => {
     console.error(error);
   }, [error]);
@@ -26,7 +30,7 @@ export default function RootError({
           </Link>
         </div>
       </nav>
-      <main>
+      <main id="main-content">
         <StatusPage
           eyebrow="Something went wrong"
           title="That didn't work"
@@ -34,7 +38,13 @@ export default function RootError({
         >
           <button
             type="button"
-            onClick={reset}
+            onClick={() =>
+          // reset() alone only re-renders the client; refresh() refetches the server-rendered page.
+          startTransition(() => {
+            router.refresh();
+            reset();
+          })
+        }
             className={primaryActionClass}
             style={{ backgroundColor: "var(--accent)" }}
           >

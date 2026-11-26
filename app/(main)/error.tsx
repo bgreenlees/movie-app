@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useTransition } from "react";
 import StatusPage, { primaryActionClass, secondaryActionClass } from "@/components/ui/StatusPage";
 
 // Rendered inside the (main) layout, so the signed-in nav stays visible.
@@ -12,6 +13,9 @@ export default function MainError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+
   useEffect(() => {
     // Details go to the console / server logs only, never to the user.
     console.error(error);
@@ -25,7 +29,13 @@ export default function MainError({
     >
       <button
         type="button"
-        onClick={reset}
+        onClick={() =>
+          // reset() alone only re-renders the client; refresh() refetches the server-rendered page.
+          startTransition(() => {
+            router.refresh();
+            reset();
+          })
+        }
         className={primaryActionClass}
         style={{ backgroundColor: "var(--accent)" }}
       >

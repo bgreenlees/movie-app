@@ -11,7 +11,7 @@ export default async function NotFound() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: "var(--secondary-bg)" }}>
       <PublicHeader isLoggedIn={isLoggedIn} />
-      <main>
+      <main id="main-content">
         <StatusPage
           eyebrow="404"
           title="We couldn't find that page"
