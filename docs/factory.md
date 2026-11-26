@@ -22,6 +22,26 @@ idea ──► issue (owner) ──► [planner: spec + task breakdown, for big 
 
 Escalate: start at the default, and relaunch at higher effort or on Opus after a failed attempt. Stop and ask the owner after 3.
 
+## Coordinator runbook
+
+The coordinator is the long-lived session on `main`. It's also the most expensive one, because it re-reads its whole conversation every turn. So **start a fresh coordinator session every day or two** (or whenever it feels slow). Nothing is lost, because the state lives in GitHub.
+
+**Resuming (fresh session):**
+1. Read CLAUDE.md and this file.
+2. Read the pinned **Factory state** issue (#102): what's in flight, what's waiting on the owner, what's next, the decisions log and gotchas.
+3. Check reality against it: `gh pr list`, `git worktree list`, `orca agent list --json`. Then carry on.
+
+**Day-to-day commands** (`scripts/factory/`):
+| Command | What it does |
+|---|---|
+| `dispatch.sh <issue> <role> [--model M] [--pr N] [--note T] [--dry-run]` | Builds the standard brief (role file + issue + safety rules + other open PRs), picks a per-issue port (3200 + issue % 700) and launches the agent in its own Orca worktree. With `--pr N` it checks out the PR head first. |
+| `wait-pr.sh <issue>... [--interval S]` | Waits (run in background) until a PR that `Closes #N` has a finished `ci` check. |
+| `send.sh <worktree> "<subject>" <file>` | Sends follow-up instructions (e.g. review findings) to the agent in that worktree. |
+
+**After every batch:** update the Factory state issue (in flight, waiting on owner, next up, decisions), and tick the Roadmap (#18) and the feature's tracking issue.
+
+**New work:** use the "Factory task" issue template (Goal, Scope, Done when, files touched, depends on, role, model, checks). Anything bigger than one PR gets a **planner** spec first.
+
 ## Security layers
 1. **Automated** (GitHub): secret scanning + push protection, Dependabot alerts + security updates, CodeQL, and the `ci` check required by branch protection (enforced for admins).
 2. **Every PR**: the Reviewer's security checklist, plus `/security-review` when a PR touches auth, API routes, Prisma or env handling.
