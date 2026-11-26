@@ -196,7 +196,7 @@ export default function AddTVModal({
                   min="1"
                   value={formData.currentSeason}
                   onChange={(e) => setFormData({ ...formData, currentSeason: e.target.value })}
-                  className="w-16 px-2 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-1"
+                  className="w-16 px-2 py-1.5 border rounded-md text-sm"
                   style={{ borderColor: "var(--border)", backgroundColor: "var(--background)", color: "var(--foreground)" }}
                   placeholder="1"
                 />
@@ -208,7 +208,7 @@ export default function AddTVModal({
                   min="1"
                   value={formData.currentEpisode}
                   onChange={(e) => setFormData({ ...formData, currentEpisode: e.target.value })}
-                  className="w-16 px-2 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-1"
+                  className="w-16 px-2 py-1.5 border rounded-md text-sm"
                   style={{ borderColor: "var(--border)", backgroundColor: "var(--background)", color: "var(--foreground)" }}
                   placeholder="1"
                 />
@@ -264,7 +264,7 @@ export default function AddTVModal({
                   value={formData.review}
                   onChange={(e) => setFormData({ ...formData, review: e.target.value })}
                   rows={3}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 resize-y text-sm"
+                  className="w-full px-3 py-2 border rounded-md resize-y text-sm"
                   style={{ borderColor: "var(--border)", backgroundColor: "var(--background)", color: "var(--foreground)" }}
                   placeholder="Share your thoughts (optional)"
                   maxLength={2000}
@@ -277,7 +277,7 @@ export default function AddTVModal({
               <select
                 value={formData.platform}
                 onChange={(e) => setFormData({ ...formData, platform: e.target.value })}
-                className="px-3 py-2 border rounded-md focus:outline-none focus:ring-1 appearance-none text-sm"
+                className="px-3 py-2 border rounded-md appearance-none text-sm"
                 style={{ borderColor: "var(--border)", backgroundColor: "var(--background)", color: "var(--foreground)" }}
               >
                 <option value="">Select platform</option>

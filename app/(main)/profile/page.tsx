@@ -262,7 +262,7 @@ export default function ProfilePage() {
               value={friendEmail}
               onChange={(e) => setFriendEmail(e.target.value)}
               placeholder="Enter their email address"
-              className="flex-1 px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+              className="flex-1 px-3 py-2 text-sm border rounded-md"
               style={{
                 borderColor: "var(--border)",
                 backgroundColor: "var(--card-bg)",

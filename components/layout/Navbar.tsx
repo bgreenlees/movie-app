@@ -339,7 +339,7 @@ export default function Navbar() {
                     onFocus={() => { if (hasSuggestions) setShowSuggestions(true); }}
                     onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                     placeholder="Search titles, people, genres..."
-                    className="w-full px-3 py-1.5 text-sm border rounded-l-md focus:outline-none focus:ring-1 focus:ring-[var(--accent)] bg-[var(--card-bg)]"
+                    className="w-full px-3 py-1.5 text-sm border rounded-l-md bg-[var(--card-bg)]"
                     style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
                   />
                   <button
@@ -458,7 +458,7 @@ export default function Navbar() {
                 onFocus={() => { if (hasSuggestions) setShowSuggestions(true); }}
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                 placeholder="Search titles, people, genres..."
-                className="w-full px-4 py-3 text-base border rounded-l-md focus:outline-none focus:ring-1 focus:ring-[var(--accent)] bg-[var(--card-bg)]"
+                className="w-full px-4 py-3 text-base border rounded-l-md bg-[var(--card-bg)]"
                 style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
               />
               <button

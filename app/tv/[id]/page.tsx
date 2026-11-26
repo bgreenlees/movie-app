@@ -79,7 +79,7 @@ export default async function TVShowPage({ params }: Props) {
   return (
     <div className="min-h-screen" style={{ backgroundColor: "var(--secondary-bg)" }}>
       <PublicHeader isLoggedIn={!!session?.user} />
-      <main className="max-w-3xl mx-auto p-4 sm:p-6">
+      <main id="main-content" className="max-w-3xl mx-auto p-4 sm:p-6">
         <div className="flex gap-5 flex-col sm:flex-row sm:items-start">
           {posterUrl && (
             <div

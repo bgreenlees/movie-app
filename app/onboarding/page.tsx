@@ -216,7 +216,7 @@ export default function OnboardingPage() {
                     key={movie.id}
                     onClick={() => toggle(movie.id)}
                     disabled={!isSelected && count >= 5}
-                    className="relative rounded-lg overflow-hidden group transition-all duration-200 focus:outline-none"
+                    className="relative rounded-lg overflow-hidden group transition-all duration-200"
                     style={{
                       boxShadow: isSelected ? `0 0 0 3px var(--accent), 0 0 20px color-mix(in srgb, var(--accent) 40%, transparent)` : "none",
                       opacity: !isSelected && count >= 5 ? 0.4 : 1,

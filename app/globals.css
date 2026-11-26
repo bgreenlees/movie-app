@@ -11,6 +11,7 @@
   --text-muted: #6e6e73;
   --card-bg: #141414;
   --hover-bg: #1f1f1f;
+  --focus-ring: #c084fc;
 }
 
 /* Light mode — Apple: clean off-white + deeper purple */
@@ -24,6 +25,7 @@
   --text-muted: #6e6e73;
   --card-bg: #ffffff;
   --hover-bg: #e8e8ed;
+  --focus-ring: #6d28d9;
 }
 
 html {
@@ -42,6 +44,31 @@ h1, h2, h3 {
 
 input, select, textarea {
   color: var(--foreground);
+}
+
+/* Keyboard focus: one visible ring for every interactive element.
+   :focus-visible so mouse clicks don't show it. Offset keeps it readable on
+   posters and buttons. Unlayered, so it wins over Tailwind utilities. */
+:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Skip-to-content link: off-screen until focused. */
+.skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 1000;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--card-bg);
+  color: var(--foreground);
+  font-weight: 700;
+  transform: translateY(-200%);
+}
+.skip-link:focus {
+  transform: none;
 }
 
 /* Splash page orb animations */

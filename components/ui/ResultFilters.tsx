@@ -83,7 +83,7 @@ function CoStarSearch({ excludeIds, onPick }: { excludeIds: Set<number>; onPick:
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search for an actor…"
           aria-label="Search for a co-star"
-          className="w-full pl-9 pr-3 py-2.5 text-base sm:text-sm rounded-lg outline-none"
+          className="w-full pl-9 pr-3 py-2.5 text-base sm:text-sm rounded-lg"
           style={{ border: "1px solid var(--border)", backgroundColor: "var(--background)", color: "var(--foreground)" }}
         />
       </div>
