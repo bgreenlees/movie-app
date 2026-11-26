@@ -638,10 +638,39 @@ function DiscoverPageInner() {
     </div>
   );
 
+  const mediaToggle = (
+    <div
+      className="flex rounded-lg overflow-hidden shrink-0"
+      style={{ border: "1px solid var(--border)" }}
+    >
+      <button
+        onClick={() => setMediaType("movie")}
+        className="px-4 py-2.5 text-sm font-medium transition-all"
+        style={{
+          backgroundColor: mediaType === "movie" ? "var(--accent)" : "transparent",
+          color: mediaType === "movie" ? "white" : "var(--foreground)",
+        }}
+      >
+        Movies
+      </button>
+      <button
+        onClick={() => setMediaType("tv")}
+        className="px-4 py-2.5 text-sm font-medium transition-all"
+        style={{
+          backgroundColor: mediaType === "tv" ? "var(--accent)" : "transparent",
+          color: mediaType === "tv" ? "white" : "var(--foreground)",
+          borderLeft: "1px solid var(--border)",
+        }}
+      >
+        TV Shows
+      </button>
+    </div>
+  );
+
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6">
       {/* Title + toggle */}
-      <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
+      <div className={`flex items-center justify-between gap-3 flex-wrap ${showFilters ? "mb-4" : "mb-6"}`}>
         <div className="flex items-center gap-3 min-w-0">
           {isPersonMode && personData?.profilePath && (
             <div
@@ -714,33 +743,7 @@ function DiscoverPageInner() {
             </select>
           )}
 
-          {/* Movies / TV toggle */}
-          <div
-            className="flex rounded-lg overflow-hidden shrink-0"
-            style={{ border: "1px solid var(--border)" }}
-          >
-            <button
-              onClick={() => setMediaType("movie")}
-              className="px-4 py-2.5 text-sm font-medium transition-all"
-              style={{
-                backgroundColor: mediaType === "movie" ? "var(--accent)" : "transparent",
-                color: mediaType === "movie" ? "white" : "var(--foreground)",
-              }}
-            >
-              Movies
-            </button>
-            <button
-              onClick={() => setMediaType("tv")}
-              className="px-4 py-2.5 text-sm font-medium transition-all"
-              style={{
-                backgroundColor: mediaType === "tv" ? "var(--accent)" : "transparent",
-                color: mediaType === "tv" ? "white" : "var(--foreground)",
-                borderLeft: "1px solid var(--border)",
-              }}
-            >
-              TV Shows
-            </button>
-          </div>
+          {!showFilters && mediaToggle}
         </div>
       </div>
 
@@ -760,8 +763,10 @@ function DiscoverPageInner() {
         </div>
       )}
 
-      {showFilters && !isLoading && !isEmpty && (
+      {showFilters && (
         <ResultFilters
+          leading={mediaToggle}
+          disabled={isLoading || isEmpty}
           sort={sort}
           onSortChange={setSort}
           genres={availableGenres}
