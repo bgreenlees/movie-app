@@ -4,7 +4,7 @@ import { isDevLoginEnabled } from "@/lib/devLogin";
 
 export default function LoginPage() {
   return (
-    <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden" style={{ backgroundColor: "#000" }}>
+    <main className="force-dark relative flex min-h-screen flex-col items-center justify-center overflow-hidden" style={{ backgroundColor: "#000" }}>
 
       {/* Animated colour orbs */}
       <div style={{

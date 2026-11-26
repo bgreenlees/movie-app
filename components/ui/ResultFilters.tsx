@@ -83,7 +83,7 @@ function CoStarSearch({ excludeIds, onPick }: { excludeIds: Set<number>; onPick:
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search for an actor…"
           aria-label="Search for a co-star"
-          className="w-full pl-9 pr-3 py-2.5 text-base sm:text-sm rounded-lg outline-none"
+          className="w-full pl-9 pr-3 py-2.5 text-base sm:text-sm rounded-lg"
           style={{ border: "1px solid var(--border)", backgroundColor: "var(--background)", color: "var(--foreground)" }}
         />
       </div>
@@ -238,7 +238,7 @@ export default function ResultFilters({
 
       {/* Active filters as removable chips (scrolls sideways on narrow screens) */}
       {!disabled && badgeCount > 0 && (
-        <div className="flex items-center gap-2 mt-3 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap [scrollbar-width:none]">
+        <div className="flex items-center gap-2 mt-3 overflow-x-auto py-1 pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap [scrollbar-width:none]">
           {narrowingCount > 0 && (
             <span className="shrink-0 text-xs whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
               {shownCount} of {totalCount}
