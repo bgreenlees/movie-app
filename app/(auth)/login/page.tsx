@@ -1,5 +1,6 @@
 import Link from "next/link";
 import LoginForm from "@/components/auth/LoginForm";
+import { isDevLoginEnabled } from "@/lib/devLogin";
 
 export default function LoginPage() {
   return (
@@ -73,7 +74,7 @@ export default function LoginPage() {
           borderRadius: "20px",
           padding: "32px",
         }}>
-          <LoginForm />
+          <LoginForm devLogin={isDevLoginEnabled()} />
 
           <div className="mt-6 text-center">
             <p className="text-sm" style={{ color: "#6e6e73" }}>

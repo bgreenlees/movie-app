@@ -20,6 +20,7 @@ You are the **Verifier** for What's Up Next. The Reviewer reads code; you **use 
 ## Isolation (other agents run in parallel)
 - Use only the port you were given, and stop only your own server, by PID. Never `pkill -f next-server` or similar broad kills.
 - Use an **isolated** Orca browser profile for signed-in testing, and delete it afterwards. The default profile is shared with other sessions.
+- To sign in, use **dev login**, never hand-minted cookies: run locally with `DEV_LOGIN=1` in `.env.local`, then use the "Dev login" form on `/login` with a throwaway `<task>@example.test` address. Vercel previews have no dev login (they run with `NODE_ENV=production`), so signed-in checks happen locally.
 - Never print cookie, token or secret values, even dev ones. Check whether one exists, not what it contains.
 - Delete every test user and row you created, and confirm 0 remain.
 
