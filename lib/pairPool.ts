@@ -114,7 +114,11 @@ export interface PairPoolInput {
 // ── Output ───────────────────────────────────────────────────────────────────
 
 export type PairCandidate = MoodCandidate & {
-  /** 0–1, the §5.1 final score. One number, so it can't be split back into two people. */
+  /**
+   * 0–1, 1 = best: the title's rank in the pool, `(n − i) / n`. The §5.1 score
+   * decides the order but is never returned, since it could be solved back
+   * into the partner's affinity (see buildPairPool).
+   */
   pairScore: number;
   /** One privacy-safe line (§5.5): only lists and Loves, never a dislike */
   reason: string;
@@ -499,7 +503,7 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
   }
 
   // ── Score and explain ──
-  const pool = [...drafts.values()]
+  const ranked = [...drafts.values()]
     .filter((d) => d.c.posterPath)
     .map((d) => {
       const wantedBy = d.wantedBy.size as 0 | 1 | 2;
@@ -510,19 +514,33 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
         traitScore: traitScore(d.c, selection),
         sourceBoost: sourceBoost({ wantedBy, recSeededBy }),
       });
-      const out: PairCandidate = {
-        ...d.c,
-        pairScore: Math.round(score * 1000) / 1000,
-        reason: reasonFor(d, input.partnerName, selection),
-        onMyList: d.wantedBy.has("me"),
-      };
-      if (d.providerIds) out.providerIds = d.providerIds;
-      return out;
+      return { d, score, key: candidateKey(d.c) };
     })
-    .sort((a, b) => b.pairScore - a.pairScore || candidateKey(a).localeCompare(candidateKey(b)))
+    .sort((a, b) => b.score - a.score || a.key.localeCompare(b.key))
     .slice(0, PAIR_POOL_SIZE);
 
+  // The exact score is never returned. The caller knows their own affinity and
+  // every other term (traitScore and sourceBoost use only public fields), so
+  // the raw number could be solved for the partner's affinity, and from many
+  // titles their taste weights, dislikes included (§5.5; security review on
+  // this PR). Only the rank is exposed: (n − i) / n, 1 for the best.
+  const pool = ranked.map(({ d }, i): PairCandidate => {
+    const out: PairCandidate = {
+      ...d.c,
+      pairScore: rankWeight(i, ranked.length),
+      reason: reasonFor(d, input.partnerName, selection),
+      onMyList: d.wantedBy.has("me"),
+    };
+    if (d.providerIds) out.providerIds = d.providerIds;
+    return out;
+  });
+
   return { pool, services: services.state, coldStart, discoverFailed };
+}
+
+/** Rank-only weight for position `i` of `n`, rounded to 3 decimals. */
+export function rankWeight(i: number, n: number): number {
+  return n === 0 ? 0 : Math.round(((n - i) / n) * 1000) / 1000;
 }
 
 // ── Reasons (§5.5) ───────────────────────────────────────────────────────────

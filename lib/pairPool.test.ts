@@ -306,6 +306,20 @@ describe("mood filter and ranking", () => {
     expect(pool.map((c) => c.onMyList)).toEqual([true, true, false]);
   });
 
+  it("exposes only rank in pairScore, so a partner's affinity can't be solved for", async () => {
+    // Same candidates; one partner loves dramas, the other hates them. The
+    // order may change, but the returned numbers depend only on position.
+    const drama = (rating: number) =>
+      Array.from({ length: 10 }, (_, i) => entry("movie", 600 + i, { status: "WATCHED", rating, genreIds: [18] }));
+    const discover = { tv: [cand("tv", 1, { genreIds: [18] }), cand("tv", 2, { genreIds: [35] }), cand("tv", 3, { genreIds: [18, 35] })] };
+    const run = (rating: number) =>
+      buildPairPool(input({ partner: { entries: drama(rating), providerIds: [] }, fetchers: fakeFetchers({ discover }) }));
+    const [loves, hates] = await Promise.all([run(3), run(1)]);
+    expect(loves.pool.map((c) => c.id)).not.toEqual(hates.pool.map((c) => c.id));
+    expect(loves.pool.map((c) => c.pairScore)).toEqual([1, 0.667, 0.333]);
+    expect(hates.pool.map((c) => c.pairScore)).toEqual([1, 0.667, 0.333]);
+  });
+
   it("reports cold start per person and only exposes one pair score", async () => {
     const fetchers = fakeFetchers({ discover: { tv: [cand("tv", 1)] } });
     const r = await buildPairPool(input({ fetchers }));
