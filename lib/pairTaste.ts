@@ -50,6 +50,11 @@ const STATUS_SIGNAL: Readonly<Record<TasteStatus, number>> = {
  * One entry's signal. A valid rating (integer 1–3) wins; an out-of-range one
  * (e.g. 999 from unvalidated input, security finding F5) is ignored, so the
  * entry counts as unrated rather than as a super-Love.
+ *
+ * A valid rating overrides the status, whatever it is: NOT_INTERESTED with a
+ * stale rating of 3 counts as +1.0. The rating is an opinion of the title
+ * itself, which says more about taste than a later list change. (Such titles
+ * are excluded from candidates anyway, §5.2.)
  */
 export function entrySignal(entry: TasteEntry): number | null {
   const r = entry.rating;

@@ -103,6 +103,14 @@ describe("affinity", () => {
     expect(affinity(one, c)).toBeGreaterThan(0.5);
   });
 
+  it("scales by confidence c = signals / 10 (one Love → c = 0.1)", () => {
+    // One Love (+1.0) on scifi: w.scifi = 1 / (1 + 2) = 1/3
+    // raw = 0.5 + 0.5·tanh(1.5 · 1/3) = 0.5 + 0.5·tanh(0.5) ≈ 0.7311
+    // affinity = 0.5 + 0.1 · (raw − 0.5) = 0.5 + 0.05·tanh(0.5) ≈ 0.5231
+    const one = buildTasteProfile([love("movie", [M.scifi])]);
+    expect(affinity(one, { mediaType: "movie", genreIds: [M.scifi] })).toBeCloseTo(0.5 + 0.05 * Math.tanh(0.5), 10);
+  });
+
   it("being on their want list means at least 0.8, even with no history", () => {
     expect(affinity(EMPTY_PROFILE, { mediaType: "tv", genreIds: [TV.comedy], onWantList: true })).toBe(0.8);
   });
@@ -118,6 +126,13 @@ describe("affinity", () => {
 describe("pairFit", () => {
   it("ranks both-fine (0.7, 0.7) above one-thrilled-one-not (0.95, 0.3)", () => {
     expect(pairFit(0.7, 0.7)).toBeGreaterThan(pairFit(0.95, 0.3));
+  });
+
+  it("is least-misery weighted, not a plain average", () => {
+    // A plain average would rank (0.95, 0.3) first: 0.625 > 0.6.
+    // pairFit: 0.7·0.3 + 0.3·0.625 = 0.21 + 0.1875 = 0.3975, below 0.7·0.6 + 0.3·0.6 = 0.6
+    expect(pairFit(0.6, 0.6)).toBeGreaterThan(pairFit(0.95, 0.3));
+    expect(pairFit(0.95, 0.3)).toBeCloseTo(0.3975);
   });
 
   it("is symmetric and still rewards excitement when the minimum ties", () => {
