@@ -56,7 +56,7 @@ export default function FeedbackModal({ onClose }: FeedbackModalProps) {
             placeholder="Your idea..."
             rows={4}
             autoFocus
-            className="w-full px-3 py-2 text-sm rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+            className="w-full px-3 py-2 text-sm rounded-lg resize-none"
             style={{
               backgroundColor: "var(--background)",
               border: "1px solid var(--border)",
