@@ -196,10 +196,8 @@ export default function ResultFilters({
     };
   }, [open]);
 
-  const clearAll = () => {
-    onClear();
-    onSortChange("relevance");
-  };
+  // onClear resets sort too: two separate updates could race when filters live in the URL.
+  const clearAll = onClear;
 
   return (
     <div className="mb-5">

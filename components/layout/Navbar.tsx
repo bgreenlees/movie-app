@@ -123,24 +123,29 @@ export default function Navbar() {
       suggestions.genres.length >
     0;
 
+  // Keep the Movies / TV tab when searching from the results page. Read at click
+  // time from window.location: useSearchParams here would need a Suspense boundary.
+  const keepMedia = () =>
+    pathname === "/search" && new URLSearchParams(window.location.search).get("media") === "tv" ? "&media=tv" : "";
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
     setShowSuggestions(false);
-    router.push(`/search?q=${encodeURIComponent(query.trim())}`);
+    router.push(`/search?q=${encodeURIComponent(query.trim())}${keepMedia()}`);
   };
 
   const handleTitle = (title: MultiTitle) => {
     const label = title.title || title.name || "";
     setQuery(label);
     setShowSuggestions(false);
-    router.push(`/search?q=${encodeURIComponent(label)}`);
+    router.push(`/search?q=${encodeURIComponent(label)}${keepMedia()}`);
   };
 
   const handlePerson = (person: MultiPerson) => {
     setQuery(person.name);
     setShowSuggestions(false);
-    router.push(`/search?personId=${person.id}&name=${encodeURIComponent(person.name)}`);
+    router.push(`/search?personId=${person.id}&name=${encodeURIComponent(person.name)}${keepMedia()}`);
   };
 
   const handleGenre = (genre: MultiGenre) => {

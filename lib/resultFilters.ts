@@ -132,3 +132,48 @@ export function intersectIds(lists: Array<Array<{ id: number }>>): Set<number> |
   }
   return result;
 }
+
+// ── URL encoding ────────────────────────────────────────────────────────────
+// Filters live in the page URL (?sort=newest&genres=35,16&with=4495) so a
+// filtered view survives a refresh and can be shared.
+
+const MAX_URL_IDS = 10;
+
+/** Parses "35,16,abc,35" → [35, 16]: positive integers only, no duplicates, capped. */
+export function parseIdList(value: string | null | undefined): number[] {
+  if (!value) return [];
+  const ids: number[] = [];
+  for (const part of value.split(",")) {
+    const trimmed = part.trim();
+    if (!/^\d+$/.test(trimmed)) continue;
+    const n = Number(trimmed);
+    if (n > 0 && Number.isSafeInteger(n) && !ids.includes(n)) ids.push(n);
+    if (ids.length >= MAX_URL_IDS) break;
+  }
+  return ids;
+}
+
+export interface UrlFilterState {
+  sort: SortOption;
+  genreIds: number[];
+  coStarIds: number[];
+}
+
+export function readUrlFilters(params: { get(name: string): string | null }): UrlFilterState {
+  const sort = params.get("sort");
+  return {
+    sort: isSortOption(sort) ? sort : "relevance",
+    genreIds: parseIdList(params.get("genres")),
+    coStarIds: parseIdList(params.get("with")),
+  };
+}
+
+/** Writes the filters into params, removing any that are at their default. */
+export function writeUrlFilters(params: URLSearchParams, filters: Partial<UrlFilterState>): URLSearchParams {
+  const next = new URLSearchParams(params.toString());
+  const set = (key: string, value: string) => (value ? next.set(key, value) : next.delete(key));
+  if (filters.sort !== undefined) set("sort", filters.sort === "relevance" ? "" : filters.sort);
+  if (filters.genreIds !== undefined) set("genres", filters.genreIds.join(","));
+  if (filters.coStarIds !== undefined) set("with", filters.coStarIds.join(","));
+  return next;
+}

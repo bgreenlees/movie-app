@@ -5,7 +5,10 @@ import {
   genresInResults,
   intersectIds,
   isSortOption,
+  parseIdList,
+  readUrlFilters,
   sortableTitle,
+  writeUrlFilters,
 } from "./resultFilters";
 
 const movies = [
@@ -92,5 +95,36 @@ describe("isSortOption", () => {
     expect(isSortOption("az")).toBe(true);
     expect(isSortOption("bogus")).toBe(false);
     expect(isSortOption(null)).toBe(false);
+  });
+});
+
+describe("parseIdList", () => {
+  it("keeps positive integers once, in order", () => {
+    expect(parseIdList("35, 16,abc,35,-2,0,1.5")).toEqual([35, 16]);
+    expect(parseIdList(null)).toEqual([]);
+    expect(parseIdList("")).toEqual([]);
+  });
+
+  it("caps the list so a crafted URL can't trigger many fetches", () => {
+    expect(parseIdList(Array.from({ length: 50 }, (_, i) => i + 1).join(","))).toHaveLength(10);
+  });
+});
+
+describe("URL filters", () => {
+  it("reads defaults from an empty URL and ignores unknown sorts", () => {
+    expect(readUrlFilters(new URLSearchParams("sort=bogus"))).toEqual({ sort: "relevance", genreIds: [], coStarIds: [] });
+  });
+
+  it("round-trips through the URL and keeps unrelated params", () => {
+    const base = new URLSearchParams("personId=4495&name=Steve%20Carell");
+    const next = writeUrlFilters(base, { sort: "newest", genreIds: [35, 16], coStarIds: [9] });
+    expect(next.get("personId")).toBe("4495");
+    expect(readUrlFilters(next)).toEqual({ sort: "newest", genreIds: [35, 16], coStarIds: [9] });
+    expect(base.has("sort")).toBe(false); // input not mutated
+  });
+
+  it("drops params that are back at their default", () => {
+    const next = writeUrlFilters(new URLSearchParams("q=office&sort=az&genres=35&with=9"), { sort: "relevance", genreIds: [], coStarIds: [] });
+    expect(next.toString()).toBe("q=office");
   });
 });

@@ -12,7 +12,7 @@ import TVShowCard, { type TVSeasonBanner } from "@/components/tv/TVShowCard";
 import AddTVModal from "@/components/tv/AddTVModal";
 import ThumbRating from "@/components/ui/ThumbRating";
 import ResultFilters, { type CoStar } from "@/components/ui/ResultFilters";
-import { applyResultFilters, genresInResults, intersectIds, type SortOption } from "@/lib/resultFilters";
+import { applyResultFilters, genresInResults, intersectIds, readUrlFilters, writeUrlFilters, type UrlFilterState } from "@/lib/resultFilters";
 import type { TMDBMovie, TMDBTVShow } from "@/lib/tmdb";
 import { DISCOVER_COUNTRIES, countryName, isValidCountry } from "@/lib/countries";
 import toast from "react-hot-toast";
@@ -99,7 +99,14 @@ function DiscoverPageInner() {
   const countryParam = searchParams.get("country");
   const country = isValidCountry(countryParam) && !urlQuery && !personId ? countryParam : null;
 
-  const [mediaType, setMediaType] = useState<"movie" | "tv">(genreMedia || "movie");
+  // Movies / TV lives in the URL (?media=tv) so shared filtered links open on the right tab.
+  const mediaParam = searchParams.get("media");
+  const mediaType: "movie" | "tv" = mediaParam === "tv" || mediaParam === "movie" ? mediaParam : genreMedia || "movie";
+  // Sort, genre and co-star filters also live in the URL (see lib/resultFilters.ts).
+  const urlFilters = readUrlFilters(searchParams);
+  const sort = urlFilters.sort;
+  const genreFilter = urlFilters.genreIds;
+  const coStarIdList = personId ? urlFilters.coStarIds.filter((id) => String(id) !== personId) : [];
   const [personData, setPersonData] = useState<PersonData | null>(null);
 
   // Movie state
@@ -125,11 +132,13 @@ function DiscoverPageInner() {
   const [columns, setColumns] = useState(6);
 
   // Sort / filter bar (search, person and genre pages)
-  const [sort, setSort] = useState<SortOption>("relevance");
-  const [genreFilter, setGenreFilter] = useState<number[]>([]);
   const [genreNames, setGenreNames] = useState<{ movie?: Record<number, string>; tv?: Record<number, string> }>({});
-  const [coStars, setCoStars] = useState<CoStar[]>([]);
-  const [coStarCredits, setCoStarCredits] = useState<Record<number, { movie: { id: number }[]; tv: { id: number }[] }>>({});
+  // Name, photo and credits for co-stars in the URL; names arrive with the credits
+  // for a shared link, or straight away when picked from the search.
+  const [coStarInfo, setCoStarInfo] = useState<
+    Record<number, { name?: string; profilePath?: string | null; credits?: { movie: { id: number }[]; tv: { id: number }[] } }>
+  >({});
+  const coStarFetches = useRef(new Set<number>());
   const gridRef = useRef<HTMLDivElement>(null);
 
   // ── Watchlist fetches ─────────────────────────────────────────────────────
@@ -199,7 +208,6 @@ function DiscoverPageInner() {
     setPrevLoadKey(loadKey);
     setSuggestion(null);
     setIsLoading(true);
-    setGenreFilter([]); // genre ids differ between movies and TV, and per result set
     if (personId) {
       setPersonData(null);
     } else if (!genreId && country) {
@@ -364,13 +372,6 @@ function DiscoverPageInner() {
     };
   }, [urlQuery, mediaType, personId, genreId, genreMedia, country, fetchSeasonBanners]);
 
-  // Co-stars belong to one person's page; drop them when the person changes.
-  const [prevPersonId, setPrevPersonId] = useState(personId);
-  if (prevPersonId !== personId) {
-    setPrevPersonId(personId);
-    setCoStars([]);
-  }
-
   // Genre id → name map for the filter chips, fetched once per media type.
   const haveGenreNames = !!genreNames[mediaType];
   useEffect(() => {
@@ -387,34 +388,63 @@ function DiscoverPageInner() {
     };
   }, [mediaType, haveGenreNames]);
 
-  const handleAddCoStar = (person: CoStar) => {
-    if (coStars.some((c) => c.id === person.id)) return;
-    setCoStars((prev) => [...prev, person]);
-    if (coStarCredits[person.id]) return;
-    fetch(`/api/person/${person.id}`)
-      .then((r) => {
-        if (!r.ok) throw new Error();
-        return r.json();
-      })
-      .then((d: PersonData) => {
-        setCoStarCredits((prev) => ({
-          ...prev,
-          [person.id]: {
-            movie: [...(d.movieCast || []), ...(d.movieCrewDirected || [])],
-            tv: [...(d.tvCast || []), ...(d.tvCrewDirected || [])],
-          },
-        }));
-      })
-      .catch(() => {
-        toast.error(`Couldn't load ${person.name}'s credits`);
-        setCoStars((prev) => prev.filter((c) => c.id !== person.id));
-      });
+  const updateUrl = (filters: Partial<UrlFilterState>, extra?: (params: URLSearchParams) => void) => {
+    const params = writeUrlFilters(new URLSearchParams(searchParams.toString()), filters);
+    extra?.(params);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   };
 
-  const handleClearFilters = () => {
-    setGenreFilter([]);
-    setCoStars([]);
+  // Genre ids differ between movies and TV, so switching tab clears them.
+  const setMediaType = (media: "movie" | "tv") => {
+    if (media === mediaType) return;
+    updateUrl({ genreIds: [] }, (params) => params.set("media", media));
   };
+
+  // Fetch credits for any co-star in the URL we haven't loaded yet.
+  const coStarKey = coStarIdList.join(",");
+  useEffect(() => {
+    for (const id of coStarKey ? coStarKey.split(",").map(Number) : []) {
+      if (coStarFetches.current.has(id)) continue;
+      coStarFetches.current.add(id);
+      fetch(`/api/person/${id}`)
+        .then((r) => {
+          if (!r.ok) throw new Error();
+          return r.json();
+        })
+        .then((d: PersonData) => {
+          setCoStarInfo((prev) => ({
+            ...prev,
+            [id]: {
+              name: d.name,
+              profilePath: d.profilePath,
+              credits: {
+                movie: [...(d.movieCast || []), ...(d.movieCrewDirected || [])],
+                tv: [...(d.tvCast || []), ...(d.tvCrewDirected || [])],
+              },
+            },
+          }));
+        })
+        .catch(() => {
+          coStarFetches.current.delete(id);
+          toast.error("Couldn't load a co-star's credits");
+        });
+    }
+  }, [coStarKey]);
+
+  const coStars: CoStar[] = coStarIdList.map((id) => ({
+    id,
+    name: coStarInfo[id]?.name ?? "Loading…",
+    profilePath: coStarInfo[id]?.profilePath ?? null,
+  }));
+
+  const handleAddCoStar = (person: CoStar) => {
+    if (coStarIdList.includes(person.id)) return;
+    setCoStarInfo((prev) => ({ ...prev, [person.id]: { ...prev[person.id], name: person.name, profilePath: person.profilePath } }));
+    updateUrl({ coStarIds: [...coStarIdList, person.id] });
+  };
+
+  const handleClearFilters = () => updateUrl({ sort: "relevance", genreIds: [], coStarIds: [] });
 
   useEffect(() => {
     if (!gridRef.current) return;
@@ -535,7 +565,7 @@ function DiscoverPageInner() {
   // Only co-stars whose credits have loaded narrow the list, so adding one
   // doesn't flash an empty page while its credits are fetched.
   const coStarIds = isPersonMode
-    ? intersectIds(coStars.filter((c) => coStarCredits[c.id]).map((c) => coStarCredits[c.id][mediaType]))
+    ? intersectIds(coStarIdList.flatMap((id) => { const c = coStarInfo[id]?.credits; return c ? [c[mediaType]] : []; }))
     : null;
   const filterState = { sort, genreIds: genreFilter, onlyIds: coStarIds };
   const applyFilters = <T extends TMDBMovie | TMDBTVShow>(arr: T[]) =>
@@ -768,18 +798,18 @@ function DiscoverPageInner() {
           leading={mediaToggle}
           disabled={isLoading || isEmpty}
           sort={sort}
-          onSortChange={setSort}
+          onSortChange={(next) => updateUrl({ sort: next })}
           genres={availableGenres}
           selectedGenreIds={genreFilter}
           onToggleGenre={(id) =>
-            setGenreFilter((prev) => (prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id]))
+            updateUrl({ genreIds: genreFilter.includes(id) ? genreFilter.filter((g) => g !== id) : [...genreFilter, id] })
           }
           {...(isPersonMode
             ? {
                 coStars,
                 excludePersonId: Number(personId),
                 onAddCoStar: handleAddCoStar,
-                onRemoveCoStar: (id: number) => setCoStars((prev) => prev.filter((c) => c.id !== id)),
+                onRemoveCoStar: (id: number) => updateUrl({ coStarIds: coStarIdList.filter((c) => c !== id) }),
               }
             : {})}
           shownCount={shownCount}
