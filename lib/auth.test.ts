@@ -9,10 +9,11 @@ const nextAuth = vi.hoisted(() => vi.fn((config: unknown) => {
 vi.mock("next-auth", () => ({ default: nextAuth }));
 vi.mock("./db", () => ({ prisma: {} }));
 
-async function providerIds(env: { NODE_ENV: string; DEV_LOGIN?: string }) {
+async function providerIds(env: { NODE_ENV: string; DEV_LOGIN?: string; VERCEL_ENV?: string }) {
   vi.resetModules();
   nextAuth.mockClear();
   vi.stubEnv("NODE_ENV", env.NODE_ENV);
+  vi.stubEnv("VERCEL_ENV", env.VERCEL_ENV as string);
   if (env.DEV_LOGIN === undefined) vi.stubEnv("DEV_LOGIN", undefined as unknown as string);
   else vi.stubEnv("DEV_LOGIN", env.DEV_LOGIN);
   await import("./auth");
@@ -29,6 +30,12 @@ afterEach(() => {
 describe("lib/auth providers", () => {
   it("has only Google when NODE_ENV=production, even with DEV_LOGIN=1", async () => {
     expect(await providerIds({ NODE_ENV: "production", DEV_LOGIN: "1" })).toEqual(["google"]);
+  });
+
+  it("has only Google on a Vercel Preview with NODE_ENV overridden to development", async () => {
+    expect(
+      await providerIds({ NODE_ENV: "development", DEV_LOGIN: "1", VERCEL_ENV: "preview" }),
+    ).toEqual(["google"]);
   });
 
   it("has only Google when DEV_LOGIN is unset", async () => {

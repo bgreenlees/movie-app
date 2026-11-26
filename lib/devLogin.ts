@@ -5,22 +5,32 @@ import type { Provider } from "next-auth/providers";
  * Development-only sign-in, so agents and local testing can sign in without
  * Google and without minting session cookies by hand (issue #69).
  *
- * SECURITY: two independent gates must both pass:
- *   1. NODE_ENV is not "production". `next build`/`next start` force
- *      NODE_ENV=production, so Vercel Production AND Preview can never pass this.
- *   2. DEV_LOGIN is exactly "1". It is set only in a developer's local
+ * SECURITY: three independent conditions must all pass:
+ *   1. NODE_ENV is not "production". `next build`/`next start` default
+ *      NODE_ENV to "production" when it's unset, so deployments fail this
+ *      unless someone explicitly overrides NODE_ENV.
+ *   2. VERCEL_ENV is not "production" or "preview", so that even an overridden
+ *      NODE_ENV on a Vercel deployment can't enable it. Locally (including after
+ *      `vercel env pull`) VERCEL_ENV is "development" or unset. Deliberately not
+ *      `!VERCEL`: `vercel env pull` writes VERCEL="1" into .env.local.
+ *   3. DEV_LOGIN is exactly "1". It is set only in a developer's local
  *      `.env.local`, never in Vercel.
  * Even then, only `@example.test` addresses are accepted (a reserved TLD that
  * can never belong to a real user), so it can't impersonate anyone.
- * There is no password and no secret: the double gate is the protection.
+ * There is no password and no secret: the gate is the protection.
  */
 
 export const DEV_LOGIN_PROVIDER_ID = "dev-login";
 
-type Env = Partial<Record<"NODE_ENV" | "DEV_LOGIN", string | undefined>>;
+type Env = Partial<Record<"NODE_ENV" | "VERCEL_ENV" | "DEV_LOGIN", string | undefined>>;
 
 export function isDevLoginEnabled(env: Env = process.env): boolean {
-  return env.NODE_ENV !== "production" && env.DEV_LOGIN === "1";
+  return (
+    env.NODE_ENV !== "production" &&
+    env.VERCEL_ENV !== "production" &&
+    env.VERCEL_ENV !== "preview" &&
+    env.DEV_LOGIN === "1"
+  );
 }
 
 // Anchored, single-line, lowercase local part + the reserved example.test domain.

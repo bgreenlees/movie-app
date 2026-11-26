@@ -19,6 +19,15 @@ describe("isDevLoginEnabled", () => {
     expect(isDevLoginEnabled({ NODE_ENV: "production", DEV_LOGIN: "1" })).toBe(false);
   });
 
+  it("is disabled on Vercel Preview and Production, even with NODE_ENV=development and DEV_LOGIN=1", () => {
+    expect(isDevLoginEnabled({ ...DEV, VERCEL_ENV: "preview" })).toBe(false);
+    expect(isDevLoginEnabled({ ...DEV, VERCEL_ENV: "production" })).toBe(false);
+  });
+
+  it("stays enabled locally after `vercel env pull` (VERCEL_ENV=development)", () => {
+    expect(isDevLoginEnabled({ ...DEV, VERCEL_ENV: "development" })).toBe(true);
+  });
+
   it("is disabled when DEV_LOGIN is unset or anything other than '1'", () => {
     for (const DEV_LOGIN of [undefined, "", "0", "true", "yes", " 1", "1 "]) {
       expect(isDevLoginEnabled({ NODE_ENV: "development", DEV_LOGIN })).toBe(false);
@@ -29,6 +38,11 @@ describe("isDevLoginEnabled", () => {
 describe("devLoginProviders", () => {
   it("returns no provider when NODE_ENV=production", () => {
     expect(devLoginProviders({ NODE_ENV: "production", DEV_LOGIN: "1" })).toEqual([]);
+  });
+
+  it("returns no provider on Vercel Preview or Production", () => {
+    expect(devLoginProviders({ ...DEV, VERCEL_ENV: "preview" })).toEqual([]);
+    expect(devLoginProviders({ ...DEV, VERCEL_ENV: "production" })).toEqual([]);
   });
 
   it("returns no provider when DEV_LOGIN is unset", () => {
@@ -91,5 +105,6 @@ describe("authorizeDevLogin", () => {
     const email = { email: "tester@example.test" };
     expect(authorizeDevLogin(email, { NODE_ENV: "production", DEV_LOGIN: "1" })).toBeNull();
     expect(authorizeDevLogin(email, { NODE_ENV: "development" })).toBeNull();
+    expect(authorizeDevLogin(email, { ...DEV, VERCEL_ENV: "preview" })).toBeNull();
   });
 });
