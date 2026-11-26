@@ -249,7 +249,7 @@ export default function OnboardingPage() {
 
                       {/* Hover overlay for unselected */}
                       {!isSelected && (
-                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.7), transparent)" }}>
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity flex items-end p-2" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.7), transparent)" }}>
                           <span className="text-white text-xs font-medium leading-tight">{movie.title}</span>
                         </div>
                       )}

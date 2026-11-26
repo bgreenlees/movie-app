@@ -269,7 +269,7 @@ export default function OnboardingModal({ onClose }: OnboardingModalProps) {
                         {/* Hover overlay */}
                         {!isSelected && (
                           <div
-                            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2"
+                            className="absolute inset-0 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity flex items-end p-2"
                             style={{
                               background: "linear-gradient(to top, rgba(0,0,0,0.75), transparent)",
                             }}
