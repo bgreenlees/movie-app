@@ -17,7 +17,8 @@ import json, sys
 name = sys.argv[1]
 for a in json.load(sys.stdin)["result"]["agents"]:
     w = a.get("workspace"); p = w.get("path", "") if isinstance(w, dict) else str(w)
-    if p.rstrip("/").endswith("/" + name):
+    p = p.rstrip("/")
+    if p == name or p.endswith("/" + name):
         print(a.get("orcaSessionId")); break' "$NAME")
 [ -n "$SID" ] || { echo "send: no agent found in worktree '$NAME'" >&2; exit 1; }
 
