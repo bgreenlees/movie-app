@@ -423,12 +423,14 @@ zod is already installed. Taste is deterministic code over cached genres, not an
 - Region support beyond US
 - TMDB keywords to fix the Heavy/Intense precision issues from the mood eval
 
-## 12. Open questions for the owner
+## 12. Owner decisions (2026-11-26)
 
-1. **Two phones or one?** On the sofa, will you both have your phones, or should v1 support passing one phone (only one person signed in)? *Recommendation: two phones for v1, so each vote is authenticated and private. Pass-the-phone later.*
-2. **Streaming default.** Should "On our services" mean a service **either** of you has (one TV, one household) or **both** have? *Recommendation: either (union), with an "Only services we both have" toggle.*
-3. **Consent.** Is an accepted connection enough to use each other's ratings for pair picks and to show reasons like "Because Sam loved *Arrival*"? Or do you want a separate opt-in per friend? *Recommendation: the connection is enough, plus one line of disclosure in the Friends UI. An opt-in adds a column and a settings toggle.*
-4. **Who sets the mood?** The person who starts the vote (simple), or both pick and the app combines? *Recommendation: the starter for v1. You're usually deciding the mood out loud anyway.*
+The owner accepted all four recommendations:
+
+1. **Two phones** for v1: each vote is authenticated and private. Pass-the-phone is "later".
+2. **"On our services" = either of you has it** (union), with an "Only services we both have" toggle.
+3. **An accepted connection is consent** to use each other's ratings for pair picks and reasons, plus one disclosure line in the Friends UI. No per-friend opt-in.
+4. **The starter sets the mood** for a decide session.
 
 ## 13. Task breakdown
 
