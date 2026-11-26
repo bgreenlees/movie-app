@@ -5,8 +5,8 @@
      --color-*  → bg-surface, text-muted, border-border, text-accent-text, outline-focus …
      --text-*   → text-h1, text-meta, text-label … (size + line height + weight)
      --radius-* → rounded-chip, rounded-control, rounded-card, rounded-sheet
-     --shadow-* → shadow-card, shadow-pop
      --ease-*   → ease-overlay
+   shadow-card / shadow-pop are custom @utility rules below, not --shadow-* tokens.
    Values here are the dark theme (the default). The light theme overrides the
    same variables below, so every utility follows [data-theme] and the OS setting.
    Not `@theme inline`: utilities must read the variable at runtime to switch theme.
@@ -64,9 +64,12 @@
   --radius-card: 12px;    /* cards, posters       (design doc: card) */
   --radius-sheet: 20px;   /* modals, sheets       (design doc: xl)   */
 
-  /* Elevation (light theme swaps these for hairline borders below) */
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
-  --shadow-pop: 0 12px 32px rgb(0 0 0 / 0.45);
+  /* Elevation, used by the shadow-card / shadow-pop utilities below. Deliberately
+     not in the --shadow-* namespace: Tailwind copies --shadow-* values into the
+     utility at build time, so a theme override would never reach it. The light
+     theme swaps these for a hairline border (a 1px ring, so no layout shift). */
+  --elevation-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --elevation-pop: 0 12px 32px rgb(0 0 0 / 0.45);
 
   /* Motion: 150ms for hover, 200ms ease-out for overlays; none under reduced motion. */
   --ease-overlay: cubic-bezier(0, 0, 0.2, 1);
@@ -80,6 +83,14 @@
 
 :root {
   color-scheme: dark;
+}
+
+/* Read the elevation variables at runtime so they follow the theme. */
+@utility shadow-card {
+  box-shadow: var(--elevation-card);
+}
+@utility shadow-pop {
+  box-shadow: var(--elevation-pop);
 }
 
 /* Light theme: an explicit choice, or the OS setting when the user hasn't picked one.
@@ -99,8 +110,8 @@
   --color-success: #047857;
   --color-warning: #92400e;
   --color-danger: #b91c1c;
-  --shadow-card: 0 0 0 1px var(--color-border);
-  --shadow-pop: 0 0 0 1px var(--color-border), 0 8px 24px rgb(0 0 0 / 0.08);
+  --elevation-card: 0 0 0 1px var(--color-border);
+  --elevation-pop: 0 0 0 1px var(--color-border);
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
@@ -118,8 +129,8 @@
     --color-success: #047857;
     --color-warning: #92400e;
     --color-danger: #b91c1c;
-    --shadow-card: 0 0 0 1px var(--color-border);
-    --shadow-pop: 0 0 0 1px var(--color-border), 0 8px 24px rgb(0 0 0 / 0.08);
+    --elevation-card: 0 0 0 1px var(--color-border);
+    --elevation-pop: 0 0 0 1px var(--color-border);
   }
 }
 
@@ -140,8 +151,8 @@
   --color-success: #34d399;
   --color-warning: #fbbf24;
   --color-danger: #f87171;
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
-  --shadow-pop: 0 12px 32px rgb(0 0 0 / 0.45);
+  --elevation-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --elevation-pop: 0 12px 32px rgb(0 0 0 / 0.45);
   color: var(--color-text);
 }
 
