@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_SELECTION, candidateKey, type MediaType, type MoodCandidate, type MoodSelection } from "./moodPicker";
 import {
   FACTS_BUDGET,
+  PAIR_POOL_SIZE,
   buildPairPool,
   excludedKeys,
   parsePairPicksQuery,
@@ -374,18 +375,58 @@ describe("budget and seeds stay fair (review on #100)", () => {
     expect(Math.abs(movies / d.length - 0.5)).toBeLessThan(0.15);
   });
 
+  it("never returns a movie over the limit, even ones the budget didn't cover (round 2)", async () => {
+    const { me, partner, recs, discover } = busyPair();
+    // Every third discover movie is really 167 minutes; discover let it through.
+    const long = Object.fromEntries(
+      discover.movie.filter((_, i) => i % 3 === 0).map((c) => [candidateKey(c), { runtime: 167 }])
+    );
+    const run = (time: MoodSelection["time"]) => {
+      const fetchers = fakeFetchers({ recs, discover, facts: long });
+      return buildPairPool(input({ me, partner, selection: { ...ANY, time }, fetchers })).then((r) => ({ r, fetchers }));
+    };
+    const [any, limited] = await Promise.all([run("any"), run("120")]);
+
+    const runtime = (c: { id: number; mediaType: MediaType }) => (long[candidateKey(c)] ? 167 : 100);
+    const movies = limited.r.pool.filter((c) => c.mediaType === "movie");
+    expect(movies.length).toBeGreaterThan(0);
+    expect(movies.filter((c) => runtime(c) > 120)).toEqual([]);
+    // The mix stays comparable to no time limit
+    const share = (pool: { mediaType: MediaType }[]) => pool.filter((c) => c.mediaType === "movie").length / pool.length;
+    expect(Math.abs(share(limited.r.pool) - share(any.r.pool))).toBeLessThan(0.2);
+    // Each title is looked up at most once
+    const looked = limited.fetchers.facts.mock.calls.map(([m, id]) => `${m}-${id}`);
+    expect(new Set(looked).size).toBe(looked.length);
+  });
+
+  it("refills once from the next-ranked titles when violators are dropped", async () => {
+    // Movies 1–3 rank top (best rated) but are really too long; 4–8 fit.
+    const movies = Array.from({ length: 8 }, (_, i) => cand("movie", i + 1, { voteAverage: 9 - i * 0.3 }));
+    const fetchers = fakeFetchers({
+      discover: { movie: movies },
+      facts: { "movie-1": { runtime: 170 }, "movie-2": { runtime: 150 }, "movie-3": { runtime: 130 } },
+    });
+    const r = await buildPairPool(input({ fetchers, selection: { ...ANY, time: "120" }, poolSize: 4 }));
+    expect(r.pool.map((c) => c.id)).toEqual([4, 5, 6, 7]);
+    expect(r.pool.map((c) => c.pairScore)).toEqual([1, 0.75, 0.5, 0.25]);
+  });
+
+  it("drops a final-pool movie whose check fails, and flags partial", async () => {
+    const fetchers = fakeFetchers({ discover: { movie: [cand("movie", 1), cand("movie", 2)], tv: [cand("tv", 3)] } });
+    fetchers.facts.mockImplementation(async (media: MediaType, id: number) => {
+      if (id === 2) throw new Error("boom");
+      return { id, title: "", posterPath: "/p.jpg", date: "2021-01-01", overview: "", popularity: 1, voteAverage: 7, voteCount: 900, genreIds: [18], runtime: 100, providerIds: [] };
+    });
+    const r = await buildPairPool(input({ fetchers, selection: { ...ANY, time: "120" } }));
+    expect(keys(r.pool)).toEqual(["movie-1", "tv-3"]);
+    expect(r.partial).toBe(true);
+  });
+
   it("still drops a discover movie whose real runtime breaks the limit", async () => {
     const fetchers = fakeFetchers({
       discover: { movie: [cand("movie", 1), cand("movie", 2)] },
       facts: { "movie-2": { runtime: 170 } },
     });
-    const { pool } = await buildPairPool(input({ fetchers, selection: { ...ANY, time: "120" } }));
-    expect(keys(pool)).toEqual(["movie-1"]);
-  });
-
-  it("keeps a discover movie whose details lookup failed (discover's filter is trusted)", async () => {
-    const fetchers = fakeFetchers({ discover: { movie: [cand("movie", 1)] } });
-    fetchers.facts.mockRejectedValue(new Error("boom"));
     const { pool } = await buildPairPool(input({ fetchers, selection: { ...ANY, time: "120" } }));
     expect(keys(pool)).toEqual(["movie-1"]);
   });
@@ -448,7 +489,11 @@ describe("TMDB caps (§5.2, §6)", () => {
 
     expect(fetchers.discover).toHaveBeenCalledTimes(4);
     expect(fetchers.recommendations.mock.calls.length).toBeLessThanOrEqual(6);
-    expect(fetchers.facts.mock.calls.length).toBeLessThanOrEqual(FACTS_BUDGET);
+    // Candidate stage within FACTS_BUDGET, plus the final-pool runtime check
+    // (at most 2 × pool size, nearly all cache hits); never the same title twice.
+    const looked = fetchers.facts.mock.calls.map(([m, id]) => `${m}-${id}`);
+    expect(looked.length).toBeLessThanOrEqual(FACTS_BUDGET + 2 * PAIR_POOL_SIZE);
+    expect(new Set(looked).size).toBe(looked.length);
     expect(r.pool.length).toBeGreaterThan(0);
     expect(r.pool.length).toBeLessThanOrEqual(60);
   });

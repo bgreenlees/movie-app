@@ -15,6 +15,7 @@ import {
   blendPools,
   candidateKey,
   filterByRealRuntime,
+  fitsRuntime,
   matchesDiscoverParams,
   moodToDiscoverParams,
   traitScore,
@@ -113,6 +114,8 @@ export interface PairPoolInput {
   fetchers: PoolFetchers;
   /** Told about each failed fetch; the pool is built from whatever succeeded */
   onError?: (what: string, error: unknown) => void;
+  /** Titles returned; defaults to PAIR_POOL_SIZE (tests use a smaller pool) */
+  poolSize?: number;
 }
 
 // ── Output ───────────────────────────────────────────────────────────────────
@@ -293,6 +296,7 @@ function looseFacts(c: MoodCandidate): TitleFacts {
 export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResult> {
   const { me, partner, sharedOnly, today, fetchers } = input;
   const onError = input.onError ?? (() => {});
+  const poolSize = input.poolSize ?? PAIR_POOL_SIZE;
   const people: Record<Who, PoolPerson> = { me, partner };
 
   const profiles = {
@@ -331,12 +335,11 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
   const factsCache = new Map<string, Promise<FullTitleFacts>>();
   let factsUsed = 0;
   let tmdbFailures = 0;
-  const reserveFacts = (media: MediaType, id: number, cap: number): Promise<FullTitleFacts> | null => {
+  // One lookup per title per request, cached; failures are logged and counted.
+  const factsFor = (media: MediaType, id: number): Promise<FullTitleFacts> => {
     const key = candidateKey({ id, mediaType: media });
     const cached = factsCache.get(key);
     if (cached) return cached;
-    if (factsUsed >= cap) return null;
-    factsUsed++;
     const p = fetchers.facts(media, id).catch((error) => {
       tmdbFailures++;
       onError(`details for ${key}`, error);
@@ -345,6 +348,13 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
     p.catch(() => {}); // handled by whoever awaits it
     factsCache.set(key, p);
     return p;
+  };
+  const reserveFacts = (media: MediaType, id: number, cap: number): Promise<FullTitleFacts> | null => {
+    const cached = factsCache.get(candidateKey({ id, mediaType: media }));
+    if (cached) return cached;
+    if (factsUsed >= cap) return null;
+    factsUsed++;
+    return factsFor(media, id);
   };
 
   const drafts = new Map<string, Draft>();
@@ -546,18 +556,47 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
       });
       return { d, score, key: candidateKey(d.c) };
     })
-    .sort((a, b) => b.score - a.score || a.key.localeCompare(b.key))
-    .slice(0, PAIR_POOL_SIZE);
+    .sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
+
+  // With a time limit, verify what we return, not every candidate: every
+  // movie in the final pool gets a real runtime check (cached; free for
+  // titles already checked above). Unchecked discover movies were let through
+  // on TMDB's with_runtime filter, which is leaky for movies (a 167-minute
+  // film under "Under 2 hrs"). A violator, or a failed lookup, is dropped and
+  // the pool refilled once from the next-ranked titles, which are checked the
+  // same way. So at most 2 × poolSize lookups, nearly all cache hits.
+  // TV episode lengths from TMDB have held up (as in the mood picker).
+  const fitsFinal = async ({ d }: (typeof ranked)[number]) => {
+    if (d.c.mediaType !== "movie") return true;
+    try {
+      return fitsRuntime(paramsFor.movie, (await factsFor("movie", d.c.id)).runtime);
+    } catch {
+      return false; // can't vouch for it
+    }
+  };
+  const keepFitting = async (items: typeof ranked) => {
+    const ok = await Promise.all(items.map(fitsFinal));
+    return items.filter((_, i) => ok[i]);
+  };
+  let finalRanked = ranked.slice(0, poolSize);
+  if (selection.time !== "any") {
+    finalRanked = await keepFitting(finalRanked);
+    const short = Math.min(poolSize, ranked.length) - finalRanked.length;
+    if (short > 0) {
+      // Refill ranks below everything already kept, so appending keeps the order
+      finalRanked.push(...(await keepFitting(ranked.slice(poolSize, poolSize + short))));
+    }
+  }
 
   // The exact score is never returned. The caller knows their own affinity and
   // every other term (traitScore and sourceBoost use only public fields), so
   // the raw number could be solved for the partner's affinity, and from many
   // titles their taste weights, dislikes included (§5.5; security review on
   // this PR). Only the rank is exposed: (n − i) / n, 1 for the best.
-  const pool = ranked.map(({ d }, i): PairCandidate => {
+  const pool = finalRanked.map(({ d }, i): PairCandidate => {
     const out: PairCandidate = {
       ...d.c,
-      pairScore: rankWeight(i, ranked.length),
+      pairScore: rankWeight(i, finalRanked.length),
       reason: reasonFor(d, input.partnerName, selection),
       onMyList: d.wantedBy.has("me"),
     };
