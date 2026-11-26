@@ -93,6 +93,7 @@ describe("GET /api/watch-together/[userId]/picks", () => {
     expect(body.pool.map((c: { mediaType: string }) => c.mediaType).sort()).toEqual(["movie", "tv"]);
     expect(body.services).toEqual({ mine: false, partners: false, shared: [] });
     expect(body.coldStart).toEqual({ me: true, partner: true });
+    expect(body.partial).toBe(false);
     expect(JSON.stringify(body)).not.toMatch(/email/i);
   });
 

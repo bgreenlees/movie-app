@@ -152,6 +152,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
       pool: result.pool,
       services: result.services,
       coldStart: result.coldStart,
+      // Some TMDB calls failed: the UI can say "some picks couldn't load"
+      partial: result.partial,
     });
   } catch (error) {
     console.error("Pair picks error:", error instanceof Error ? error.message : "unknown");

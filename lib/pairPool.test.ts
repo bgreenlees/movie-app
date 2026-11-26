@@ -329,6 +329,103 @@ describe("mood filter and ranking", () => {
   });
 });
 
+describe("budget and seeds stay fair (review on #100)", () => {
+  // Busy lists: 15 wants and 3 Loves each, every Love with 20 recommendations,
+  // and as many matching movies as shows in discover.
+  function busyPair() {
+    const person = (base: number) => ({
+      entries: [
+        ...Array.from({ length: 15 }, (_, i) => entry(i % 2 ? "tv" : "movie", base + i)),
+        ...Array.from({ length: 3 }, (_, i) =>
+          entry(i % 2 ? "tv" : "movie", base + 100 + i, { status: "WATCHED", rating: 3, title: `Love ${base + 100 + i}` })
+        ),
+      ],
+      providerIds: [],
+    });
+    const me = person(1000);
+    const partner = person(2000);
+    const recs = Object.fromEntries(
+      [...me.entries, ...partner.entries]
+        .filter((e) => e.rating === 3)
+        .map((e) => [
+          candidateKey({ id: e.tmdbId, mediaType: e.mediaType }),
+          Array.from({ length: 20 }, (_, i) => cand(e.mediaType, 10_000 + e.tmdbId * 20 + i)),
+        ])
+    );
+    const discover = {
+      movie: Array.from({ length: 40 }, (_, i) => cand("movie", 70_000 + i)),
+      tv: Array.from({ length: 40 }, (_, i) => cand("tv", 80_000 + i)),
+    };
+    return { me, partner, recs, discover };
+  }
+  const isDiscover = (c: { id: number }) => c.id >= 70_000;
+
+  it("keeps discover movies with a time limit when the details budget runs out", async () => {
+    // Before the fix: 0 discover movies and 20 discover shows here.
+    const { me, partner, recs, discover } = busyPair();
+    const { pool } = await buildPairPool(
+      input({ me, partner, selection: { ...ANY, time: "120" }, fetchers: fakeFetchers({ recs, discover }) })
+    );
+    const d = pool.filter(isDiscover);
+    const movies = d.filter((c) => c.mediaType === "movie").length;
+    expect(movies).toBeGreaterThan(0);
+    // blendPools gives an even split for this fake (equal totals) and every
+    // runtime fits, so the time limit must not tilt it towards TV.
+    expect(Math.abs(movies / d.length - 0.5)).toBeLessThan(0.15);
+  });
+
+  it("still drops a discover movie whose real runtime breaks the limit", async () => {
+    const fetchers = fakeFetchers({
+      discover: { movie: [cand("movie", 1), cand("movie", 2)] },
+      facts: { "movie-2": { runtime: 170 } },
+    });
+    const { pool } = await buildPairPool(input({ fetchers, selection: { ...ANY, time: "120" } }));
+    expect(keys(pool)).toEqual(["movie-1"]);
+  });
+
+  it("keeps a discover movie whose details lookup failed (discover's filter is trusted)", async () => {
+    const fetchers = fakeFetchers({ discover: { movie: [cand("movie", 1)] } });
+    fetchers.facts.mockRejectedValue(new Error("boom"));
+    const { pool } = await buildPairPool(input({ fetchers, selection: { ...ANY, time: "120" } }));
+    expect(keys(pool)).toEqual(["movie-1"]);
+  });
+
+  it.each(["any", "120"] as const)("uses both people's Loves as seeds (time=%s)", async (time) => {
+    const { me, partner, recs } = busyPair();
+    const { pool } = await buildPairPool(
+      input({ me, partner, selection: { ...ANY, time }, fetchers: fakeFetchers({ recs }) })
+    );
+    const reasons = pool.map((c) => c.reason);
+    expect(reasons.some((r) => r.startsWith("Because you loved"))).toBe(true);
+    expect(reasons.some((r) => r.startsWith("Because Sam loved"))).toBe(true);
+  });
+});
+
+describe("posters and partial results", () => {
+  it("keeps a title both want even without a poster, but drops other posterless titles", async () => {
+    const both = entry("tv", 1, { posterPath: null });
+    const me: PoolPerson = { entries: [both, entry("tv", 2, { posterPath: null })], providerIds: [] };
+    const partner: PoolPerson = { entries: [{ ...both }], providerIds: [] };
+    const fetchers = fakeFetchers({ discover: { tv: [cand("tv", 3, { posterPath: null })] } });
+    const { pool } = await buildPairPool(input({ me, partner, fetchers }));
+    expect(keys(pool)).toEqual(["tv-1"]);
+    expect(pool[0].posterPath).toBeNull();
+  });
+
+  it("flags partial results when some TMDB calls failed", async () => {
+    const fetchers = fakeFetchers({ discover: { tv: [cand("tv", 1)] } });
+    fetchers.discover.mockImplementation(async (media: MediaType) => {
+      if (media === "movie") throw new Error("boom");
+      return { total: 1, candidates: [cand("tv", 1)] };
+    });
+    const r = await buildPairPool(input({ fetchers }));
+    expect(r.partial).toBe(true);
+    expect(r.discoverFailed).toBe(false);
+    const ok = await buildPairPool(input({ fetchers: fakeFetchers({ discover: { tv: [cand("tv", 1)] } }) }));
+    expect(ok.partial).toBe(false);
+  });
+});
+
 describe("TMDB caps (§5.2, §6)", () => {
   it("stays within 4 discover calls, 6 rec calls and the details budget", async () => {
     const many = (status: PoolEntry["status"], from: number, n: number, rating: number | null = null) =>

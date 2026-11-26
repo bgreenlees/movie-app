@@ -38,10 +38,14 @@ export const REC_POOL_SIZE = 30;
 export const DISCOVER_PAGES = [1, 2] as const;
 /** D: size of the blended discover pool */
 export const DISCOVER_POOL_SIZE = 40;
-/** Title-details lookups per request (each is 24 h cached by the TMDB client) */
-export const FACTS_BUDGET = 30;
-/** Of FACTS_BUDGET, at most this many go to want-list titles, so recs and discover still get checked */
-export const WANT_FACTS_MAX = 20;
+/**
+ * Title-details lookups per request (each is 24 h cached by the TMDB client),
+ * shared out by source so no source can starve another: want lists first,
+ * then recommendations, then discover movies. A share a source doesn't use
+ * rolls on to the next.
+ */
+export const FACTS_SHARES = { wants: 12, recs: 8, discover: 10 } as const;
+export const FACTS_BUDGET = FACTS_SHARES.wants + FACTS_SHARES.recs + FACTS_SHARES.discover;
 /** Size of the ranked pool returned to the client */
 export const PAIR_POOL_SIZE = 60;
 
@@ -133,6 +137,8 @@ export interface PairPoolResult {
   coldStart: { me: boolean; partner: boolean };
   /** Every discover call failed (the route may treat an empty pool as an error) */
   discoverFailed: boolean;
+  /** Some TMDB calls failed but titles survived: the UI can say "some picks couldn't load" */
+  partial: boolean;
 }
 
 // ── Query validation (§5.6, §6 F5) ───────────────────────────────────────────
@@ -280,8 +286,6 @@ function looseFacts(c: MoodCandidate): TitleFacts {
   };
 }
 
-const OVER_BUDGET = new Error("facts budget used up");
-
 /**
  * Build the ranked pair pool: sources A–D (§5.2), the excludes, the mood
  * filter, the services filter, the §5.1 score and a reason per title.
@@ -304,7 +308,7 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
   // "Only services we both have" with nothing in common: nothing can qualify.
   // (moodToDiscoverParams would otherwise drop the filter for an empty list.)
   if (servicesOn && services.providerIds.length === 0) {
-    return { pool: [], services: services.state, coldStart, discoverFailed: false };
+    return { pool: [], services: services.state, coldStart, discoverFailed: false, partial: false };
   }
 
   const ctx = { today, providerIds: services.providerIds };
@@ -322,19 +326,19 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
   // Details lookups: one per title, shared across sources, within FACTS_BUDGET.
   // Reservations are made synchronously in priority order, so which titles get
   // checked is deterministic however the network answers.
+  // `cap` is cumulative: the total used so far may not pass it. Returns null
+  // when over budget, so callers decide what an unchecked title means.
   const factsCache = new Map<string, Promise<FullTitleFacts>>();
   let factsUsed = 0;
-  const reserveFacts = (media: MediaType, id: number, cap = FACTS_BUDGET): Promise<FullTitleFacts> => {
+  let tmdbFailures = 0;
+  const reserveFacts = (media: MediaType, id: number, cap: number): Promise<FullTitleFacts> | null => {
     const key = candidateKey({ id, mediaType: media });
     const cached = factsCache.get(key);
     if (cached) return cached;
-    if (factsUsed >= cap) {
-      const over = Promise.reject<FullTitleFacts>(OVER_BUDGET);
-      over.catch(() => {}); // awaited later; don't flag it as unhandled meanwhile
-      return over;
-    }
+    if (factsUsed >= cap) return null;
     factsUsed++;
     const p = fetchers.facts(media, id).catch((error) => {
+      tmdbFailures++;
       onError(`details for ${key}`, error);
       throw error;
     });
@@ -379,18 +383,23 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
     if (oneSided.partner[i]) wantOrder.push({ e: oneSided.partner[i], by: ["partner"] });
   }
   const wantChecks = wantOrder.map(({ e, by }) => {
-    const facts = needsFacts ? reserveFacts(e.mediaType, e.tmdbId, WANT_FACTS_MAX) : null;
+    // Over budget → `undefined`: it needed a check and didn't get one
+    const facts = needsFacts ? reserveFacts(e.mediaType, e.tmdbId, FACTS_SHARES.wants) ?? undefined : null;
     return { e, by, facts };
   });
 
   // ── C and D: TMDB calls, in parallel with the want-list lookups ──
-  const seeds: { who: Who; e: PoolEntry }[] = (["me", "partner"] as Who[]).flatMap((who) =>
-    people[who].entries
-      .filter((e) => e.rating === 3)
-      .sort(byRecent)
-      .slice(0, REC_SEEDS_PER_PERSON)
-      .map((e) => ({ who, e }))
-  );
+  // Seeds alternate between the two people (my 1st, their 1st, my 2nd…), so
+  // neither person's Loves get first claim on the recommendation slots.
+  const lovesOf = (who: Who) =>
+    people[who].entries.filter((e) => e.rating === 3).sort(byRecent).slice(0, REC_SEEDS_PER_PERSON);
+  const myLoves = lovesOf("me");
+  const theirLoves = lovesOf("partner");
+  const seeds: { who: Who; e: PoolEntry }[] = [];
+  for (let i = 0; i < REC_SEEDS_PER_PERSON; i++) {
+    if (myLoves[i]) seeds.push({ who: "me", e: myLoves[i] });
+    if (theirLoves[i]) seeds.push({ who: "partner", e: theirLoves[i] });
+  }
   const recCalls = Promise.allSettled(
     seeds.map(({ e }) => fetchers.recommendations(e.mediaType, e.tmdbId))
   );
@@ -401,6 +410,7 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
       );
       const ok = pages.flatMap((r, i) => {
         if (r.status === "fulfilled") return [r.value];
+        tmdbFailures++;
         onError(`discover ${media} page ${DISCOVER_PAGES[i]}`, r.reason);
         return [];
       });
@@ -410,6 +420,7 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
 
   // Want-list titles that pass the mood (and, with facts, time and services).
   for (const { e, by, facts } of wantChecks) {
+    if (facts === undefined) continue; // needed a check, over budget: can't vouch for runtime / services
     let candidate = entryCandidate(e);
     let tf = looseFacts(candidate);
     let providerIds: number[] | undefined;
@@ -428,24 +439,28 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
   }
 
   // C: rank recommendations by how many people's Loves led to them, then by
-  // how many seeds, then by first appearance.
+  // how many seeds, then by their best position in any seed's list, with the
+  // seeds interleaved. Ordering by first appearance would let the first seeds
+  // (the viewer's, before the interleave) fill every slot.
   const recResults = await recCalls;
   const recs = new Map<string, { c: MoodCandidate; by: Partial<Record<Who, string>>; hits: number; order: number }>();
-  let order = 0;
   recResults.forEach((r, i) => {
     const { who, e } = seeds[i];
     if (r.status === "rejected") {
+      tmdbFailures++;
       onError(`recommendations for ${entryKey(e)}`, r.reason);
       return;
     }
-    for (const c of r.value) {
+    r.value.forEach((c, position) => {
       const key = candidateKey(c);
-      if (exclude.has(key)) continue;
-      const rec = recs.get(key) ?? { c, by: {}, hits: 0, order: order++ };
+      if (exclude.has(key)) return;
+      const order = position * seeds.length + i;
+      const rec = recs.get(key) ?? { c, by: {}, hits: 0, order };
+      rec.order = Math.min(rec.order, order);
       rec.hits++;
       if (!rec.by[who]) rec.by[who] = e.title;
       recs.set(key, rec);
-    }
+    });
   });
   const topRecs = [...recs.values()]
     .sort(
@@ -461,16 +476,13 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
 
   // Second wave of lookups, after the want lists: recs (when time or services
   // are on) then discover movies (runtime, when time is on; discover's movie
-  // runtime filter is leaky). Reserved now, in that order.
+  // runtime filter is leaky). Reserved now, in that order, each within its share.
   const recFacts = topRecs.map((r) =>
-    needsFacts ? reserveFacts(r.c.mediaType, r.c.id) : null
+    needsFacts ? reserveFacts(r.c.mediaType, r.c.id, FACTS_SHARES.wants + FACTS_SHARES.recs) ?? undefined : null
   );
   const discoverMovies = blended.filter((c) => c.mediaType === "movie");
-  const movieFacts = new Map(
-    discoverMovies.map((c) => [
-      candidateKey(c),
-      selection.time !== "any" ? reserveFacts("movie", c.id) : null,
-    ])
+  const movieFacts = discoverMovies.map((c) =>
+    selection.time !== "any" ? reserveFacts("movie", c.id, FACTS_BUDGET) : null
   );
 
   for (let i = 0; i < topRecs.length; i++) {
@@ -478,6 +490,7 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
     let tf = looseFacts(c);
     let providerIds: number[] | undefined;
     const facts = recFacts[i];
+    if (facts === undefined) continue; // needed a check, over budget: can't vouch for runtime / services
     if (facts) {
       try {
         const f = await facts;
@@ -491,20 +504,37 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
     for (const who of Object.keys(by) as Who[]) add(c, { seed: [who, by[who]!], providerIds });
   }
 
-  const verifiedMovies = await filterByRealRuntime(discoverMovies, paramsFor.movie, async (c) => {
-    const f = movieFacts.get(candidateKey(c));
-    if (!f) throw OVER_BUDGET;
-    return (await f).runtime;
-  });
-  const verifiedKeys = new Set(verifiedMovies.map(candidateKey));
+  // Discover movies: drop one only when a real lookup shows its runtime breaks
+  // the limit. One that's over budget, or whose lookup failed, keeps TMDB's
+  // own with_runtime filter, as discover TV always does. Otherwise a busy
+  // pair would lose every discover movie to the budget while discover TV
+  // passed, a type skew from an implementation detail (§4).
+  const checked = discoverMovies.filter((_, i) => movieFacts[i]);
+  const checkedFacts = new Map(checked.map((c) => [candidateKey(c), movieFacts[discoverMovies.indexOf(c)]!]));
+  const runtimeOk = new Set(
+    (
+      await filterByRealRuntime(checked, paramsFor.movie, (c) =>
+        checkedFacts.get(candidateKey(c))!.then(
+          (f) => f.runtime,
+          // A failed lookup is no evidence against the title: trust discover
+          () => Number(paramsFor.movie["with_runtime.lte"])
+        )
+      )
+    ).map(candidateKey)
+  );
+  const checkedKeys = new Set(checkedFacts.keys());
   for (const c of blended) {
-    if (c.mediaType === "movie" && !verifiedKeys.has(candidateKey(c))) continue;
+    const key = candidateKey(c);
+    if (c.mediaType === "movie" && checkedKeys.has(key) && !runtimeOk.has(key)) continue;
     add(c);
   }
 
   // ── Score and explain ──
   const ranked = [...drafts.values()]
-    .filter((d) => d.c.posterPath)
+    // Posterless titles look broken on a card, except one you both want:
+    // that's the strongest signal there is, and the UI shows a placeholder
+    // (posterPath: null).
+    .filter((d) => d.c.posterPath || d.wantedBy.size === 2)
     .map((d) => {
       const wantedBy = d.wantedBy.size as 0 | 1 | 2;
       const recSeededBy = Object.keys(d.seededBy).length as 0 | 1 | 2;
@@ -535,7 +565,8 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
     return out;
   });
 
-  return { pool, services: services.state, coldStart, discoverFailed };
+  const partial = tmdbFailures > 0 && pool.length > 0;
+  return { pool, services: services.state, coldStart, discoverFailed, partial };
 }
 
 /** Rank-only weight for position `i` of `n`, rounded to 3 decimals. */
