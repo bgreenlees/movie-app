@@ -11,6 +11,8 @@ import OnboardingModal from "@/components/movies/OnboardingModal";
 import TVShowCard, { type TVSeasonBanner } from "@/components/tv/TVShowCard";
 import AddTVModal from "@/components/tv/AddTVModal";
 import ThumbRating from "@/components/ui/ThumbRating";
+import ResultFilters, { type CoStar } from "@/components/ui/ResultFilters";
+import { applyResultFilters, genresInResults, intersectIds, type SortOption } from "@/lib/resultFilters";
 import type { TMDBMovie, TMDBTVShow } from "@/lib/tmdb";
 import { DISCOVER_COUNTRIES, countryName, isValidCountry } from "@/lib/countries";
 import toast from "react-hot-toast";
@@ -121,6 +123,13 @@ function DiscoverPageInner() {
   // Set when a search had no exact matches and we fell back to close spellings
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [columns, setColumns] = useState(6);
+
+  // Sort / filter bar (search, person and genre pages)
+  const [sort, setSort] = useState<SortOption>("relevance");
+  const [genreFilter, setGenreFilter] = useState<number[]>([]);
+  const [genreNames, setGenreNames] = useState<{ movie?: Record<number, string>; tv?: Record<number, string> }>({});
+  const [coStars, setCoStars] = useState<CoStar[]>([]);
+  const [coStarCredits, setCoStarCredits] = useState<Record<number, { movie: { id: number }[]; tv: { id: number }[] }>>({});
   const gridRef = useRef<HTMLDivElement>(null);
 
   // ── Watchlist fetches ─────────────────────────────────────────────────────
@@ -190,6 +199,7 @@ function DiscoverPageInner() {
     setPrevLoadKey(loadKey);
     setSuggestion(null);
     setIsLoading(true);
+    setGenreFilter([]); // genre ids differ between movies and TV, and per result set
     if (personId) {
       setPersonData(null);
     } else if (!genreId && country) {
@@ -354,6 +364,58 @@ function DiscoverPageInner() {
     };
   }, [urlQuery, mediaType, personId, genreId, genreMedia, country, fetchSeasonBanners]);
 
+  // Co-stars belong to one person's page; drop them when the person changes.
+  const [prevPersonId, setPrevPersonId] = useState(personId);
+  if (prevPersonId !== personId) {
+    setPrevPersonId(personId);
+    setCoStars([]);
+  }
+
+  // Genre id → name map for the filter chips, fetched once per media type.
+  const haveGenreNames = !!genreNames[mediaType];
+  useEffect(() => {
+    if (haveGenreNames) return;
+    let cancelled = false;
+    fetch(`/api/genres?media=${mediaType}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d?.genres) setGenreNames((prev) => ({ ...prev, [mediaType]: d.genres }));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [mediaType, haveGenreNames]);
+
+  const handleAddCoStar = (person: CoStar) => {
+    if (coStars.some((c) => c.id === person.id)) return;
+    setCoStars((prev) => [...prev, person]);
+    if (coStarCredits[person.id]) return;
+    fetch(`/api/person/${person.id}`)
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.json();
+      })
+      .then((d: PersonData) => {
+        setCoStarCredits((prev) => ({
+          ...prev,
+          [person.id]: {
+            movie: [...(d.movieCast || []), ...(d.movieCrewDirected || [])],
+            tv: [...(d.tvCast || []), ...(d.tvCrewDirected || [])],
+          },
+        }));
+      })
+      .catch(() => {
+        toast.error(`Couldn't load ${person.name}'s credits`);
+        setCoStars((prev) => prev.filter((c) => c.id !== person.id));
+      });
+  };
+
+  const handleClearFilters = () => {
+    setGenreFilter([]);
+    setCoStars([]);
+  };
+
   useEffect(() => {
     if (!gridRef.current) return;
     const obs = new ResizeObserver(() => {
@@ -466,6 +528,42 @@ function DiscoverPageInner() {
     : mediaType === "movie"
       ? displayMovies.length === 0
       : displayTV.length === 0;
+
+  // ── Sort / filter ─────────────────────────────────────────────────────────
+
+  const showFilters = isPersonMode || isGenreMode || !!urlQuery;
+  // Only co-stars whose credits have loaded narrow the list, so adding one
+  // doesn't flash an empty page while its credits are fetched.
+  const coStarIds = isPersonMode
+    ? intersectIds(coStars.filter((c) => coStarCredits[c.id]).map((c) => coStarCredits[c.id][mediaType]))
+    : null;
+  const filterState = { sort, genreIds: genreFilter, onlyIds: coStarIds };
+  const applyFilters = <T extends TMDBMovie | TMDBTVShow>(arr: T[]) =>
+    showFilters ? applyResultFilters(arr, filterState) : arr;
+
+  const shownMovieCast = applyFilters(personMovieCast);
+  const shownMovieDirected = applyFilters(personMovieDirected);
+  const shownTVCast = applyFilters(personTVCast);
+  const shownTVDirected = applyFilters(personTVDirected);
+  const shownMovies = applyFilters(displayMovies);
+  const shownTV = applyFilters(displayTV);
+
+  const unfilteredResults: Array<TMDBMovie | TMDBTVShow> = isPersonMode
+    ? mediaType === "movie"
+      ? [...personMovieCast, ...personMovieDirected]
+      : [...personTVCast, ...personTVDirected]
+    : mediaType === "movie"
+      ? displayMovies
+      : displayTV;
+  const shownCount = isPersonMode
+    ? mediaType === "movie"
+      ? shownMovieCast.length + shownMovieDirected.length
+      : shownTVCast.length + shownTVDirected.length
+    : mediaType === "movie"
+      ? shownMovies.length
+      : shownTV.length;
+  const availableGenres = genresInResults(unfilteredResults, genreNames[mediaType] ?? {});
+  const isFilteredEmpty = !isEmpty && shownCount === 0;
 
   const renderMovieGrid = (arr: TMDBMovie[], key: string) => (
     <div key={key} className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))" }}>
@@ -662,6 +760,29 @@ function DiscoverPageInner() {
         </div>
       )}
 
+      {showFilters && !isLoading && !isEmpty && (
+        <ResultFilters
+          sort={sort}
+          onSortChange={setSort}
+          genres={availableGenres}
+          selectedGenreIds={genreFilter}
+          onToggleGenre={(id) =>
+            setGenreFilter((prev) => (prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id]))
+          }
+          {...(isPersonMode
+            ? {
+                coStars,
+                excludePersonId: Number(personId),
+                onAddCoStar: handleAddCoStar,
+                onRemoveCoStar: (id: number) => setCoStars((prev) => prev.filter((c) => c.id !== id)),
+              }
+            : {})}
+          shownCount={shownCount}
+          totalCount={unfilteredResults.length}
+          onClear={handleClearFilters}
+        />
+      )}
+
       {isLoading && (
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))" }}>
           {Array.from({ length: 12 }).map((_, i) => (
@@ -679,20 +800,20 @@ function DiscoverPageInner() {
       {/* Person mode: sections */}
       {!isLoading && isPersonMode && mediaType === "movie" && (
         <div ref={gridRef} className="space-y-8">
-          {personMovieCast.length > 0 && (
+          {shownMovieCast.length > 0 && (
             <div>
               <h2 className="text-lg font-semibold mb-3" style={{ color: "var(--foreground)" }}>
                 Movies with {personData?.name || personNameParam}
               </h2>
-              {renderMovieGrid(personMovieCast, "movie-cast")}
+              {renderMovieGrid(shownMovieCast, "movie-cast")}
             </div>
           )}
-          {personMovieDirected.length > 0 && (
+          {shownMovieDirected.length > 0 && (
             <div>
               <h2 className="text-lg font-semibold mb-3" style={{ color: "var(--foreground)" }}>
                 Movies directed by {personData?.name || personNameParam}
               </h2>
-              {renderMovieGrid(personMovieDirected, "movie-directed")}
+              {renderMovieGrid(shownMovieDirected, "movie-directed")}
             </div>
           )}
         </div>
@@ -700,33 +821,51 @@ function DiscoverPageInner() {
 
       {!isLoading && isPersonMode && mediaType === "tv" && (
         <div ref={gridRef} className="space-y-8">
-          {personTVCast.length > 0 && (
+          {shownTVCast.length > 0 && (
             <div>
               <h2 className="text-lg font-semibold mb-3" style={{ color: "var(--foreground)" }}>
                 TV shows with {personData?.name || personNameParam}
               </h2>
-              {renderTVGrid(personTVCast, "tv-cast")}
+              {renderTVGrid(shownTVCast, "tv-cast")}
             </div>
           )}
-          {personTVDirected.length > 0 && (
+          {shownTVDirected.length > 0 && (
             <div>
               <h2 className="text-lg font-semibold mb-3" style={{ color: "var(--foreground)" }}>
                 TV shows directed by {personData?.name || personNameParam}
               </h2>
-              {renderTVGrid(personTVDirected, "tv-directed")}
+              {renderTVGrid(shownTVDirected, "tv-directed")}
             </div>
           )}
         </div>
       )}
 
       {/* Movies grid (normal / genre / query mode) */}
-      {!isLoading && !isPersonMode && mediaType === "movie" && displayMovies.length > 0 && (
-        <div ref={gridRef}>{renderMovieGrid(displayMovies, "movies")}</div>
+      {!isLoading && !isPersonMode && mediaType === "movie" && shownMovies.length > 0 && (
+        <div ref={gridRef}>{renderMovieGrid(shownMovies, "movies")}</div>
       )}
 
       {/* TV grid (normal / genre / query mode) */}
-      {!isLoading && !isPersonMode && mediaType === "tv" && displayTV.length > 0 && (
-        <div ref={gridRef}>{renderTVGrid(displayTV, "tvshows")}</div>
+      {!isLoading && !isPersonMode && mediaType === "tv" && shownTV.length > 0 && (
+        <div ref={gridRef}>{renderTVGrid(shownTV, "tvshows")}</div>
+      )}
+
+      {!isLoading && isFilteredEmpty && (
+        <div className="text-center py-16 flex flex-col items-center gap-3">
+          <p className="text-base" style={{ color: "var(--text-muted)" }}>
+            {coStars.length > 0 && coStarIds
+              ? `No ${mediaType === "tv" ? "TV shows" : "movies"} with ${personData?.name || personNameParam} and ${coStars.map((c) => c.name).join(" and ")}${genreFilter.length ? " in the selected genres" : ""}`
+              : `Nothing matches these filters`}
+          </p>
+          <button
+            type="button"
+            onClick={handleClearFilters}
+            className="text-sm font-semibold underline cursor-pointer"
+            style={{ color: "var(--accent)" }}
+          >
+            Clear filters
+          </button>
+        </div>
       )}
 
       {!isLoading && isEmpty && (
