@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Logo } from "@/components/brand/Logo";
 
 export default function Home() {
   return (
@@ -38,18 +39,8 @@ export default function Home() {
       </div>
 
       <div className="relative z-10 text-center max-w-2xl">
-        <div className="flex items-center justify-center gap-3 mb-6">
-          <svg width="48" height="48" viewBox="0 0 36 36" fill="none">
-            <rect width="36" height="36" rx="8" fill="url(#logo-grad-home)" />
-            <path d="M10 26L14 10h2l4 12 4-12h2l4 16" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-            <defs>
-              <linearGradient id="logo-grad-home" x1="0" y1="0" x2="36" y2="36">
-                <stop offset="0%" stopColor="#a855f7" />
-                <stop offset="100%" stopColor="#3b82f6" />
-              </linearGradient>
-            </defs>
-          </svg>
-          <span className="text-2xl font-bold tracking-tight text-text">What&apos;s Up Next</span>
+        <div className="flex items-center justify-center mb-6">
+          <Logo variant="horizontal" size={48} />
         </div>
 
         <h1 className="text-5xl font-bold mb-4 tracking-tight text-text">

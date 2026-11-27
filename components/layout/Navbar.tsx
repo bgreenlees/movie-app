@@ -6,6 +6,7 @@ import { signOut } from "next-auth/react";
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import toast from "react-hot-toast";
+import { Logo } from "@/components/brand/Logo";
 import FeedbackModal from "@/components/ui/FeedbackModal";
 
 interface MultiTitle {
@@ -309,8 +310,8 @@ export default function Navbar() {
         {/* Top row: Logo | desktop nav | icons */}
         <div className="flex items-center gap-4">
           {/* Logo */}
-          <Link href="/search" className="text-xl font-bold shrink-0" style={{ color: "var(--primary)" }}>
-            What&apos;s Up Next
+          <Link href="/search" className="shrink-0" aria-label="What's Up Next: Discover">
+            <Logo variant="horizontal" size={30} />
           </Link>
 
           {/* Desktop nav links */}
