@@ -6,19 +6,22 @@
 #   scripts/factory/usage.sh watch    loop: at USAGE_WIP_AT % of the session, tell every working
 #                                     agent to commit its work in progress (once per window)
 #
-# Source: ~/.claude/state/usage.json, written by ~/.claude/usage-tap.sh, which wraps the
-# Claude Code status line (it receives `rate_limits` on every refresh). If the file is
-# missing or stale, `gate` refuses: ask the owner for the numbers, then use --force.
+#   scripts/factory/usage.sh refresh  fetch fresh numbers now
+#
+# Source: a one-word Haiku call (`claude -p --output-format stream-json`), whose
+# `rate_limit_event` carries the plan's 5-hour and weekly utilization. It costs a few hundred
+# tokens and runs at most every USAGE_STALE_MIN minutes; the result is cached in
+# ~/.claude/state/usage.json. If it can't be read, `gate` refuses: ask the owner, then --force.
 #
 # Thresholds (env): USAGE_LAUNCH_MAX (default 70) session % above which nothing new launches;
 # USAGE_WIP_AT (default 85) session % at which running agents are told to commit;
 # USAGE_WEEK_SLACK (default 15) how many points the week may run ahead of an even pace;
-# USAGE_STALE_MIN (default 20) minutes after which the saved numbers are too old to trust.
+# USAGE_STALE_MIN (default 10) minutes after which the cached numbers are refreshed.
 set -euo pipefail
 
 USAGE_FILE=${USAGE_FILE:-$HOME/.claude/state/usage.json}
 export USAGE_FILE USAGE_LAUNCH_MAX=${USAGE_LAUNCH_MAX:-70} USAGE_WIP_AT=${USAGE_WIP_AT:-85} \
-  USAGE_WEEK_SLACK=${USAGE_WEEK_SLACK:-15} USAGE_STALE_MIN=${USAGE_STALE_MIN:-20}
+  USAGE_WEEK_SLACK=${USAGE_WEEK_SLACK:-15} USAGE_STALE_MIN=${USAGE_STALE_MIN:-10}
 
 # Prints "<mode-result>\t<message>"; mode is line | gate | session.
 read_usage() {
@@ -39,7 +42,7 @@ def fmt(t):
 try:
     data = json.load(open(os.environ["USAGE_FILE"]))
 except (OSError, ValueError):
-    print("unknown\tno usage data (is ~/.claude/usage-tap.sh the status line?)"); sys.exit()
+    print("unknown\tno usage data (usage.sh refresh failed)"); sys.exit()
 age_min = (now - data.get("saved_at", 0)) / 60
 rl = data.get("rate_limits") or {}
 def window(key):
@@ -69,7 +72,34 @@ print(f"ok\t{line}")
 PY
 }
 
+# Fetch fresh numbers with a tiny Haiku call and cache them (same shape the reader expects).
+refresh() {
+  mkdir -p "$(dirname "$USAGE_FILE")"
+  (cd "${TMPDIR:-/tmp}" && claude -p "Reply with the single word ok." --model haiku \
+      --output-format stream-json --verbose --max-turns 1 2>/dev/null) | python3 -I -c '
+import json, os, sys, time
+for line in sys.stdin:
+    try: d = json.loads(line)
+    except ValueError: continue
+    if d.get("type") != "rate_limit_event": continue
+    w = (d.get("rate_limit_info") or {}).get("unifiedWindows") or {}
+    out = {k: {"used_percentage": round(float(v.get("utilization", 0)) * 100, 1), "resets_at": v.get("resetsAt")}
+           for k, v in w.items() if k in ("five_hour", "seven_day")}
+    if out:
+        p = sys.argv[1]; t = p + ".tmp"
+        with open(t, "w") as f: json.dump({"rate_limits": out, "saved_at": int(time.time())}, f)
+        os.replace(t, p); sys.exit(0)
+sys.exit(1)' "$USAGE_FILE"
+}
+# Refresh when the cache is missing or older than USAGE_STALE_MIN.
+ensure_fresh() {
+  local age=999999
+  [ -f "$USAGE_FILE" ] && age=$(( $(date +%s) - $(stat -f %m "$USAGE_FILE" 2>/dev/null || stat -c %Y "$USAGE_FILE") ))
+  [ "$age" -lt $(( USAGE_STALE_MIN * 60 )) ] || refresh || true
+}
+
 cmd=${1:-line}
+case $cmd in line|gate|watch) [ "$cmd" = watch ] || ensure_fresh ;; esac
 case $cmd in
   line)
     out=$(read_usage line); echo "Usage: ${out#*	}" ;;
@@ -80,6 +110,7 @@ case $cmd in
   watch)
     DIR=$(cd "$(dirname "$0")" && pwd); warned_reset=
     while :; do
+      ensure_fresh
       out=$(read_usage session); pct=${out%%	*}
       if [[ $pct =~ ^[0-9]+$ ]] && [ "$pct" -ge "$USAGE_WIP_AT" ]; then
         reset=$(python3 -I -c 'import json,sys; print((json.load(open(sys.argv[1])).get("rate_limits") or {}).get("five_hour",{}).get("resets_at",""))' "$USAGE_FILE" 2>/dev/null || true)
@@ -99,5 +130,7 @@ for a in json.load(sys.stdin)["result"]["agents"]:
       fi
       sleep "${USAGE_WATCH_INTERVAL:-120}"
     done ;;
-  *) echo "usage: usage.sh [line|gate|watch]" >&2; exit 2 ;;
+  refresh)
+    refresh && read_usage line | cut -f2- ;;
+  *) echo "usage: usage.sh [line|gate|watch|refresh]" >&2; exit 2 ;;
 esac
