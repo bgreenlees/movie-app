@@ -23,7 +23,7 @@ while :; do
     pr=$(gh pr list --state open --json number,body \
       -q ".[] | select(.body | test(\"(?i)(closes|fixes|resolves) #$i\\\\b\")) | .number" | head -1)
     [ -n "$pr" ] || continue
-    ci=$(gh pr checks "$pr" 2>/dev/null | awk '$1=="ci"{print $2}')
+    ci=$(gh pr checks "$pr" 2>/dev/null | awk '$1=="ci"{print $2}' || true)  # gh exits 8 while checks are pending
     if [ "$ci" = pass ] || [ "$ci" = fail ]; then
       echo "issue=$i pr=$pr ci=$ci"
       exit 0
