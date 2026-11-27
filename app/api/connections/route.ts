@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { createRateLimiter } from "@/lib/rateLimit";
+import { createInvite, isValidEmail, MAX_EMAIL_LENGTH, normalizeEmail } from "@/lib/invites";
 
 /** Most PENDING outgoing requests one user may have at once. */
 export const MAX_PENDING_OUTGOING = 20;
@@ -14,15 +16,8 @@ export const MAX_PENDING_OUTGOING = 20;
  */
 const neutralOk = () => NextResponse.json({ ok: true });
 
-/**
- * Called when no account has this email. Deliberately does nothing yet:
- * email invites (#135) hook in here. Whatever it does, the caller still
- * returns the neutral response.
- */
-async function handleNoAccount(email: string, requesterId: string): Promise<void> {
-  void email;
-  void requesterId;
-}
+/** 10 invites per user per day. Per server instance; see lib/rateLimit.ts. */
+const allowInvite = createRateLimiter({ limit: 10, windowMs: 24 * 60 * 60 * 1000 });
 
 // GET — fetch accepted connections + pending incoming requests
 export async function GET() {
@@ -66,8 +61,10 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const raw = body && typeof body === "object" ? (body as { email?: unknown }).email : undefined;
   const email = typeof raw === "string" ? raw.trim() : "";
-  if (!email || email.length > 320) {
-    return NextResponse.json({ error: "Email required" }, { status: 400 });
+  if (!email) return NextResponse.json({ error: "Email required" }, { status: 400 });
+  // Depends only on the text typed, never on whether an account exists.
+  if (email.length > MAX_EMAIL_LENGTH || !isValidEmail(email)) {
+    return NextResponse.json({ error: "Enter a valid email address" }, { status: 400 });
   }
 
   // Your own address isn't secret to you, so this can be a clear error.
@@ -91,6 +88,15 @@ export async function POST(req: NextRequest) {
   // under a lock below, because count-then-create alone isn't atomic.
   if ((await countPending(prisma)) >= MAX_PENDING_OUTGOING) return capped();
 
+  // Daily limit on every valid send, known email or not, so a 429 never hints at whether
+  // an account exists.
+  if (!allowInvite(userId)) {
+    return NextResponse.json(
+      { error: "You've sent a lot of requests today. Please try again tomorrow." },
+      { status: 429, headers: { "Retry-After": "86400" } },
+    );
+  }
+
   // Case-insensitive exact match. Not Prisma's `mode: "insensitive"`: on
   // Postgres that is ILIKE, so "%" or "_" in the input act as wildcards and
   // "%@gmail.com" would match an arbitrary account. LOWER() = $1 is a plain
@@ -98,7 +104,7 @@ export async function POST(req: NextRequest) {
   const [target] = await prisma.$queryRaw<{ id: string }[]>`
     SELECT "id" FROM "users" WHERE LOWER("email") = ${email.toLowerCase()} LIMIT 1`;
   if (!target) {
-    await handleNoAccount(email, userId);
+    await createInvite(normalizeEmail(email), userId, session.user.name ?? "", new Date());
     return neutralOk();
   }
   if (target.id === userId) {

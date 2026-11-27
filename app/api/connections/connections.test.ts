@@ -14,6 +14,9 @@ type Where = {
 
 const m = vi.hoisted(() => ({
   auth: vi.fn(),
+  createInvite: vi.fn(async (...args: unknown[]) => void args),
+  allow: vi.fn((key: string) => key !== ""),
+  limiterOpts: undefined as unknown,
   users: [] as { id: string; email: string; name: string }[],
   rows: [] as Row[],
   nextId: 1,
@@ -29,6 +32,17 @@ function matches(row: Row, where: Where): boolean {
 }
 
 vi.mock("@/lib/auth", () => ({ auth: m.auth }));
+vi.mock("@/lib/rateLimit", () => ({
+  createRateLimiter: (opts: unknown) => {
+    m.limiterOpts = opts;
+    return (key: string) => m.allow(key);
+  },
+}));
+// Invite creation has its own tests (lib/invites.test.ts); here we only check the route calls it.
+vi.mock("@/lib/invites", async () => ({
+  ...(await vi.importActual<typeof import("../../../lib/invites")>("../../../lib/invites")),
+  createInvite: m.createInvite,
+}));
 vi.mock("@/lib/db", () => {
   const userConnection = {
     count: vi.fn(async ({ where }: { where: Where }) => {
@@ -127,6 +141,37 @@ beforeEach(() => {
   m.lock = Promise.resolve();
   m.countDelay = false;
   as(ME);
+  m.allow.mockReset().mockReturnValue(true);
+  m.createInvite.mockClear();
+});
+
+describe("POST /api/connections: invites (#135)", () => {
+  it("invites an unknown email, normalised, with the neutral response", async () => {
+    const res = await send("  New.Person@Example.TEST ");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(m.createInvite).toHaveBeenCalledWith("new.person@example.test", "me", "", expect.any(Date));
+  });
+  it("doesn't invite an email that has an account", async () => {
+    await send(PAL.email);
+    expect(m.createInvite).not.toHaveBeenCalled();
+  });
+  it("rejects malformed or over-long emails with 400 and no invite", async () => {
+    for (const bad of ["not-an-email", "a@b", "a".repeat(250) + "@b.de"]) {
+      expect((await send(bad)).status).toBe(400);
+    }
+    expect(m.createInvite).not.toHaveBeenCalled();
+  });
+  it("limits to 10 a day, and answers 429 the same for known and unknown emails", async () => {
+    expect(m.limiterOpts).toEqual({ limit: 10, windowMs: 24 * 60 * 60 * 1000 });
+    m.allow.mockReturnValue(false);
+    const unknown = await send("nobody@example.test");
+    const known = await send(PAL.email);
+    expect(unknown.status).toBe(429);
+    expect(known.status).toBe(429);
+    expect(await known.json()).toEqual(await unknown.json());
+    expect(m.createInvite).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /api/connections: no email oracle (F7)", () => {
