@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import toast from "react-hot-toast";
 import { Logo, LogoMark } from "@/components/brand/Logo";
@@ -53,6 +53,14 @@ export default function Navbar() {
   const [showSearch, setShowSearch] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const profileRef = useRef<HTMLDivElement>(null);
+  const searchButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Close the search sheet and hand focus back to the button that opened it,
+  // so keyboard and screen-reader users don't land on <body>.
+  const closeSearch = useCallback(() => {
+    setShowSearch(false);
+    searchButtonRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     const current = document.documentElement.getAttribute("data-theme");
@@ -84,11 +92,11 @@ export default function Navbar() {
   useEffect(() => {
     if (!showSearch) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setShowSearch(false);
+      if (e.key === "Escape") closeSearch();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [showSearch]);
+  }, [showSearch, closeSearch]);
 
   const toggleTheme = () => {
     const next = theme === "light" ? "dark" : "light";
@@ -144,7 +152,7 @@ export default function Navbar() {
     e.preventDefault();
     if (!query.trim()) return;
     setShowSuggestions(false);
-    setShowSearch(false);
+    closeSearch();
     router.push(`/search?q=${encodeURIComponent(query.trim())}`);
   };
 
@@ -152,21 +160,21 @@ export default function Navbar() {
     const label = title.title || title.name || "";
     setQuery(label);
     setShowSuggestions(false);
-    setShowSearch(false);
+    closeSearch();
     router.push(`/search?q=${encodeURIComponent(label)}`);
   };
 
   const handlePerson = (person: MultiPerson) => {
     setQuery(person.name);
     setShowSuggestions(false);
-    setShowSearch(false);
+    closeSearch();
     router.push(`/search?personId=${person.id}&name=${encodeURIComponent(person.name)}`);
   };
 
   const handleGenre = (genre: MultiGenre) => {
     setQuery(genre.name);
     setShowSuggestions(false);
-    setShowSearch(false);
+    closeSearch();
     router.push(
       `/search?genreId=${genre.id}&genreName=${encodeURIComponent(genre.name)}&genreMedia=${genre.media}`
     );
@@ -371,6 +379,7 @@ export default function Navbar() {
             </div>
 
             <button
+              ref={searchButtonRef}
               onClick={() => setShowSearch(true)}
               className="xl:hidden p-2 rounded-full transition-colors hover:bg-[var(--hover-bg)] shrink-0"
               style={{ color: "var(--foreground)" }}
@@ -489,7 +498,7 @@ export default function Navbar() {
       {/* Search sheet: opened by the search icon below xl */}
       {showSearch && (
         <div className="fixed inset-0 z-50 xl:hidden" role="dialog" aria-modal="true" aria-label="Search">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setShowSearch(false)} />
+          <div className="absolute inset-0 bg-black/50" onClick={() => closeSearch()} />
           <div className="relative bg-[var(--card-bg)] border-b border-[var(--border)] px-4 sm:px-6 py-3 shadow-lg">
             <div className="max-w-2xl mx-auto relative">
               <form onSubmit={handleSearch} className="flex gap-2 items-center">
@@ -518,7 +527,7 @@ export default function Navbar() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowSearch(false)}
+                  onClick={() => closeSearch()}
                   className="px-2 py-3 text-sm shrink-0"
                   style={{ color: "var(--foreground)" }}
                 >
