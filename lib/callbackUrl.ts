@@ -19,7 +19,6 @@ export function safeCallbackUrl(raw: unknown, fallback: string = DEFAULT_CALLBAC
   if (value.length === 0 || value.length > MAX_LENGTH) return fallback;
   if (!value.startsWith("/") || value.startsWith("//")) return fallback;
   if (value.includes("\\")) return fallback;
-  // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f]/.test(value)) return fallback;
   return value;
 }
