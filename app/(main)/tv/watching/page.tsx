@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import PosterCard, { POSTER_GRID } from "@/components/ui/PosterCard";
 import { episodeMeta, seasonProgress, statusChip, yearMeta } from "@/lib/posterCard";
 import TrailerModal from "@/components/movies/TrailerModal";
@@ -102,6 +102,7 @@ async function loadEntries(tab: Tab): Promise<TVEntry[] | null> {
 export default function MyTVPage() {
   const [activeTab, setActiveTab] = useState<Tab>("watching");
   const [entries, setEntries] = useState<TVEntry[]>([]);
+  const requestId = useRef(0); // latest load wins; stale responses are dropped
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [nextEpisodes, setNextEpisodes] = useState<Record<number, NextEpisodeInfo["next_episode_to_air"]>>({});
@@ -122,8 +123,10 @@ export default function MyTVPage() {
 
   // Refresh after a mutation (called from event handlers); shows the spinner like a tab switch.
   const fetchEntries = useCallback(async (tab: Tab) => {
+    const id = ++requestId.current;
     setIsLoading(true);
     const loaded = await loadEntries(tab);
+    if (id !== requestId.current) return loaded ?? []; // superseded by a newer load
     if (loaded) setEntries(loaded);
     setLoadFailed(!loaded);
     setIsLoading(false);
@@ -132,9 +135,11 @@ export default function MyTVPage() {
 
   useEffect(() => {
     // Ignore responses that arrive after the tab changed or the page unmounted.
+    // Bumping requestId here also invalidates any in-flight fetchEntries refresh.
     let cancelled = false;
+    const id = ++requestId.current;
     loadEntries(activeTab).then((loaded) => {
-      if (cancelled) return;
+      if (cancelled || id !== requestId.current) return;
       if (loaded) setEntries(loaded);
       setLoadFailed(!loaded);
       setIsLoading(false);

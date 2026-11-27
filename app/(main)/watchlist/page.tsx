@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PosterCard, { POSTER_GRID } from "@/components/ui/PosterCard";
 import { statusChip, yearMeta } from "@/lib/posterCard";
 import AddMovieModal from "@/components/movies/AddMovieModal";
@@ -51,6 +51,7 @@ export default function MyMoviesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<WatchlistEntry | null>(null);
+  const requestId = useRef(0); // latest load wins; stale responses are dropped
   const [trailerMovie, setTrailerMovie] = useState<{ id: number; title: string } | null>(null);
 
   // Reset the spinner while rendering when the tab changes
@@ -64,8 +65,10 @@ export default function MyMoviesPage() {
 
   // Refresh after a mutation (called from event handlers); shows the spinner like a tab switch.
   const fetchEntries = async (tab: Tab) => {
+    const id = ++requestId.current;
     setIsLoading(true);
     const loaded = await loadEntries(tab);
+    if (id !== requestId.current) return; // a newer load (e.g. tab switch) superseded this one
     if (loaded) setEntries(loaded);
     setLoadFailed(!loaded);
     setIsLoading(false);
@@ -73,9 +76,11 @@ export default function MyMoviesPage() {
 
   useEffect(() => {
     // Ignore responses that arrive after the tab changed or the page unmounted.
+    // Bumping requestId here also invalidates any in-flight fetchEntries refresh.
     let cancelled = false;
+    const id = ++requestId.current;
     loadEntries(activeTab).then((loaded) => {
-      if (cancelled) return;
+      if (cancelled || id !== requestId.current) return;
       if (loaded) setEntries(loaded);
       setLoadFailed(!loaded);
       setIsLoading(false);
