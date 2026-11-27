@@ -621,7 +621,7 @@ function DiscoverPageInner() {
     >
       <button
         onClick={() => setMediaType("movie")}
-        className="px-4 py-2.5 text-sm font-medium transition-all"
+        className="px-2.5 sm:px-4 py-2.5 text-sm font-medium transition-all"
         style={{
           backgroundColor: mediaType === "movie" ? "var(--accent)" : "transparent",
           color: mediaType === "movie" ? "white" : "var(--foreground)",
@@ -631,7 +631,7 @@ function DiscoverPageInner() {
       </button>
       <button
         onClick={() => setMediaType("tv")}
-        className="px-4 py-2.5 text-sm font-medium transition-all"
+        className="px-2.5 sm:px-4 py-2.5 text-sm font-medium transition-all"
         style={{
           backgroundColor: mediaType === "tv" ? "var(--accent)" : "transparent",
           color: mediaType === "tv" ? "white" : "var(--foreground)",
@@ -693,7 +693,7 @@ function DiscoverPageInner() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+        <div className="flex items-center gap-2 max-w-full flex-wrap">
           {/* Country filter (browse and genre mode only) */}
           {!urlQuery && !isPersonMode && (
             <select

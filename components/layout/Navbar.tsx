@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import toast from "react-hot-toast";
-import { Logo } from "@/components/brand/Logo";
+import { Logo, LogoMark } from "@/components/brand/Logo";
 import FeedbackModal from "@/components/ui/FeedbackModal";
+import { NAV_LINKS, isActivePath } from "@/lib/navLinks";
 
 interface MultiTitle {
   id: number;
@@ -49,8 +50,17 @@ export default function Navbar() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const profileRef = useRef<HTMLDivElement>(null);
+  const searchButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Close the search sheet and hand focus back to the button that opened it,
+  // so keyboard and screen-reader users don't land on <body>.
+  const closeSearch = useCallback(() => {
+    setShowSearch(false);
+    searchButtonRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     const current = document.documentElement.getAttribute("data-theme");
@@ -78,6 +88,15 @@ export default function Navbar() {
       document.removeEventListener("touchstart", handleClickOutside);
     };
   }, []);
+
+  useEffect(() => {
+    if (!showSearch) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeSearch();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showSearch, closeSearch]);
 
   const toggleTheme = () => {
     const next = theme === "light" ? "dark" : "light";
@@ -133,6 +152,7 @@ export default function Navbar() {
     e.preventDefault();
     if (!query.trim()) return;
     setShowSuggestions(false);
+    closeSearch();
     router.push(`/search?q=${encodeURIComponent(query.trim())}`);
   };
 
@@ -140,18 +160,21 @@ export default function Navbar() {
     const label = title.title || title.name || "";
     setQuery(label);
     setShowSuggestions(false);
+    closeSearch();
     router.push(`/search?q=${encodeURIComponent(label)}`);
   };
 
   const handlePerson = (person: MultiPerson) => {
     setQuery(person.name);
     setShowSuggestions(false);
+    closeSearch();
     router.push(`/search?personId=${person.id}&name=${encodeURIComponent(person.name)}`);
   };
 
   const handleGenre = (genre: MultiGenre) => {
     setQuery(genre.name);
     setShowSuggestions(false);
+    closeSearch();
     router.push(
       `/search?genreId=${genre.id}&genreName=${encodeURIComponent(genre.name)}&genreMedia=${genre.media}`
     );
@@ -294,36 +317,29 @@ export default function Navbar() {
     );
   };
 
-  const navLinks = [
-    { href: "/search", label: "Discover" },
-    { href: "/what-to-watch", label: "What to Watch" },
-    { href: "/new-releases", label: "New Releases" },
-    { href: "/news", label: "News" },
-    { href: "/watchlist", label: "My Movies" },
-    { href: "/tv/watching", label: "My TV" },
-  ];
-
   return (
     <nav className="border-b border-[var(--border)] bg-[var(--card-bg)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
 
         {/* Top row: Logo | desktop nav | icons */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           {/* Logo */}
           <Link href="/search" className="shrink-0" aria-label="What's Up Next: Discover">
-            <Logo variant="horizontal" size={30} />
+            <Logo variant="horizontal" size={30} className="max-sm:hidden" />
+            <LogoMark size={32} decorative className="sm:hidden" />
           </Link>
 
           {/* Desktop nav links */}
-          <div className="hidden md:flex gap-1 shrink-0 items-center">
-            {navLinks.map((link) => (
+          <div className="hidden lg:flex gap-0.5 xl:gap-1 min-w-0 items-center">
+            {NAV_LINKS.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className={`transition-all px-3 py-1.5 rounded-md text-sm ${pathname === link.href ? "font-semibold" : ""}`}
+                aria-current={isActivePath(pathname, link.href) ? "page" : undefined}
+                className={`transition-all px-2.5 xl:px-3 py-1.5 rounded-md text-sm whitespace-nowrap ${isActivePath(pathname, link.href) ? "font-semibold" : ""}`}
                 style={{
-                  color: pathname === link.href ? "white" : "var(--foreground)",
-                  backgroundColor: pathname === link.href ? "var(--accent)" : "transparent",
+                  color: isActivePath(pathname, link.href) ? "white" : "var(--foreground)",
+                  backgroundColor: isActivePath(pathname, link.href) ? "var(--accent)" : "transparent",
                 }}
               >
                 {link.label}
@@ -332,10 +348,10 @@ export default function Navbar() {
           </div>
 
           {/* Right side: desktop search + icons */}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1 sm:gap-2 shrink-0">
 
-            {/* Desktop search — hidden on mobile */}
-            <div className="hidden md:block relative w-64">
+            {/* Inline search from xl up; below that the search icon opens the sheet */}
+            <div className="hidden xl:block relative w-64">
               <form onSubmit={handleSearch}>
                 <div className="flex">
                   <input
@@ -361,6 +377,18 @@ export default function Navbar() {
               </form>
               {showSuggestions && renderSuggestions("desktop")}
             </div>
+
+            <button
+              ref={searchButtonRef}
+              onClick={() => setShowSearch(true)}
+              className="xl:hidden p-2 rounded-full transition-colors hover:bg-[var(--hover-bg)] shrink-0"
+              style={{ color: "var(--foreground)" }}
+              aria-label="Search"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
 
             {/* Feedback icon */}
             <button
@@ -403,6 +431,18 @@ export default function Navbar() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A9 9 0 0112 15a9 9 0 016.879 2.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                     Profile
+                  </Link>
+
+                  <Link
+                    href="/news"
+                    onClick={() => setShowProfileMenu(false)}
+                    className="lg:hidden flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-[var(--hover-bg)]"
+                    style={{ color: "var(--foreground)" }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                    </svg>
+                    News
                   </Link>
 
                   <div style={{ borderTop: "1px solid var(--border)" }} />
@@ -453,52 +493,52 @@ export default function Navbar() {
           </div>
         </div>
 
-        {/* Mobile search — full width, shown below top row */}
-        <div className="md:hidden mt-3 relative">
-          <form onSubmit={handleSearch}>
-            <div className="flex">
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => handleQueryChange(e.target.value)}
-                onFocus={() => { if (hasSuggestions) setShowSuggestions(true); }}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                placeholder="Search titles, people, genres..."
-                className="w-full px-4 py-3 text-base border rounded-l-md bg-[var(--card-bg)]"
-                style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
-              />
-              <button
-                type="submit"
-                className="px-4 py-3 text-white rounded-r-md shrink-0"
-                style={{ backgroundColor: "var(--accent)" }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </button>
-            </div>
-          </form>
-          {showSuggestions && renderSuggestions("mobile")}
-        </div>
-
-        {/* Mobile nav links */}
-        <div className="md:hidden flex gap-2 mt-2 overflow-x-auto py-1 pb-1">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`text-sm shrink-0 transition-all px-3 py-2 rounded-md ${pathname === link.href ? "font-semibold" : ""}`}
-              style={{
-                color: pathname === link.href ? "white" : "var(--foreground)",
-                backgroundColor: pathname === link.href ? "var(--accent)" : "transparent",
-              }}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </div>
-
       </div>
+
+      {/* Search sheet: opened by the search icon below xl */}
+      {showSearch && (
+        <div className="fixed inset-0 z-50 xl:hidden" role="dialog" aria-modal="true" aria-label="Search">
+          <div className="absolute inset-0 bg-black/50" onClick={() => closeSearch()} />
+          <div className="relative bg-[var(--card-bg)] border-b border-[var(--border)] px-4 sm:px-6 py-3 shadow-lg">
+            <div className="max-w-2xl mx-auto relative">
+              <form onSubmit={handleSearch} className="flex gap-2 items-center">
+                <div className="flex flex-1 min-w-0">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={query}
+                    onChange={(e) => handleQueryChange(e.target.value)}
+                    onFocus={() => { if (hasSuggestions) setShowSuggestions(true); }}
+                    placeholder="Search titles, people, genres..."
+                    aria-label="Search titles, people, genres"
+                    className="w-full min-w-0 px-4 py-3 text-base border rounded-l-md bg-[var(--card-bg)]"
+                    style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+                  />
+                  <button
+                    type="submit"
+                    aria-label="Search"
+                    className="px-4 py-3 text-white rounded-r-md shrink-0"
+                    style={{ backgroundColor: "var(--accent)" }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => closeSearch()}
+                  className="px-2 py-3 text-sm shrink-0"
+                  style={{ color: "var(--foreground)" }}
+                >
+                  Cancel
+                </button>
+              </form>
+              {showSuggestions && renderSuggestions("mobile")}
+            </div>
+          </div>
+        </div>
+      )}
       {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
     </nav>
   );
