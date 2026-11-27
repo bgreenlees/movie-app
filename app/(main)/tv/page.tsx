@@ -10,7 +10,6 @@ import type { TMDBTVShow } from "@/lib/tmdb";
 import Skeleton from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import ErrorState from "@/components/ui/ErrorState";
-import toast from "react-hot-toast";
 
 interface TVEntry {
   id: string;

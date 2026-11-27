@@ -9,6 +9,7 @@ import AddTVModal from "./AddTVModal";
 import ShareButton from "@/components/ui/ShareButton";
 import TrailerButton from "@/components/ui/TrailerButton";
 import { SkeletonBlock } from "@/components/ui/Skeleton";
+import ErrorState from "@/components/ui/ErrorState";
 
 interface CastMember {
   id: number;
@@ -62,6 +63,12 @@ function daysUntil(dateStr: string | null): number | null {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
+/** Parses a JSON response, throwing on a non-2xx status so callers can show an error. */
+function okJson(r: Response) {
+  if (!r.ok) throw new Error(`Request failed: ${r.status}`);
+  return r.json();
+}
+
 export default function TVShowDetailModal({
   tvId,
   tvName,
@@ -76,6 +83,8 @@ export default function TVShowDetailModal({
 
   const [details, setDetails] = useState<TVDetails | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [detailsFailed, setDetailsFailed] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const [providers, setProviders] = useState<{ flatrate: TMDBWatchProvider[]; rent: TMDBWatchProvider[] }>({ flatrate: [], rent: [] });
   const [userServices, setUserServices] = useState<Set<number>>(new Set());
   const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
@@ -136,6 +145,7 @@ export default function TVShowDetailModal({
     setSeasonEpisodes({});
     setRecs([]);
     setIsLoading(true);
+    setDetailsFailed(false);
     setRecsLoading(true);
   }
 
@@ -145,9 +155,9 @@ export default function TVShowDetailModal({
     let cancelled = false;
 
     Promise.all([
-      fetch(`/api/tv/${currentId}/credits`).then((r) => r.json()),
-      fetch(`/api/tv/${currentId}/providers`).then((r) => r.json()),
-      fetch("/api/user/streaming").then((r) => r.json()),
+      fetch(`/api/tv/${currentId}/credits`).then(okJson),
+      fetch(`/api/tv/${currentId}/providers`).then(okJson),
+      fetch("/api/user/streaming").then(okJson),
     ])
       .then(([creditsData, providerData, userData]) => {
         if (cancelled) return;
@@ -156,7 +166,10 @@ export default function TVShowDetailModal({
         setUserServices(new Set(userData.streamingServices || []));
       })
       .catch(() => {
-        if (!cancelled) setDetails(null);
+        if (!cancelled) {
+          setDetails(null);
+          setDetailsFailed(true);
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -177,7 +190,7 @@ export default function TVShowDetailModal({
     return () => {
       cancelled = true;
     };
-  }, [currentId]);
+  }, [currentId, retryCount]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -296,7 +309,19 @@ export default function TVShowDetailModal({
             </div>
           )}
 
-          {!isLoading && (
+          {!isLoading && detailsFailed && (
+            <ErrorState
+              title="Couldn't load details"
+              onRetry={() => {
+                setDetails(null);
+                setDetailsFailed(false);
+                setIsLoading(true);
+                setRetryCount((n) => n + 1);
+              }}
+            />
+          )}
+
+          {!isLoading && !detailsFailed && (
             <>
               {/* Actions */}
               <div className="flex items-center gap-2 mb-4">
