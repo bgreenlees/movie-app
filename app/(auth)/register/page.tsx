@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Logo } from "@/components/brand/Logo";
 import RegisterForm from "@/components/auth/RegisterForm";
 
 // Mirrors /login: black background with colour orbs and a dark glass card.
@@ -43,6 +44,9 @@ export default function RegisterPage() {
 
       <div className="relative z-10 w-full max-w-sm">
         <div className="text-center mb-8">
+          <div className="flex items-center justify-center mb-4">
+            <Logo variant="horizontal" size={40} />
+          </div>
           <h1 className="text-3xl font-bold mb-2 tracking-tight text-text">
             Create Account
           </h1>
