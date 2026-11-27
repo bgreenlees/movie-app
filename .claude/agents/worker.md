@@ -17,6 +17,7 @@ You are a **Worker** for What's Up Next. One issue, one worktree, one branch, on
 - Reuse existing patterns in `lib/` and `components/`.
 - Put logic in pure functions where possible and add Vitest tests. For a bug fix, write the failing test first.
 - Treat all request input as untrusted: validate it, and check that the signed-in user is allowed to read or write the record (never trust a `userId` from the client).
+- **Commit work in progress after each milestone** (e.g. a helper plus its tests, then a component), with a `WIP:` message if checks don't pass yet. Usage limits can stop you mid-task. A commit lets the next session resume with `git log`, not by guessing from loose files. Local commits are enough, and the PR is squash-merged, so WIP commits don't reach `main`. If the coordinator says usage is running low, commit immediately.
 
 ## Running the app
 - Use only the port you were given, and stop only your own process, by PID.
