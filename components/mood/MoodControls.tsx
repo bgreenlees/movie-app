@@ -89,6 +89,8 @@ interface MoodControlsProps {
   showBothHave?: boolean;
   bothHave?: boolean;
   onBothHaveChange?: (bothHave: boolean) => void;
+  /** Label for the services toggle. "On my services" by default; Watch Together says "On our services". */
+  servicesLabel?: string;
 }
 
 /** Mood chips (vibe, time) and toggles. Controlled: the parent owns the selection. */
@@ -99,6 +101,7 @@ export default function MoodControls({
   showBothHave = false,
   bothHave = false,
   onBothHaveChange,
+  servicesLabel,
 }: MoodControlsProps) {
   const update = (patch: Partial<MoodSelection>) => onChange({ ...value, ...patch });
 
@@ -130,7 +133,7 @@ export default function MoodControls({
         ))}
         {TOGGLES.map((t) => (
           <Chip key={t.key} active={value[t.key]} onClick={() => update({ [t.key]: !value[t.key] })}>
-            {t.label}
+            {t.key === "onMyServices" && servicesLabel ? servicesLabel : t.label}
           </Chip>
         ))}
         {showBothHave && (

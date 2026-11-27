@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import MoodControls from "@/components/mood/MoodControls";
 import { DEFAULT_SELECTION, type MoodSelection } from "@/lib/moodPicker";
 import type { PairCandidate } from "@/lib/pairPool";
-import { TONIGHT_COUNT, drawPairPicks, emptyKind, pairPicksQuery } from "@/lib/pairPicks";
+import { TONIGHT_COUNT, drawPairPicks, emptyKind, pairPicksQuery, refillPicks } from "@/lib/pairPicks";
 import PairCard, { type PairCardTitle } from "./PairCard";
 
 /** The `GET /api/watch-together/[userId]/picks` response. */
@@ -59,13 +59,20 @@ function Notice({ children }: { children: React.ReactNode }) {
 export default function TonightForYouBoth({
   partnerId,
   partnerName,
+  onPartnerName,
+  onNotFound,
   hasEntry,
   hidden,
   onAdd,
   onTrailer,
 }: {
   partnerId: string;
-  partnerName: string;
+  /** The partner's name once known, else null (the page may not have it yet) */
+  partnerName: string | null;
+  /** Called with the partner's name when the picks response arrives */
+  onPartnerName?: (name: string | null) => void;
+  /** Called when the picks route says the partner isn't a connection (404) */
+  onNotFound?: () => void;
   /** Whether a title is already on one of my lists (Add vs Update) */
   hasEntry: (t: { id: number; mediaType: "movie" | "tv" }) => boolean;
   /** Keys (`movie-1`) I've since marked watched, watching or not interested: hidden and never redrawn */
@@ -78,10 +85,15 @@ export default function TonightForYouBoth({
   const query = pairPicksQuery(selection, sharedOnly);
 
   // The query the current data was loaded for; loading = data is for an older query
-  const [loaded, setLoaded] = useState<{ query: string; data: PicksData } | null>(null);
+  const [loaded, setLoaded] = useState<{ partnerId: string; query: string; data: PicksData } | null>(null);
   const [picks, setPicks] = useState<PairCandidate[]>([]);
   const [failed, setFailed] = useState<string | null>(null);
+  const loadedOnce = useRef(false);
   const [attempt, setAttempt] = useState(0);
+  // Text for the screen-reader live line; `n` makes a repeat announcement count as new
+  const [announcement, setAnnouncement] = useState<{ n: number; text: string }>({ n: 0, text: "" });
+  const announce = (count: number) =>
+    setAnnouncement((a) => ({ n: a.n + 1, text: count === 0 ? "No new picks" : `${count} new ${count === 1 ? "pick" : "picks"}` }));
 
   useEffect(() => {
     // Abort a stale request (quick chip clicks) so it stops costing TMDB calls
@@ -92,26 +104,51 @@ export default function TonightForYouBoth({
         const res = await fetch(`/api/watch-together/${encodeURIComponent(partnerId)}/picks${qs}`, {
           signal: controller.signal,
         });
+        if (res.status === 404) {
+          if (!controller.signal.aborted) onNotFound?.();
+          return;
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data: PicksData = await res.json();
         if (controller.signal.aborted) return;
         setFailed(null);
-        setLoaded({ query, data });
-        setPicks(drawPairPicks(data.pool));
+        setLoaded({ partnerId, query, data });
+        const drawn = drawPairPicks(data.pool);
+        setPicks(drawn);
+        // The first load isn't news; later loads (a mood change) are
+        if (loadedOnce.current) announce(drawn.length);
+        loadedOnce.current = true;
+        onPartnerName?.(data.partner.name?.trim() || null);
       } catch {
         if (!controller.signal.aborted) setFailed(query);
       }
     })();
     return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbacks are stable enough; re-fetching on their identity would loop
   }, [partnerId, query, attempt]);
 
   const hasError = failed === query;
-  const isLoading = loaded?.query !== query && !hasError;
-  const data = hasError ? undefined : loaded?.data;
-  const pool = (data?.pool ?? []).filter((c) => !hidden.has(keyOf(c)));
+  const current = loaded?.partnerId === partnerId && loaded.query === query ? loaded : null;
+  const isLoading = !current && !hasError;
+  // Never another friend's picks: only data loaded for this partner counts
+  const data = hasError ? undefined : loaded?.partnerId === partnerId ? loaded.data : undefined;
+  // The pool minus anything I've hidden; the empty check and Shuffle use this, not the 5 on screen
+  const pool = useMemo(() => (data?.pool ?? []).filter((c) => !hidden.has(keyOf(c))), [data, hidden]);
   const shown = picks.filter((p) => !hidden.has(keyOf(p)));
 
-  const shuffle = () => setPicks(drawPairPicks(pool, { avoid: new Set(shown.map(keyOf)) }));
+  // Hiding a pick (watched, not interested) tops the row back up from the pool
+  // (Adjusting state while rendering, not in an effect: React re-renders at once, with no stale frame.)
+  const [refillBasis, setRefillBasis] = useState<{ pool: unknown; hidden: unknown } | null>(null);
+  if (current && (refillBasis?.pool !== pool || refillBasis?.hidden !== hidden)) {
+    setRefillBasis({ pool, hidden });
+    setPicks(refillPicks(picks, pool, hidden));
+  }
+
+  const shuffle = () => {
+    const next = drawPairPicks(pool, { avoid: new Set(shown.map(keyOf)) });
+    setPicks(next);
+    announce(next.length);
+  };
   const retry = () => {
     setFailed(null);
     setAttempt((n) => n + 1);
@@ -151,6 +188,7 @@ export default function TonightForYouBoth({
         hideMedia
         value={selection}
         onChange={setSelection}
+        servicesLabel="On our services"
         showBothHave={bothHaveServices && selection.onMyServices}
         bothHave={sharedOnly}
         onBothHaveChange={setSharedOnly}
@@ -159,7 +197,7 @@ export default function TonightForYouBoth({
       <div className="mt-4">
         {data?.coldStart.partner && (
           <Notice>
-            {partnerName} hasn&apos;t rated much yet, so picks lean on your taste.
+            {partnerName ?? "Your friend"} hasn&apos;t rated much yet, so picks lean on your taste.
           </Notice>
         )}
         {data?.coldStart.me && (
@@ -180,7 +218,11 @@ export default function TonightForYouBoth({
         )}
       </div>
 
-      <div aria-live="polite" aria-busy={isLoading}>
+      <p role="status" className="sr-only">
+        <span key={announcement.n}>{announcement.text}</span>
+      </p>
+
+      <div aria-busy={isLoading}>
         {hasError ? (
           <div role="alert" className="flex flex-wrap items-center gap-3 py-6">
             <p style={{ color: "var(--text-muted)" }}>Couldn&apos;t load picks for you both.</p>
@@ -190,7 +232,7 @@ export default function TonightForYouBoth({
           </div>
         ) : isLoading && !data ? (
           <Skeletons />
-        ) : shown.length === 0 && !isLoading ? (
+        ) : pool.length === 0 && !isLoading ? (
           <div className="rounded-lg border px-6 py-10 text-center" style={{ borderColor: "var(--border)" }}>
             <p className="font-bold mb-1" style={{ color: "var(--foreground)" }}>
               {empty === "services"
@@ -203,7 +245,7 @@ export default function TonightForYouBoth({
             </p>
             <p className="text-sm mb-5" style={{ color: "var(--text-muted)" }}>
               {empty === "none"
-                ? `Add a few titles to your lists, and ask ${partnerName} to do the same.`
+                ? `Add a few titles to your lists, and ask ${partnerName ?? "your friend"} to do the same.`
                 : "Try loosening the filters."}
             </p>
             <div className="flex flex-wrap justify-center gap-3">

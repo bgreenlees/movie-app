@@ -97,8 +97,16 @@ function Shelf({
 
 export default function WatchTogetherPage({ params }: { params: Promise<{ userId: string }> }) {
   const { userId } = use(params);
+  // Keyed on the friend, so one friend's loaded picks and shelves never show on another's page
+  return <WatchTogether key={userId} userId={userId} />;
+}
+
+function WatchTogether({ userId }: { userId: string }) {
   const [data, setData] = useState<WatchTogetherData | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "notFound" | "error">("loading");
+  // The picks route reports a missing connection and the partner's name too; either response can arrive first
+  const [picksNotFound, setPicksNotFound] = useState(false);
+  const [picksName, setPicksName] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [entries, setEntries] = useState<Record<string, MyEntry>>({});
   const [adding, setAdding] = useState<PairCardTitle | null>(null);
@@ -142,15 +150,7 @@ export default function WatchTogetherPage({ params }: { params: Promise<{ userId
     [entries]
   );
 
-  if (status === "loading") {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-6 sm:p-6">
-        <p style={{ color: "var(--text-muted)" }}>Loading…</p>
-      </div>
-    );
-  }
-
-  if (status === "notFound") {
+  if (status === "notFound" || picksNotFound) {
     return (
       <div className="max-w-xl mx-auto px-4 py-20 text-center">
         <h1 className="text-2xl font-bold mb-2" style={{ color: "var(--primary)" }}>
@@ -166,29 +166,13 @@ export default function WatchTogetherPage({ params }: { params: Promise<{ userId
     );
   }
 
-  if (status === "error" || !data) {
-    return (
-      <div role="alert" className="max-w-xl mx-auto px-4 py-20 text-center">
-        <p className="mb-4" style={{ color: "var(--text-muted)" }}>
-          Couldn&apos;t load Watch Together.
-        </p>
-        <button
-          onClick={() => {
-            setStatus("loading");
-            setAttempt((n) => n + 1);
-          }}
-          className="min-h-11 px-4 py-1.5 text-sm rounded-md cursor-pointer hover:opacity-80"
-          style={{ color: "var(--accent)", border: "1px solid var(--accent)" }}
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
-
   // Never an email (spec §7): the API doesn't return one
-  const friendName = data.friend.name?.trim() || "your friend";
+  // The name comes from whichever response arrives first; null until one does
+  const shelfName = data ? data.friend.name?.trim() || "your friend" : null;
+  const friendName = shelfName ?? picksName;
+  const nameForCopy = friendName ?? "your friend";
   const shelvesEmpty =
+    !!data &&
     data.bothWantToWatch.length === 0 &&
     data.friendLovedForMe.length === 0 &&
     data.iLovedForFriend.length === 0 &&
@@ -200,18 +184,42 @@ export default function WatchTogetherPage({ params }: { params: Promise<{ userId
         Watch Together
       </h1>
       <p className="text-base mb-8" style={{ color: "var(--text-muted)" }}>
-        with <span style={{ color: "var(--foreground)" }}>{friendName}</span>
+        with <span style={{ color: "var(--foreground)" }}>{friendName ?? "…"}</span>
       </p>
 
       <TonightForYouBoth
-        partnerId={data.friend.id}
+        partnerId={userId}
         partnerName={friendName}
+        onPartnerName={(n) => setPicksName(n ?? "your friend")}
+        onNotFound={() => setPicksNotFound(true)}
         hasEntry={hasEntry}
         hidden={hidden}
         onAdd={setAdding}
         onTrailer={setTrailer}
       />
 
+      {status === "loading" && (
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+          Loading shelves…
+        </p>
+      )}
+      {status === "error" && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 py-6">
+          <p style={{ color: "var(--text-muted)" }}>Couldn&apos;t load the shelves.</p>
+          <button
+            onClick={() => {
+              setStatus("loading");
+              setAttempt((n) => n + 1);
+            }}
+            className="min-h-11 px-4 py-1.5 text-sm rounded-md cursor-pointer hover:opacity-80"
+            style={{ color: "var(--accent)", border: "1px solid var(--accent)" }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+      {data && (
+        <>
       <Shelf
         title="Both Want to Watch"
         subtitle="Movies and shows on both your lists"
@@ -221,16 +229,16 @@ export default function WatchTogetherPage({ params }: { params: Promise<{ userId
         onTrailer={setTrailer}
       />
       <Shelf
-        title={`${friendName} Loved — You Haven't Seen`}
-        subtitle={`${friendName}'s top-rated titles that aren't on your lists yet`}
+        title={`${nameForCopy} Loved — You Haven't Seen`}
+        subtitle={`${nameForCopy}'s top-rated titles that aren't on your lists yet`}
         items={data.friendLovedForMe}
         hasEntry={hasEntry}
         onAdd={setAdding}
         onTrailer={setTrailer}
       />
       <Shelf
-        title={`You Loved — ${friendName} Hasn't Seen`}
-        subtitle={`Your top-rated titles that ${friendName} hasn't added yet`}
+        title={`You Loved — ${nameForCopy} Hasn't Seen`}
+        subtitle={`Your top-rated titles that ${nameForCopy} hasn't added yet`}
         items={data.iLovedForFriend}
         hasEntry={hasEntry}
         onAdd={setAdding}
@@ -245,9 +253,12 @@ export default function WatchTogetherPage({ params }: { params: Promise<{ userId
         onTrailer={setTrailer}
       />
 
+        </>
+      )}
+
       {shelvesEmpty && (
         <p className="text-sm text-center py-8" style={{ color: "var(--text-muted)" }}>
-          Rate some movies and shows, and ask {friendName} to do the same, to fill in more shelves here.
+          Rate some movies and shows, and ask {nameForCopy} to do the same, to fill in more shelves here.
         </p>
       )}
 

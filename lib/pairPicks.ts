@@ -79,6 +79,30 @@ function drawFrom<C extends Drawable>(items: readonly C[], count: number, random
 }
 
 /**
+ * Keep the picks still on screen and top them up to `count` from the pool,
+ * so hiding a card (watched, not interested) refills the row instead of
+ * leaving a gap. Replacements avoid cards already shown and hidden titles.
+ * Returns `current` itself when nothing needs to change, so a state setter
+ * can bail out.
+ */
+export function refillPicks<C extends Drawable>(
+  current: readonly C[],
+  pool: readonly C[],
+  hidden: ReadonlySet<string>,
+  opts: { count?: number; random?: () => number } = {}
+): C[] {
+  const { count = TONIGHT_COUNT, random } = opts;
+  const kept = current.filter((c) => !hidden.has(keyOf(c)));
+  if (kept.length >= count || kept.length === pool.filter((c) => !hidden.has(keyOf(c))).length) {
+    return kept.length === current.length ? (current as C[]) : kept;
+  }
+  const onScreen = new Set(kept.map(keyOf));
+  const candidates = pool.filter((c) => !hidden.has(keyOf(c)) && !onScreen.has(keyOf(c)));
+  const extra = drawPairPicks(candidates, { count: count - kept.length, random });
+  return [...kept, ...extra].sort((a, b) => b.pairScore - a.pairScore);
+}
+
+/**
  * Query for `GET /api/watch-together/[userId]/picks`. No `media`: the pair
  * pool is always movies and TV. Only non-default values are sent.
  */
