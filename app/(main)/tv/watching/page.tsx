@@ -252,7 +252,7 @@ export default function MyTVPage() {
                             </p>
                           </div>
                           <div className="text-right shrink-0">
-                            <p className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
+                            <p className="text-sm font-semibold" style={{ color: "var(--color-accent-text)" }}>
                               {days === 0 ? "Today!" : days === 1 ? "Tomorrow" : `${days} days`}
                             </p>
                             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
@@ -308,7 +308,7 @@ export default function MyTVPage() {
                               days !== null && days >= 0
                                 ? "color-mix(in srgb, var(--accent) 15%, var(--card-bg))"
                                 : "var(--border)",
-                            color: days !== null && days >= 0 ? "var(--accent)" : "var(--text-muted)",
+                            color: days !== null && days >= 0 ? "var(--color-accent-text)" : "var(--text-muted)",
                           }}
                         >
                           {days !== null && days >= 0 ? (

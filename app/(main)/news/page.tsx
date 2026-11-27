@@ -77,7 +77,7 @@ function ArticleCard({ article }: { article: NewsArticle }) {
         )}
 
         {/* Read more */}
-        <span className="text-xs font-medium mt-1" style={{ color: "var(--accent)" }}>
+        <span className="text-xs font-medium mt-1" style={{ color: "var(--color-accent-text)" }}>
           Read more →
         </span>
       </div>

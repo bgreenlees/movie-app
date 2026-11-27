@@ -36,10 +36,10 @@ export default function DevLoginForm() {
       className="mt-6 rounded-xl p-4"
       style={{ border: "1px dashed rgba(251,191,36,0.6)", background: "rgba(251,191,36,0.06)" }}
     >
-      <h2 id="dev-login-heading" className="text-sm font-semibold" style={{ color: "#fbbf24" }}>
+      <h2 id="dev-login-heading" className="text-sm font-semibold text-warning">
         Dev login
       </h2>
-      <p className="mt-1 text-xs" style={{ color: "#a1a1a6" }}>
+      <p className="mt-1 text-xs text-muted">
         Local development only. Any <code>@example.test</code> address, no password.
       </p>
       <label htmlFor="dev-login-email" className="mt-3 block text-xs font-medium" style={{ color: "#d1d1d6" }}>
@@ -67,7 +67,7 @@ export default function DevLoginForm() {
         type="submit"
         disabled={isLoading}
         className="mt-3 w-full rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-        style={{ background: "#fbbf24", color: "#1c1917" }}
+        style={{ background: "var(--color-warning)", color: "#1c1917" }}
       >
         {isLoading ? "Signing in…" : "Sign in (dev)"}
       </button>
