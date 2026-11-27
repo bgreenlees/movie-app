@@ -3,8 +3,12 @@
  * function; extra calls wait in a queue. Used to keep one request's TMDB detail
  * lookups from all firing at once (TMDB rate-limits per IP, and Vercel functions
  * share egress IPs).
+ *
+ * With a `signal`, tasks that haven't started yet are skipped (their promise
+ * rejects with an AbortError) once it aborts, so an abandoned request stops
+ * queueing work. A task already running is left to finish.
  */
-export function createLimiter(limit: number) {
+export function createLimiter(limit: number, signal?: AbortSignal) {
   if (!Number.isInteger(limit) || limit < 1) throw new Error("limit must be a positive integer");
   let active = 0;
   const queue: (() => void)[] = [];
@@ -17,6 +21,12 @@ export function createLimiter(limit: number) {
   return function run<T>(task: () => Promise<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const start = () => {
+        if (signal?.aborted) {
+          reject(new DOMException("Aborted", "AbortError"));
+          // Never took a slot, so just move on to the next queued task
+          queue.shift()?.();
+          return;
+        }
         active++;
         // Promise.resolve().then so a task that throws synchronously still frees its slot
         Promise.resolve()
@@ -24,7 +34,8 @@ export function createLimiter(limit: number) {
           .then(resolve, reject)
           .finally(next);
       };
-      if (active < limit) start();
+      if (signal?.aborted) start();
+      else if (active < limit) start();
       else queue.push(start);
     });
   };

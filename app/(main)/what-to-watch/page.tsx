@@ -73,7 +73,8 @@ export default function WhatToWatchPage() {
 
   useEffect(() => {
     // Aborting stops a stale request (e.g. after quick chip clicks) instead of
-    // just ignoring its response, so it stops costing TMDB calls server-side.
+    // just ignoring its response. The route sees the abort (req.signal) and skips
+    // TMDB lookups still queued; ones already in flight finish.
     const controller = new AbortController();
     (async () => {
       try {

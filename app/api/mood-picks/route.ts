@@ -12,6 +12,7 @@ import {
   mediaTypesFor,
   moodToDiscoverParams,
   parseMoodSelection,
+  RuntimeLookupsFailedError,
   type MediaType,
   type MoodCandidate,
 } from "@/lib/moodPicker";
@@ -25,6 +26,10 @@ const POOL_SIZE = 60;
 const WATCHLIST_CHECK = 20;
 // TMDB detail lookups (watchlist checks + runtime checks) in flight at once, per request
 const DETAIL_CONCURRENCY = 6;
+// Movies whose real runtime is checked when time is limited: the most popular N of
+// the blended pool, rather than all of it. Bounds the cold-load cost (one details
+// call each) at ~4 rounds of DETAIL_CONCURRENCY instead of ~10.
+const RUNTIME_CHECKS = 25;
 
 // Log a failed TMDB call without leaking the API key, in case an error message
 // ever includes the request URL.
@@ -87,7 +92,9 @@ export async function GET(req: NextRequest) {
     const paramsFor = Object.fromEntries(
       medias.map((m) => [m, moodToDiscoverParams(selection, m, ctx)])
     ) as Record<MediaType, Record<string, string>>;
-    const limit = createLimiter(DETAIL_CONCURRENCY);
+    // Passing the request's signal means lookups still queued when the client aborts
+    // (e.g. after quick chip clicks) are skipped instead of hitting TMDB.
+    const limit = createLimiter(DETAIL_CONCURRENCY, req.signal);
 
     // Per type: up to 3 discover pages, plus TMDB's count of all matches, which
     // blendPools uses to size each type's share of the pool.
@@ -176,20 +183,31 @@ export async function GET(req: NextRequest) {
     // movie's real runtime is checked (24h-cached details call) before it can be
     // picked. TV episode lengths from discover have held up, so they're trusted.
     const blended = blendPools(okGroups, POOL_SIZE);
-    const verified = paramsFor.movie
-      ? await filterByRealRuntime(
-          blended.filter((c) => c.mediaType === "movie"),
+    const blendedMovies = blended.filter((c) => c.mediaType === "movie");
+    let verified: MoodCandidate[] = [];
+    if (paramsFor.movie) {
+      try {
+        verified = await filterByRealRuntime(
+          blendedMovies,
           paramsFor.movie,
           (c) =>
             limit(() => tmdb.getTitleMoodFacts("movie", c.id)).then(
               (t) => t.runtime,
               (error) => {
-                warnFailed(`runtime check for movie ${c.id}`, error);
+                if (!req.signal.aborted) warnFailed(`runtime check for movie ${c.id}`, error);
                 throw error;
               }
-            )
-        )
-      : [];
+            ),
+          { maxChecks: RUNTIME_CHECKS }
+        );
+      } catch (error) {
+        // Every runtime check failed. With TV in the pool the page can still show
+        // TV; with nothing else, an empty pool would read as "Nothing matches",
+        // so let it fall through to the 500 and the page's error state with Retry.
+        if (!(error instanceof RuntimeLookupsFailedError) || blended.length === blendedMovies.length) throw error;
+        warnFailed("all runtime checks", error);
+      }
+    }
     const verifiedKeys = new Set(verified.map(candidateKey));
     const pool = [
       ...checks.flatMap((r) => (r.status === "fulfilled" ? r.value : [])),
@@ -203,6 +221,8 @@ export async function GET(req: NextRequest) {
       hasServices: providerIds.length > 0,
     });
   } catch (error) {
+    // The client went away; nobody is waiting for this response
+    if (req.signal.aborted) return new NextResponse(null, { status: 499 });
     console.error("Mood picks error:", error);
     return NextResponse.json({ error: "Failed to load picks" }, { status: 500 });
   }

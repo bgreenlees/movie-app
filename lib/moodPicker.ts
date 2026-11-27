@@ -269,7 +269,9 @@ export function pickRecommendations(pool: MoodCandidate[], opts: PickOptions): M
 /**
  * After the user adds or updates a title, refresh the cards on screen: keep them
  * in place with up-to-date watchlist flags, but drop any just marked watched or
- * not interested (now in `exclude`) and refill those slots from the pool.
+ * not interested (now in `exclude`) and refill those slots from the pool. A
+ * replacement takes the removed card's slot, so the other cards don't shift.
+ * If the pool runs dry, the slots it can't fill are dropped.
  */
 export function refreshPicks(
   current: MoodPick[],
@@ -277,18 +279,21 @@ export function refreshPicks(
   opts: Omit<PickOptions, "avoid">
 ): MoodPick[] {
   const count = opts.count ?? 5;
-  const kept = current
-    .filter((p) => !opts.exclude.has(candidateKey(p)))
-    .map((p) => ({ ...p, onWatchlist: opts.watchlist.has(candidateKey(p)) }));
-  if (kept.length === current.length) return kept; // nothing removed
+  const removed = current.filter((p) => opts.exclude.has(candidateKey(p))).length;
+  const flagged = (p: MoodPick) => ({ ...p, onWatchlist: opts.watchlist.has(candidateKey(p)) });
+  if (removed === 0) return current.map(flagged); // nothing removed
   const onScreen = new Set(current.map(candidateKey));
   const refill = pickRecommendations(pool, {
     ...opts,
     // Never re-add a card that was just removed or is still showing
     exclude: new Set([...opts.exclude, ...onScreen]),
-    count: count - kept.length,
+    count: count - (current.length - removed),
   });
-  return [...kept, ...refill];
+  let next = 0;
+  return current.flatMap((p) => {
+    if (!opts.exclude.has(candidateKey(p))) return [flagged(p)];
+    return next < refill.length ? [refill[next++]] : [];
+  });
 }
 
 /**
@@ -346,21 +351,39 @@ export function fitsRuntime(params: Record<string, string>, runtime: number | nu
   return true;
 }
 
+/** Every runtime lookup failed, so TMDB is down or erroring: not "nothing matches". */
+export class RuntimeLookupsFailedError extends Error {
+  constructor(count: number) {
+    super(`All ${count} runtime lookups failed`);
+    this.name = "RuntimeLookupsFailedError";
+  }
+}
+
 /**
  * Keep only candidates whose real runtime fits the time limit. TMDB's discover
  * `with_runtime` filter is leaky for movies (it has returned 3-hour films for
  * "≤ 120 min"), so the route re-checks each one with a details lookup. A lookup
- * that fails drops the title: better one fewer suggestion than a wrong one.
+ * that fails drops the title: better one fewer suggestion than a wrong one. But
+ * if every lookup fails, it throws RuntimeLookupsFailedError, so the caller can
+ * report an error instead of an empty (and misleading) "nothing matches".
  * Order is kept. `lookup` is injected so this stays free of network code.
+ *
+ * `maxChecks` bounds the lookups: only the first N candidates (the most popular,
+ * since pools are popularity-ordered) are checked, and the rest are dropped.
  */
 export async function filterByRealRuntime<C extends MoodCandidate>(
   candidates: C[],
   params: Record<string, string>,
-  lookup: (c: C) => Promise<number | null>
+  lookup: (c: C) => Promise<number | null>,
+  opts: { maxChecks?: number } = {}
 ): Promise<C[]> {
   if (fitsRuntime(params, null)) return candidates; // no time limit
-  const checks = await Promise.allSettled(candidates.map(lookup));
-  return candidates.filter((_, i) => {
+  const toCheck = candidates.slice(0, opts.maxChecks ?? candidates.length);
+  const checks = await Promise.allSettled(toCheck.map(lookup));
+  if (checks.length > 0 && checks.every((r) => r.status === "rejected")) {
+    throw new RuntimeLookupsFailedError(checks.length);
+  }
+  return toCheck.filter((_, i) => {
     const r = checks[i];
     return r.status === "fulfilled" && fitsRuntime(params, r.value);
   });

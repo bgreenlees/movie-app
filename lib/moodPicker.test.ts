@@ -4,6 +4,7 @@ import {
   blendPools,
   candidateKey,
   filterByRealRuntime,
+  RuntimeLookupsFailedError,
   fitsRuntime,
   matchesDiscoverParams,
   mediaTypesFor,
@@ -500,6 +501,27 @@ describe("runtime: discover's filter is leaky, so real runtimes are checked", ()
     expect(kept.map((c) => c.id)).toEqual([1, 3]);
   });
 
+  it("throws when every lookup fails, so the caller can show an error, not an empty pool", async () => {
+    const lookup = async () => {
+      throw new Error("TMDB API error");
+    };
+    await expect(filterByRealRuntime([1, 2, 3].map(film), under2, lookup)).rejects.toBeInstanceOf(
+      RuntimeLookupsFailedError
+    );
+  });
+
+  it("returns empty (not an error) when there's nothing to check", async () => {
+    await expect(filterByRealRuntime([], under2, async () => 90)).resolves.toEqual([]);
+  });
+
+  it("only checks the first maxChecks candidates and drops the rest", async () => {
+    const seen: number[] = [];
+    const lookup = async (c: MoodCandidate) => (seen.push(c.id), 90);
+    const kept = await filterByRealRuntime([1, 2, 3, 4, 5].map(film), under2, lookup, { maxChecks: 3 });
+    expect(seen).toEqual([1, 2, 3]);
+    expect(kept.map((c) => c.id)).toEqual([1, 2, 3]);
+  });
+
   it("makes no lookups when time isn't limited", async () => {
     let calls = 0;
     const pool = [1, 2].map(film);
@@ -529,8 +551,24 @@ describe("refreshPicks — after Add/Update", () => {
     const current = [shown(1), shown(2), shown(3), shown(4), shown(5)];
     const next = refreshPicks(current, pool, { watchlist: new Set(), exclude: keys(3), count: 5 });
     expect(next).toHaveLength(5);
-    expect(next.slice(0, 4).map((p) => p.id)).toEqual([1, 2, 4, 5]);
-    expect([6, 7, 8, 9, 10]).toContain(next[4].id);
+    expect(next.filter((p) => p.id !== 3 && p.id <= 5).map((p) => p.id)).toEqual([1, 2, 4, 5]);
+    expect(next.some((p) => p.id === 3)).toBe(false);
+  });
+
+  it("puts the replacement in the removed card's slot", () => {
+    const current = [shown(1), shown(2), shown(3), shown(4), shown(5)];
+    const next = refreshPicks(current, pool, { watchlist: new Set(), exclude: keys(2), count: 5 });
+    expect(next).toHaveLength(5);
+    expect([next[0].id, next[2].id, next[3].id, next[4].id]).toEqual([1, 3, 4, 5]);
+    expect([6, 7, 8, 9, 10]).toContain(next[1].id);
+  });
+
+  it("fills several removed slots in place, in order", () => {
+    const current = [shown(1), shown(2), shown(3), shown(4), shown(5)];
+    const next = refreshPicks(current, pool, { watchlist: new Set(), exclude: keys(1, 4), count: 5 });
+    expect(next).toHaveLength(5);
+    expect([next[1].id, next[2].id, next[4].id]).toEqual([2, 3, 5]);
+    expect(new Set(next.map((p) => p.id)).size).toBe(5);
   });
 
   it("just shrinks when the pool has nothing else to offer", () => {
