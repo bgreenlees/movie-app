@@ -51,14 +51,20 @@ export async function sendInviteEmail(to: string, inviterName: string): Promise<
   }
 }
 
+export type InviteClaim = { previousSentAt: Date | null };
+
 /**
- * Records an invite from `inviterId` to `email` (already normalised) and emails it,
- * unless the same inviter already emailed that address within RESEND_COOLDOWN_MS.
- * The claim on `sentAt` happens under the caller's per-user lock; the email is sent
- * after, and the claim is rolled back if sending fails, so a later try can resend.
+ * Step 1, inside the request (DB only, no network): records an invite from `inviterId` to
+ * `email` (already normalised) unless the same inviter already emailed that address within
+ * RESEND_COOLDOWN_MS. Returns a claim when an email should be sent, else null. Runs under
+ * the per-user lock, like the known-account path, so the two take comparable time.
  */
-export async function createInvite(email: string, inviterId: string, inviterName: string, now = new Date()) {
-  const claim = await prisma.$transaction(async (tx) => {
+export async function recordInvite(
+  email: string,
+  inviterId: string,
+  now = new Date(),
+): Promise<InviteClaim | null> {
+  return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"connreq:" + inviterId}))`;
     const existing = await tx.connectionInvite.findUnique({
       where: { inviterId_email: { inviterId, email } },
@@ -72,13 +78,26 @@ export async function createInvite(email: string, inviterId: string, inviterName
     });
     return { previousSentAt: existing?.sentAt ?? null };
   });
-  if (!claim) return;
+}
 
-  if (!(await sendInviteEmail(email, inviterName))) {
+/**
+ * Step 2, run after the response is sent (`after()`): emails the invite and, if sending
+ * fails, rolls the claim back so a later try can resend. Never throws.
+ */
+export async function deliverInvite(
+  email: string,
+  inviterId: string,
+  inviterName: string,
+  claim: InviteClaim,
+): Promise<void> {
+  try {
+    if (await sendInviteEmail(email, inviterName)) return;
     await prisma.connectionInvite.update({
       where: { inviterId_email: { inviterId, email } },
       data: { sentAt: claim.previousSentAt },
     });
+  } catch (err) {
+    console.error("Delivering invite failed", err instanceof Error ? err.message : err);
   }
 }
 

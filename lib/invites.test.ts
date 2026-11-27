@@ -45,7 +45,7 @@ vi.mock("./db", () => {
   };
 });
 
-import { buildInviteEmail, convertInvites, createInvite, RESEND_COOLDOWN_MS } from "./invites";
+import { buildInviteEmail, convertInvites, deliverInvite, recordInvite, RESEND_COOLDOWN_MS } from "./invites";
 import { isValidEmail, normalizeEmail } from "./emailAddress";
 
 beforeEach(() => {
@@ -73,8 +73,21 @@ describe("email helpers", () => {
   });
 });
 
+/** What the route does: record in the request, deliver afterwards. */
+async function createInvite(email: string, inviterId: string, name: string, now: Date) {
+  const claim = await recordInvite(email, inviterId, now);
+  if (claim) await deliverInvite(email, inviterId, name, claim);
+}
+
 describe("createInvite", () => {
   const now = new Date("2026-11-27T12:00:00Z");
+  it("recordInvite only touches the DB: it never calls the email sender", async () => {
+    m.send.mockReturnValue(new Promise(() => {})); // would hang forever if awaited
+    const claim = await recordInvite("new@example.test", "u1", now);
+    expect(claim).toEqual({ previousSentAt: null });
+    expect(m.invites).toHaveLength(1);
+    expect(m.send).not.toHaveBeenCalled();
+  });
   it("records and emails a new invite", async () => {
     await createInvite("new@example.test", "u1", "Ann", now);
     expect(m.invites).toHaveLength(1);

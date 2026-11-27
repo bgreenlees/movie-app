@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { createRateLimiter } from "@/lib/rateLimit";
-import { createInvite } from "@/lib/invites";
+import { deliverInvite, recordInvite } from "@/lib/invites";
 import { isValidEmail, MAX_EMAIL_LENGTH, normalizeEmail } from "../../../lib/emailAddress";
 
 /** Most PENDING outgoing requests one user may have at once. */
@@ -105,7 +105,12 @@ export async function POST(req: NextRequest) {
   const [target] = await prisma.$queryRaw<{ id: string }[]>`
     SELECT "id" FROM "users" WHERE LOWER("email") = ${email.toLowerCase()} LIMIT 1`;
   if (!target) {
-    await createInvite(normalizeEmail(email), userId, session.user.name ?? "", new Date());
+    // DB work only inside the request; the email goes out after the response, so
+    // response time can't reveal whether an account exists.
+    const invitee = normalizeEmail(email);
+    const inviterName = session.user.name ?? "";
+    const claim = await recordInvite(invitee, userId, new Date());
+    if (claim) after(() => deliverInvite(invitee, userId, inviterName, claim));
     return neutralOk();
   }
   if (target.id === userId) {

@@ -14,7 +14,8 @@ type Where = {
 
 const m = vi.hoisted(() => ({
   auth: vi.fn(),
-  createInvite: vi.fn(async (...args: unknown[]) => void args),
+  recordInvite: vi.fn<(...args: unknown[]) => Promise<{ previousSentAt: Date | null } | null>>(async () => ({ previousSentAt: null })),
+  deliverInvite: vi.fn<(...args: unknown[]) => Promise<void>>(async () => {}),
   allow: vi.fn((key: string) => key !== ""),
   limiterOpts: undefined as unknown,
   users: [] as { id: string; email: string; name: string }[],
@@ -39,7 +40,13 @@ vi.mock("@/lib/rateLimit", () => ({
   },
 }));
 // Invite creation has its own tests (lib/invites.test.ts); here we only check the route calls it.
-vi.mock("@/lib/invites", () => ({ createInvite: m.createInvite }));
+vi.mock("@/lib/invites", () => ({ recordInvite: m.recordInvite, deliverInvite: m.deliverInvite }));
+// after() only works inside a real request, so run its callback straight away, un-awaited,
+// the way Vercel runs it once the response has gone out.
+vi.mock("next/server", async (orig) => ({
+  ...(await orig<typeof import("next/server")>()),
+  after: (fn: () => unknown) => void fn(),
+}));
 vi.mock("@/lib/db", () => {
   const userConnection = {
     count: vi.fn(async ({ where }: { where: Where }) => {
@@ -139,7 +146,8 @@ beforeEach(() => {
   m.countDelay = false;
   as(ME);
   m.allow.mockReset().mockReturnValue(true);
-  m.createInvite.mockClear();
+  m.recordInvite.mockClear();
+  m.deliverInvite.mockClear();
 });
 
 describe("POST /api/connections: invites (#135)", () => {
@@ -147,17 +155,30 @@ describe("POST /api/connections: invites (#135)", () => {
     const res = await send("  New.Person@Example.TEST ");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
-    expect(m.createInvite).toHaveBeenCalledWith("new.person@example.test", "me", "", expect.any(Date));
+    expect(m.recordInvite).toHaveBeenCalledWith("new.person@example.test", "me", expect.any(Date));
+    expect(m.deliverInvite).toHaveBeenCalledWith("new.person@example.test", "me", "", { previousSentAt: null });
+  });
+  it("answers without waiting for the email to be sent (no timing oracle)", async () => {
+    m.deliverInvite.mockReturnValueOnce(new Promise(() => {})); // never resolves
+    const res = await send("new.person@example.test");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(m.deliverInvite).toHaveBeenCalledOnce();
+  });
+  it("sends nothing when the invite was already emailed recently", async () => {
+    m.recordInvite.mockResolvedValueOnce(null);
+    expect((await send("new.person@example.test")).status).toBe(200);
+    expect(m.deliverInvite).not.toHaveBeenCalled();
   });
   it("doesn't invite an email that has an account", async () => {
     await send(PAL.email);
-    expect(m.createInvite).not.toHaveBeenCalled();
+    expect(m.recordInvite).not.toHaveBeenCalled();
   });
   it("rejects malformed or over-long emails with 400 and no invite", async () => {
     for (const bad of ["not-an-email", "a@b", "a".repeat(250) + "@b.de"]) {
       expect((await send(bad)).status).toBe(400);
     }
-    expect(m.createInvite).not.toHaveBeenCalled();
+    expect(m.recordInvite).not.toHaveBeenCalled();
   });
   it("limits to 10 a day, and answers 429 the same for known and unknown emails", async () => {
     expect(m.limiterOpts).toEqual({ limit: 10, windowMs: 24 * 60 * 60 * 1000 });
@@ -167,7 +188,7 @@ describe("POST /api/connections: invites (#135)", () => {
     expect(unknown.status).toBe(429);
     expect(known.status).toBe(429);
     expect(await known.json()).toEqual(await unknown.json());
-    expect(m.createInvite).not.toHaveBeenCalled();
+    expect(m.recordInvite).not.toHaveBeenCalled();
   });
 });
 
