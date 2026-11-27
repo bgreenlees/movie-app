@@ -231,7 +231,8 @@ describe("pending outgoing cap (F6)", () => {
     expect((await over.json()).error).toMatch(/waiting for an answer/);
     expect(m.rows).toHaveLength(MAX_PENDING_OUTGOING);
 
-    // Same 429 for an unknown email, so the cap isn't an oracle either.
+    // Same 429 for an unknown email: the direct response doesn't depend on the email.
+    // (The count itself only moves for real accounts; see the PR's residual-risk note.)
     expect((await send("nobody@example.test")).status).toBe(429);
   });
 
