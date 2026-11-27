@@ -17,6 +17,8 @@ const m = vi.hoisted(() => ({
   users: [] as { id: string; email: string; name: string }[],
   rows: [] as Row[],
   nextId: 1,
+  lock: Promise.resolve() as Promise<void>,
+  countDelay: false,
 }));
 
 function matches(row: Row, where: Where): boolean {
@@ -29,7 +31,12 @@ function matches(row: Row, where: Where): boolean {
 vi.mock("@/lib/auth", () => ({ auth: m.auth }));
 vi.mock("@/lib/db", () => {
   const userConnection = {
-    count: vi.fn(async ({ where }: { where: Where }) => m.rows.filter((r) => matches(r, where)).length),
+    count: vi.fn(async ({ where }: { where: Where }) => {
+      const n = m.rows.filter((r) => matches(r, where)).length;
+      // Widen the count-then-create window so an unlocked implementation races.
+      if (m.countDelay) await new Promise((r) => setTimeout(r, 1));
+      return n;
+    }),
     findFirst: vi.fn(async ({ where }: { where: Where }) => m.rows.find((r) => matches(r, where)) ?? null),
     findUnique: vi.fn(async ({ where }: { where: { id: string } }) => m.rows.find((r) => r.id === where.id) ?? null),
     findMany: vi.fn(async ({ where }: { where: Where }) =>
@@ -58,13 +65,33 @@ vi.mock("@/lib/db", () => {
   };
   return {
     prisma: {
-      user: {
-        findUnique: vi.fn(async ({ where }: { where: { email: string } }) =>
-          m.users.find((u) => u.email === where.email) ?? null,
-        ),
-      },
+      // Tagged template: the bound value is the one interpolation. Mimics
+      // LOWER(email) = $1, i.e. exact equality with no wildcards.
+      $queryRaw: vi.fn(async (_strings: TemplateStringsArray, value: string) =>
+        m.users.filter((u) => u.email.toLowerCase() === value).slice(0, 1),
+      ),
       userConnection,
-      $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
+      // Interactive transactions only. $executeRaw stands in for the advisory
+      // lock: the first call per tx takes a mutex that is released when the
+      // transaction ends, so parallel sends by one user run one at a time.
+      $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
+        let release: (() => void) | undefined;
+        const tx = {
+          userConnection,
+          $executeRaw: async () => {
+            const prev = m.lock;
+            let done!: () => void;
+            m.lock = new Promise<void>((r) => (done = r));
+            release = done;
+            await prev;
+          },
+        };
+        try {
+          return await fn(tx);
+        } finally {
+          release?.();
+        }
+      }),
     },
   };
 });
@@ -97,6 +124,8 @@ beforeEach(() => {
   m.users = [ME, PAL, OTHER];
   m.rows = [];
   m.nextId = 1;
+  m.lock = Promise.resolve();
+  m.countDelay = false;
   as(ME);
 });
 
@@ -133,6 +162,31 @@ describe("POST /api/connections: no email oracle (F7)", () => {
     m.rows.push({ id: "x", requesterId: "pal", addresseeId: "me", status: "PENDING" });
     expect((await send(PAL.email)).status).toBe(200);
     expect(m.rows).toHaveLength(1);
+  });
+
+  it("finds the account whatever the email's casing", async () => {
+    expect((await send("  PAL@Example.TEST ")).status).toBe(200);
+    expect(m.rows).toEqual([expect.objectContaining({ addresseeId: "pal" })]);
+  });
+
+  it("treats % and _ in the email literally, never as wildcards", async () => {
+    expect((await send("%@example.test")).status).toBe(200);
+    expect((await send("p_l@example.test")).status).toBe(200);
+    expect(m.rows).toHaveLength(0);
+    const { prisma } = await import("@/lib/db");
+    expect(vi.mocked(prisma.$queryRaw).mock.calls.map((c) => c[1])).toEqual(["%@example.test", "p_l@example.test"]);
+  });
+
+  it("a double-send of a decline-lift answers neutrally, not 500", async () => {
+    m.rows.push({ id: "d", requesterId: "pal", addresseeId: "me", status: "DECLINED" });
+    const { prisma } = await import("@/lib/db");
+    const { Prisma } = await import("@prisma/client");
+    vi.mocked(prisma.userConnection.create).mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError("dup", { code: "P2002", clientVersion: "x" }),
+    );
+    const res = await send(PAL.email);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
   });
 
   it("keeps 'that's you' as a 400, case-insensitively", async () => {
@@ -234,6 +288,15 @@ describe("pending outgoing cap (F6)", () => {
     // Same 429 for an unknown email: the direct response doesn't depend on the email.
     // (The count itself only moves for real accounts; see the PR's residual-risk note.)
     expect((await send("nobody@example.test")).status).toBe(429);
+  });
+
+  it("30 parallel sends can't exceed the cap", async () => {
+    m.countDelay = true;
+    for (let i = 0; i < 30; i++) m.users.push({ id: `u${i}`, email: `u${i}@example.test`, name: `U${i}` });
+    const results = await Promise.all(Array.from({ length: 30 }, (_, i) => send(`u${i}@example.test`)));
+    expect(m.rows.filter((r) => r.status === "PENDING")).toHaveLength(MAX_PENDING_OUTGOING);
+    expect(results.filter((r) => r.status === 200)).toHaveLength(MAX_PENDING_OUTGOING);
+    expect(results.filter((r) => r.status === 429)).toHaveLength(10);
   });
 
   it("accepted and declined requests don't count toward the cap", async () => {

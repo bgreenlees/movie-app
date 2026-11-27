@@ -76,20 +76,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "You can't connect with yourself" }, { status: 400 });
   }
 
-  // Checked before the lookup, so it applies the same way to every email.
-  const pendingOutgoing = await prisma.userConnection.count({
-    where: { requesterId: userId, status: "PENDING" },
-  });
-  if (pendingOutgoing >= MAX_PENDING_OUTGOING) {
-    return NextResponse.json(
+  const capped = () =>
+    NextResponse.json(
       {
         error: `You have ${MAX_PENDING_OUTGOING} requests waiting for an answer. Try again once some have been accepted.`,
       },
       { status: 429 },
     );
-  }
+  const countPending = (db: Pick<typeof prisma, "userConnection">) =>
+    db.userConnection.count({ where: { requesterId: userId, status: "PENDING" } });
 
-  const target = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  // Checked before the lookup, so it applies the same way to every email.
+  // This early check is a cheap fast path; the authoritative one is re-run
+  // under a lock below, because count-then-create alone isn't atomic.
+  if ((await countPending(prisma)) >= MAX_PENDING_OUTGOING) return capped();
+
+  // Case-insensitive exact match. Not Prisma's `mode: "insensitive"`: on
+  // Postgres that is ILIKE, so "%" or "_" in the input act as wildcards and
+  // "%@gmail.com" would match an arbitrary account. LOWER() = $1 is a plain
+  // equality on a bound parameter.
+  const [target] = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT "id" FROM "users" WHERE LOWER("email") = ${email.toLowerCase()} LIMIT 1`;
   if (!target) {
     await handleNoAccount(email, userId);
     return neutralOk();
@@ -98,34 +105,39 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "You can't connect with yourself" }, { status: 400 });
   }
 
-  // Any existing row, in either direction and in any status (PENDING,
-  // ACCEPTED, DECLINED), means no new request. A DECLINED row is never
-  // reset here, so the person who declined isn't asked again.
-  const existing = await prisma.userConnection.findFirst({
-    where: {
-      OR: [
-        { requesterId: userId, addresseeId: target.id },
-        { requesterId: target.id, addresseeId: userId },
-      ],
-    },
-    select: { id: true, status: true, addresseeId: true },
-  });
-  if (existing) {
-    // The one exception: the person who declined now asks the other way
-    // round. That's their choice to make, so lift the decline and send it.
-    if (existing.status === "DECLINED" && existing.addresseeId === userId) {
-      await prisma.$transaction([
-        prisma.userConnection.delete({ where: { id: existing.id } }),
-        prisma.userConnection.create({ data: { requesterId: userId, addresseeId: target.id } }),
-      ]);
-    }
-    return neutralOk();
-  }
-
   try {
-    await prisma.userConnection.create({
-      data: { requesterId: userId, addresseeId: target.id },
+    const overCap = await prisma.$transaction(async (tx) => {
+      // Serialise this user's sends. The lock is transaction-scoped, so it
+      // is released on commit/rollback and is safe on a pooled connection.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"connreq:" + userId}))`;
+
+      if ((await countPending(tx)) >= MAX_PENDING_OUTGOING) return true;
+
+      // Any existing row, in either direction and in any status (PENDING,
+      // ACCEPTED, DECLINED), means no new request. A DECLINED row is never
+      // reset here, so the person who declined isn't asked again.
+      const existing = await tx.userConnection.findFirst({
+        where: {
+          OR: [
+            { requesterId: userId, addresseeId: target.id },
+            { requesterId: target.id, addresseeId: userId },
+          ],
+        },
+        select: { id: true, status: true, addresseeId: true },
+      });
+      if (existing) {
+        // The one exception: the person who declined now asks the other way
+        // round. That's their choice to make, so lift the decline and send it.
+        if (existing.status === "DECLINED" && existing.addresseeId === userId) {
+          await tx.userConnection.delete({ where: { id: existing.id } });
+          await tx.userConnection.create({ data: { requesterId: userId, addresseeId: target.id } });
+        }
+        return false;
+      }
+      await tx.userConnection.create({ data: { requesterId: userId, addresseeId: target.id } });
+      return false;
     });
+    if (overCap) return capped();
   } catch (err) {
     // A concurrent identical request won the race: same outcome.
     if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002")) throw err;
