@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { heroPrimaryButton, heroSecondaryButton } from "@/components/detail/buttonStyles";
+import { CheckIcon, PlusIcon } from "@/components/detail/icons";
 import AddTVModal from "./AddTVModal";
 
 interface ExistingTVEntry {
@@ -42,10 +44,10 @@ export default function TVWatchlistAction({ tvShowId, tvShowName, isLoggedIn }: 
     return (
       <Link
         href={`/login?callbackUrl=${encodeURIComponent(`/tv/${tvShowId}`)}`}
-        className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium text-white transition-opacity hover:opacity-90"
-        style={{ backgroundColor: "var(--accent)" }}
+        className={heroPrimaryButton}
       >
-        Sign in to Add
+        <PlusIcon />
+        Sign in to add
       </Link>
     );
   }
@@ -54,10 +56,19 @@ export default function TVWatchlistAction({ tvShowId, tvShowName, isLoggedIn }: 
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-opacity hover:opacity-90"
-        style={{ backgroundColor: existingEntry ? "var(--border)" : "var(--accent)", color: existingEntry ? "var(--foreground)" : "white" }}
+        className={existingEntry ? heroSecondaryButton : heroPrimaryButton}
       >
-        {existingEntry ? "✓ On Your List" : "+ Add to Watchlist"}
+        {existingEntry ? (
+          <>
+            <CheckIcon />
+            On your list
+          </>
+        ) : (
+          <>
+            <PlusIcon />
+            Want to Watch
+          </>
+        )}
       </button>
       <AddTVModal
         isOpen={open}

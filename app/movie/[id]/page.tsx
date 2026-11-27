@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
-import Image from "next/image";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { tmdb } from "@/lib/tmdb";
 import { auth } from "@/lib/auth";
 import ShareButton from "@/components/ui/ShareButton";
 import TrailerButton from "@/components/ui/TrailerButton";
 import PublicHeader from "@/components/layout/PublicHeader";
+import Navbar from "@/components/layout/Navbar";
+import DetailHero from "@/components/detail/DetailHero";
+import { CastShelf, MoreLikeThis, WhereToWatch } from "@/components/detail/DetailShelves";
+import { heroSecondaryButton } from "@/components/detail/buttonStyles";
+import { getUserServiceIds } from "@/lib/userServices";
+import { buildProviderOptions, formatRating, formatRuntime, genreList, heroEyebrow, joinMeta, yearOf } from "@/lib/detailView";
 import MovieWatchlistAction from "@/components/movies/MovieWatchlistAction";
 
 interface Props {
@@ -46,203 +50,62 @@ export default async function MoviePage({ params }: Props) {
   const movieId = parseInt(id);
   if (isNaN(movieId)) notFound();
 
-  const [details, providersData, recsData, session] = await Promise.all([
+  const sessionPromise = auth();
+  const [details, providersData, recsData, session, serviceIds] = await Promise.all([
     tmdb.getMovieDetailsWithCredits(movieId).catch(() => null),
     tmdb.getWatchProviders(movieId).catch(() => null),
     tmdb.getMovieRecommendations(movieId).catch(() => null),
-    auth(),
+    sessionPromise,
+    sessionPromise.then((s) => getUserServiceIds(s?.user?.id)),
   ]);
+  const isLoggedIn = !!session?.user;
 
   if (!details) notFound();
 
-  const posterUrl = tmdb.getPosterUrl(details.poster_path);
   const director = details.crew.find((c) => c.job === "Director");
   const writers = details.crew
     .filter((c) => c.department === "Writing" && ["Screenplay", "Writer", "Story"].includes(c.job))
     .slice(0, 3);
-  const us = providersData?.results?.US;
-  const flatrate = us?.flatrate || [];
-  const rent = us?.rent || [];
-  const recs = (recsData?.results || []).slice(0, 12);
+  const providers = buildProviderOptions(providersData?.results?.US, serviceIds);
+  const similar = (recsData?.results || []).slice(0, 14).map((rec) => ({
+    id: rec.id,
+    title: rec.title,
+    href: `/movie/${rec.id}`,
+    posterPath: rec.poster_path,
+    meta: joinMeta([yearOf(rec.release_date), "Movie"]),
+  }));
+
+  const credits = [
+    director && { label: "Director", value: director.name },
+    writers.length > 0 && { label: writers.length === 1 ? "Writer" : "Writers", value: writers.map((w) => w.name).join(", ") },
+  ].filter((c): c is { label: string; value: string } => !!c);
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "var(--secondary-bg)" }}>
-      <PublicHeader isLoggedIn={!!session?.user} />
-      <main id="main-content" className="max-w-3xl mx-auto p-4 sm:p-6">
-        <div className="flex gap-5 flex-col sm:flex-row sm:items-start">
-          {posterUrl && (
-            <div
-              className="shrink-0 rounded-lg overflow-hidden mx-auto sm:mx-0"
-              style={{ width: 200, aspectRatio: "2/3", backgroundColor: "var(--border)" }}
-            >
-              <Image
-                src={posterUrl}
-                alt={details.title}
-                width={200}
-                height={300}
-                className="object-cover w-full h-full"
-                priority
-              />
-            </div>
-          )}
-
-          <div className="flex-1 min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold mb-1" style={{ color: "var(--primary)" }}>
-              {details.title}
-            </h1>
-            {details.release_date && (
-              <p className="text-sm mb-3" style={{ color: "var(--text-muted)" }}>
-                {new Date(details.release_date).getFullYear()}
-              </p>
-            )}
-
-            <div className="flex items-center gap-2 mb-4 flex-wrap">
-              <MovieWatchlistAction movieId={movieId} movieTitle={details.title} isLoggedIn={!!session?.user} />
-              <TrailerButton id={movieId} title={details.title} mediaType="movie" />
-              <ShareButton url={`/movie/${movieId}`} title={details.title} text={details.overview || undefined} />
-            </div>
-
-            {details.tagline && (
-              <p className="text-sm italic mb-3 leading-snug" style={{ color: "var(--text-muted)" }}>
-                &ldquo;{details.tagline}&rdquo;
-              </p>
-            )}
-            {details.overview && (
-              <p className="text-sm leading-relaxed mb-4" style={{ color: "var(--foreground)" }}>
-                {details.overview}
-              </p>
-            )}
-
-            <div className="space-y-1 text-sm">
-              {director && (
-                <div className="flex gap-2">
-                  <span className="font-semibold shrink-0 w-16" style={{ color: "var(--text-muted)" }}>Director</span>
-                  <span style={{ color: "var(--foreground)" }}>{director.name}</span>
-                </div>
-              )}
-              {writers.length > 0 && (
-                <div className="flex gap-2">
-                  <span className="font-semibold shrink-0 w-16" style={{ color: "var(--text-muted)" }}>
-                    {writers.length === 1 ? "Writer" : "Writers"}
-                  </span>
-                  <span style={{ color: "var(--foreground)" }}>{writers.map((w) => w.name).join(", ")}</span>
-                </div>
-              )}
-            </div>
-          </div>
+    <div className="min-h-screen bg-bg">
+      {isLoggedIn ? <Navbar /> : <PublicHeader isLoggedIn={false} />}
+      <main id="main-content">
+        <DetailHero
+          title={details.title}
+          backdropUrl={tmdb.getBackdropUrl(details.backdrop_path)}
+          posterUrl={tmdb.getPosterUrl(details.poster_path)}
+          eyebrow={heroEyebrow("movie", providers)}
+          meta={joinMeta([yearOf(details.release_date), formatRuntime(details.runtime), genreList(details.genres), formatRating(details.vote_average)])}
+          tagline={details.tagline}
+          overview={details.overview}
+          credits={credits}
+          actions={
+            <>
+              <MovieWatchlistAction movieId={movieId} movieTitle={details.title} isLoggedIn={isLoggedIn} />
+              <TrailerButton id={movieId} title={details.title} mediaType="movie" className={heroSecondaryButton} />
+              <ShareButton url={`/movie/${movieId}`} title={details.title} text={details.overview || undefined} className={heroSecondaryButton} />
+            </>
+          }
+        />
+        <div className="mx-auto flex max-w-[1376px] flex-col gap-12 px-4 pb-16 pt-12 sm:px-6 lg:px-8">
+          <WhereToWatch providers={providers} />
+          <CastShelf cast={details.cast} />
+          <MoreLikeThis items={similar} />
         </div>
-
-        {(flatrate.length > 0 || rent.length > 0) && (
-          <div className="mt-6">
-            <h2 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
-              Where to Watch
-            </h2>
-            {flatrate.length > 0 && (
-              <div className="mb-3">
-                <p className="text-xs mb-1.5" style={{ color: "var(--text-muted)" }}>Stream</p>
-                <div className="flex flex-wrap gap-2">
-                  {flatrate.map((p) => (
-                    <div
-                      key={p.provider_id}
-                      className="flex items-center gap-1.5 px-2 py-1 rounded-md"
-                      style={{ border: "1px solid var(--border)" }}
-                      title={p.provider_name}
-                    >
-                      <Image src={`https://image.tmdb.org/t/p/w92${p.logo_path}`} alt={p.provider_name} width={20} height={20} className="rounded" />
-                      <span className="text-xs" style={{ color: "var(--foreground)" }}>{p.provider_name}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {rent.length > 0 && (
-              <div>
-                <p className="text-xs mb-1.5" style={{ color: "var(--text-muted)" }}>Rent / Buy</p>
-                <div className="flex flex-wrap gap-2">
-                  {rent.map((p) => (
-                    <div
-                      key={p.provider_id}
-                      className="flex items-center gap-1.5 px-2 py-1 rounded-md"
-                      style={{ border: "1px solid var(--border)" }}
-                      title={p.provider_name}
-                    >
-                      <Image src={`https://image.tmdb.org/t/p/w92${p.logo_path}`} alt={p.provider_name} width={20} height={20} className="rounded" />
-                      <span className="text-xs" style={{ color: "var(--foreground)" }}>{p.provider_name}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {details.cast.length > 0 && (
-          <div className="mt-6">
-            <h2 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
-              Top Cast
-            </h2>
-            <div className="grid grid-cols-4 gap-3">
-              {details.cast.map((member) => (
-                <Link
-                  key={member.id}
-                  href={`/search?personId=${member.id}&name=${encodeURIComponent(member.name)}`}
-                  className="text-center hover:opacity-80 transition-opacity"
-                >
-                  <div
-                    className="rounded-full overflow-hidden mx-auto mb-1.5"
-                    style={{ width: 56, height: 56, backgroundColor: "var(--border)" }}
-                  >
-                    {member.profile_path ? (
-                      <Image
-                        src={`https://image.tmdb.org/t/p/w185${member.profile_path}`}
-                        alt={member.name}
-                        width={56}
-                        height={56}
-                        className="object-cover w-full h-full"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center" style={{ color: "var(--text-muted)", fontSize: 22 }}>◉</div>
-                    )}
-                  </div>
-                  <p className="text-xs font-medium leading-tight" style={{ color: "var(--foreground)" }}>{member.name}</p>
-                  <p className="text-xs leading-tight mt-0.5" style={{ color: "var(--text-muted)" }}>{member.character}</p>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {recs.length > 0 && (
-          <div className="mt-6">
-            <h2 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
-              More like this
-            </h2>
-            <div className="flex gap-3 overflow-x-auto py-1 pb-2">
-              {recs.map((rec) => (
-                <Link key={rec.id} href={`/movie/${rec.id}`} className="shrink-0 group" style={{ width: 110 }} title={rec.title}>
-                  <div
-                    className="relative rounded-md overflow-hidden mb-1.5"
-                    style={{ width: 110, aspectRatio: "2/3", backgroundColor: "var(--border)" }}
-                  >
-                    {rec.poster_path && (
-                      <Image
-                        src={`https://image.tmdb.org/t/p/w300${rec.poster_path}`}
-                        alt={rec.title}
-                        width={110}
-                        height={165}
-                        className="object-cover w-full h-full group-hover:opacity-90 transition-opacity"
-                      />
-                    )}
-                  </div>
-                  <p className="text-xs font-medium leading-tight line-clamp-2" style={{ color: "var(--foreground)" }}>{rec.title}</p>
-                  {typeof rec.vote_average === "number" && rec.vote_average > 0 && (
-                    <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>★ {rec.vote_average.toFixed(1)}</p>
-                  )}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
       </main>
     </div>
   );

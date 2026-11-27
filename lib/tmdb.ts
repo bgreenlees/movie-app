@@ -72,6 +72,10 @@ interface TMDBTVShowDetails {
   id: number;
   name: string;
   poster_path: string | null;
+  backdrop_path: string | null;
+  vote_average: number;
+  episode_run_time?: number[] | null;
+  last_episode_to_air?: { runtime?: number | null } | null;
   first_air_date: string;
   last_air_date: string | null;
   overview: string;
@@ -336,12 +340,20 @@ class TMDBClient {
     return `https://image.tmdb.org/t/p/${size}${posterPath}`;
   }
 
+  getBackdropUrl(backdropPath: string | null, size: "w780" | "w1280" = "w1280"): string | null {
+    if (!backdropPath) return null;
+    return `https://image.tmdb.org/t/p/${size}${backdropPath}`;
+  }
+
   async getMovieDetailsWithCredits(movieId: number): Promise<{
     title: string;
     tagline: string | null;
     overview: string | null;
     poster_path: string | null;
+    backdrop_path: string | null;
     release_date: string | null;
+    runtime: number | null;
+    vote_average: number;
     genres: Array<{ id: number; name: string }>;
     cast: Array<{ id: number; name: string; character: string; profile_path: string | null }>;
     crew: Array<{ id: number; name: string; job: string; department: string }>;
@@ -356,7 +368,10 @@ class TMDBClient {
       tagline: data.tagline || null,
       overview: data.overview || null,
       poster_path: data.poster_path || null,
+      backdrop_path: data.backdrop_path || null,
       release_date: data.release_date || null,
+      runtime: typeof data.runtime === "number" && data.runtime > 0 ? data.runtime : null,
+      vote_average: typeof data.vote_average === "number" ? data.vote_average : 0,
       genres: data.genres || [],
       cast: (data.credits?.cast || []).slice(0, 8),
       crew: data.credits?.crew || [],

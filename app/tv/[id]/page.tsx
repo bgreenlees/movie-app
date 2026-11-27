@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
-import Image from "next/image";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { tmdb } from "@/lib/tmdb";
 import { auth } from "@/lib/auth";
 import ShareButton from "@/components/ui/ShareButton";
 import TrailerButton from "@/components/ui/TrailerButton";
 import PublicHeader from "@/components/layout/PublicHeader";
+import Navbar from "@/components/layout/Navbar";
+import DetailHero from "@/components/detail/DetailHero";
+import { CastShelf, MoreLikeThis, WhereToWatch } from "@/components/detail/DetailShelves";
+import { heroSecondaryButton } from "@/components/detail/buttonStyles";
+import { getUserServiceIds } from "@/lib/userServices";
+import { buildProviderOptions, formatRating, formatRuntime, genreList, heroEyebrow, joinMeta, tvYearSpan, yearOf } from "@/lib/detailView";
 import TVWatchlistAction from "@/components/tv/TVWatchlistAction";
 
 interface Props {
@@ -56,198 +60,104 @@ export default async function TVShowPage({ params }: Props) {
   const tvId = parseInt(id);
   if (isNaN(tvId)) notFound();
 
-  const [details, credits, providersData, recsData, session] = await Promise.all([
+  const sessionPromise = auth();
+  const [details, credits, providersData, recsData, session, serviceIds] = await Promise.all([
     tmdb.getTVShowDetails(tvId).catch(() => null),
     tmdb.getTVCredits(tvId).catch(() => ({ cast: [], crew: [] })),
     tmdb.getTVWatchProviders(tvId).catch(() => null),
     tmdb.getTVRecommendations(tvId).catch(() => null),
-    auth(),
+    sessionPromise,
+    sessionPromise.then((s) => getUserServiceIds(s?.user?.id)),
   ]);
 
   if (!details) notFound();
 
-  const posterUrl = tmdb.getPosterUrl(details.poster_path);
+  const isLoggedIn = !!session?.user;
   const cast = (credits.cast || []).slice(0, 8);
-  const us = providersData?.results?.US;
-  const flatrate = us?.flatrate || [];
-  const rent = us?.rent || [];
-  const recs = (recsData?.results || []).slice(0, 12);
+  const providers = buildProviderOptions(providersData?.results?.US, serviceIds);
+  const similar = (recsData?.results || []).slice(0, 14).map((rec) => ({
+    id: rec.id,
+    title: rec.name,
+    href: `/tv/${rec.id}`,
+    posterPath: rec.poster_path,
+    meta: joinMeta([yearOf(rec.first_air_date), "TV"]),
+  }));
   const mainSeasons = details.seasons.filter((s) => s.season_number > 0);
   const nextEp = details.next_episode_to_air;
   const daysAway = nextEp ? daysUntil(nextEp.air_date) : null;
+  const ended = details.status === "Ended" || details.status === "Canceled";
+  const episodeRuntime = details.episode_run_time?.[0] ?? details.last_episode_to_air?.runtime ?? null;
+  const seasonCount = details.number_of_seasons
+    ? `${details.number_of_seasons} season${details.number_of_seasons === 1 ? "" : "s"}`
+    : null;
+
+  const heroCredits = [
+    details.status && { label: "Status", value: details.status },
+    details.number_of_episodes > 0 && { label: "Episodes", value: String(details.number_of_episodes) },
+    details.networks.length > 0 && { label: "Network", value: details.networks.map((n) => n.name).join(", ") },
+  ].filter((c): c is { label: string; value: string } => !!c);
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "var(--secondary-bg)" }}>
-      <PublicHeader isLoggedIn={!!session?.user} />
-      <main id="main-content" className="max-w-3xl mx-auto p-4 sm:p-6">
-        <div className="flex gap-5 flex-col sm:flex-row sm:items-start">
-          {posterUrl && (
-            <div
-              className="shrink-0 rounded-lg overflow-hidden mx-auto sm:mx-0"
-              style={{ width: 200, aspectRatio: "2/3", backgroundColor: "var(--border)" }}
-            >
-              <Image src={posterUrl} alt={details.name} width={200} height={300} className="object-cover w-full h-full" priority />
-            </div>
+    <div className="min-h-screen bg-bg">
+      {isLoggedIn ? <Navbar /> : <PublicHeader isLoggedIn={false} />}
+      <main id="main-content">
+        <DetailHero
+          title={details.name}
+          backdropUrl={tmdb.getBackdropUrl(details.backdrop_path)}
+          posterUrl={tmdb.getPosterUrl(details.poster_path)}
+          eyebrow={heroEyebrow("tv", providers)}
+          meta={joinMeta([
+            tvYearSpan(details.first_air_date, details.last_air_date, ended),
+            seasonCount,
+            formatRuntime(episodeRuntime),
+            genreList(details.genres),
+            formatRating(details.vote_average),
+          ])}
+          tagline={details.tagline}
+          overview={details.overview}
+          credits={heroCredits}
+          actions={
+            <>
+              <TVWatchlistAction tvShowId={tvId} tvShowName={details.name} isLoggedIn={isLoggedIn} />
+              <TrailerButton id={tvId} title={details.name} mediaType="tv" className={heroSecondaryButton} />
+              <ShareButton url={`/tv/${tvId}`} title={details.name} text={details.overview || undefined} className={heroSecondaryButton} />
+            </>
+          }
+        />
+        <div className="mx-auto flex max-w-[1376px] flex-col gap-12 px-4 pb-16 pt-12 sm:px-6 lg:px-8">
+          {nextEp && (
+            <section aria-label="Next episode" className="max-w-xl rounded-card border border-accent bg-surface px-4 py-3">
+              <p className="text-label uppercase text-accent-text">Next episode</p>
+              <p className="mt-1 text-title text-text">
+                S{String(nextEp.season_number).padStart(2, "0")}E{String(nextEp.episode_number).padStart(2, "0")} — {nextEp.name}
+              </p>
+              <p className="text-meta text-muted">
+                {formatAirDate(nextEp.air_date)}
+                {daysAway !== null && daysAway > 0 && ` · in ${daysAway} day${daysAway === 1 ? "" : "s"}`}
+                {daysAway !== null && daysAway === 0 && " · Today!"}
+                {daysAway !== null && daysAway < 0 && " · Aired"}
+              </p>
+            </section>
           )}
-
-          <div className="flex-1 min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold mb-1" style={{ color: "var(--primary)" }}>
-              {details.name}
-            </h1>
-            {details.first_air_date && (
-              <p className="text-sm mb-3" style={{ color: "var(--text-muted)" }}>
-                {new Date(details.first_air_date).getFullYear()}
-              </p>
-            )}
-
-            <div className="flex items-center gap-2 mb-4 flex-wrap">
-              <TVWatchlistAction tvShowId={tvId} tvShowName={details.name} isLoggedIn={!!session?.user} />
-              <TrailerButton id={tvId} title={details.name} mediaType="tv" />
-              <ShareButton url={`/tv/${tvId}`} title={details.name} text={details.overview || undefined} />
-            </div>
-
-            {details.tagline && (
-              <p className="text-sm italic mb-2 leading-snug" style={{ color: "var(--text-muted)" }}>
-                &ldquo;{details.tagline}&rdquo;
-              </p>
-            )}
-            {details.overview && (
-              <p className="text-sm leading-relaxed mb-3" style={{ color: "var(--foreground)" }}>
-                {details.overview}
-              </p>
-            )}
-
-            <div className="space-y-1 text-sm">
-              <div className="flex gap-2">
-                <span className="font-semibold shrink-0 w-20" style={{ color: "var(--text-muted)" }}>Status</span>
-                <span style={{ color: "var(--foreground)" }}>{details.status}</span>
-              </div>
-              <div className="flex gap-2">
-                <span className="font-semibold shrink-0 w-20" style={{ color: "var(--text-muted)" }}>Seasons</span>
-                <span style={{ color: "var(--foreground)" }}>{details.number_of_seasons} seasons · {details.number_of_episodes} episodes</span>
-              </div>
-              {details.networks.length > 0 && (
-                <div className="flex gap-2">
-                  <span className="font-semibold shrink-0 w-20" style={{ color: "var(--text-muted)" }}>Network</span>
-                  <span style={{ color: "var(--foreground)" }}>{details.networks.map((n) => n.name).join(", ")}</span>
-                </div>
-              )}
-            </div>
-          </div>
+          <WhereToWatch providers={providers} />
+          <CastShelf cast={cast} />
+          {mainSeasons.length > 0 && (
+            <section className="flex flex-col gap-4">
+              <h2 className="text-h2 text-text">Seasons</h2>
+              <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {mainSeasons.map((season) => (
+                  <li key={season.season_number} className="rounded-card border border-border bg-surface px-4 py-3">
+                    <span className="block text-title text-text">{season.name}</span>
+                    <span className="text-meta text-muted">
+                      {joinMeta([`${season.episode_count} episode${season.episode_count === 1 ? "" : "s"}`, yearOf(season.air_date)])}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          <MoreLikeThis items={similar} />
         </div>
-
-        {nextEp && (
-          <div
-            className="mt-4 px-4 py-3 rounded-lg"
-            style={{ backgroundColor: "color-mix(in srgb, var(--accent) 12%, var(--card-bg))", border: "1px solid var(--accent)" }}
-          >
-            <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--color-accent-text)" }}>Next Episode</p>
-            <p className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
-              S{String(nextEp.season_number).padStart(2, "0")}E{String(nextEp.episode_number).padStart(2, "0")} — {nextEp.name}
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-              {formatAirDate(nextEp.air_date)}
-              {daysAway !== null && daysAway > 0 && ` · in ${daysAway} day${daysAway === 1 ? "" : "s"}`}
-              {daysAway !== null && daysAway === 0 && " · Today!"}
-              {daysAway !== null && daysAway < 0 && " · Aired"}
-            </p>
-          </div>
-        )}
-
-        {(flatrate.length > 0 || rent.length > 0) && (
-          <div className="mt-6">
-            <h2 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>Where to Watch</h2>
-            {flatrate.length > 0 && (
-              <div className="mb-3">
-                <p className="text-xs mb-1.5" style={{ color: "var(--text-muted)" }}>Stream</p>
-                <div className="flex flex-wrap gap-2">
-                  {flatrate.map((p) => (
-                    <div key={p.provider_id} className="flex items-center gap-1.5 px-2 py-1 rounded-md" style={{ border: "1px solid var(--border)" }} title={p.provider_name}>
-                      <Image src={`https://image.tmdb.org/t/p/w92${p.logo_path}`} alt={p.provider_name} width={20} height={20} className="rounded" />
-                      <span className="text-xs" style={{ color: "var(--foreground)" }}>{p.provider_name}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {rent.length > 0 && (
-              <div>
-                <p className="text-xs mb-1.5" style={{ color: "var(--text-muted)" }}>Rent / Buy</p>
-                <div className="flex flex-wrap gap-2">
-                  {rent.map((p) => (
-                    <div key={p.provider_id} className="flex items-center gap-1.5 px-2 py-1 rounded-md" style={{ border: "1px solid var(--border)" }} title={p.provider_name}>
-                      <Image src={`https://image.tmdb.org/t/p/w92${p.logo_path}`} alt={p.provider_name} width={20} height={20} className="rounded" />
-                      <span className="text-xs" style={{ color: "var(--foreground)" }}>{p.provider_name}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {mainSeasons.length > 0 && (
-          <div className="mt-6">
-            <h2 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>Seasons</h2>
-            <div className="space-y-2">
-              {mainSeasons.map((season) => (
-                <div key={season.season_number} className="px-4 py-3 rounded-lg" style={{ border: "1px solid var(--border)" }}>
-                  <span className="text-sm font-medium" style={{ color: "var(--foreground)" }}>{season.name}</span>
-                  <span className="text-xs ml-2" style={{ color: "var(--text-muted)" }}>
-                    {season.episode_count} episodes
-                    {season.air_date && ` · ${new Date(season.air_date).getFullYear()}`}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {cast.length > 0 && (
-          <div className="mt-6">
-            <h2 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>Top Cast</h2>
-            <div className="grid grid-cols-4 gap-3">
-              {cast.map((member) => (
-                <Link
-                  key={member.id}
-                  href={`/search?personId=${member.id}&name=${encodeURIComponent(member.name)}`}
-                  className="text-center hover:opacity-80 transition-opacity"
-                >
-                  <div className="rounded-full overflow-hidden mx-auto mb-1.5" style={{ width: 56, height: 56, backgroundColor: "var(--border)" }}>
-                    {member.profile_path ? (
-                      <Image src={`https://image.tmdb.org/t/p/w185${member.profile_path}`} alt={member.name} width={56} height={56} className="object-cover w-full h-full" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center" style={{ color: "var(--text-muted)", fontSize: 22 }}>◉</div>
-                    )}
-                  </div>
-                  <p className="text-xs font-medium leading-tight" style={{ color: "var(--foreground)" }}>{member.name}</p>
-                  <p className="text-xs leading-tight mt-0.5" style={{ color: "var(--text-muted)" }}>{member.character}</p>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {recs.length > 0 && (
-          <div className="mt-6">
-            <h2 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>More like this</h2>
-            <div className="flex gap-3 overflow-x-auto py-1 pb-2">
-              {recs.map((rec) => (
-                <Link key={rec.id} href={`/tv/${rec.id}`} className="shrink-0 group" style={{ width: 110 }} title={rec.name}>
-                  <div className="relative rounded-md overflow-hidden mb-1.5" style={{ width: 110, aspectRatio: "2/3", backgroundColor: "var(--border)" }}>
-                    {rec.poster_path && (
-                      <Image src={`https://image.tmdb.org/t/p/w300${rec.poster_path}`} alt={rec.name} width={110} height={165} className="object-cover w-full h-full group-hover:opacity-90 transition-opacity" />
-                    )}
-                  </div>
-                  <p className="text-xs font-medium leading-tight line-clamp-2" style={{ color: "var(--foreground)" }}>{rec.name}</p>
-                  {typeof rec.vote_average === "number" && rec.vote_average > 0 && (
-                    <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>★ {rec.vote_average.toFixed(1)}</p>
-                  )}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
       </main>
     </div>
   );
