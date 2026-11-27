@@ -272,6 +272,36 @@ describe("reasons", () => {
     expect(reason(20)).toBe("Popular right now");
   });
 
+  it("are mirrored for the partner with partnerView, and left out without it", async () => {
+    const me: PoolPerson = {
+      entries: [entry("movie", 5, { status: "WATCHED", rating: 3, title: "Heat" }), entry("tv", 6, { title: "Mine" })],
+      providerIds: [],
+    };
+    const partner: PoolPerson = {
+      entries: [entry("movie", 3, { status: "WATCHED", rating: 3, title: "Arrival" }), entry("tv", 7, { title: "Theirs" })],
+      providerIds: [],
+    };
+    const fetchers = fakeFetchers({
+      recs: { "movie-3": [cand("movie", 10), cand("movie", 11)], "movie-5": [cand("movie", 11)] },
+    });
+
+    const plain = await buildPairPool(input({ me, partner, fetchers }));
+    expect(plain.pool.every((c) => c.partnerReason === undefined)).toBe(true);
+
+    const { pool } = await buildPairPool(input({ me, partner, fetchers, partnerView: { myName: "Alex" } }));
+    const view = (id: number) => {
+      const c = pool.find((p) => p.id === id);
+      return [c?.reason, c?.partnerReason];
+    };
+    expect(view(6)).toEqual(["On your list", "On Alex's list"]);
+    expect(view(7)).toEqual(["On Sam's list", "On your list"]);
+    expect(view(10)).toEqual(["Because Sam loved Arrival", "Because you loved Arrival"]);
+    expect(view(11)).toEqual([
+      "Because you loved Heat and Sam loved Arrival",
+      "Because you loved Arrival and Alex loved Heat",
+    ]);
+  });
+
   it("use list wording, a fallback name and the mood", () => {
     const base = { c: cand("tv", 1, { voteAverage: 8, voteCount: 5000 }), seededBy: {} };
     expect(reasonFor({ ...base, wantedBy: new Set(["partner"]) }, null, ANY)).toBe("On your friend's list");
