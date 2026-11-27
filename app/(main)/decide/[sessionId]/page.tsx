@@ -10,5 +10,5 @@ export const metadata: Metadata = { title: "Decide together — What's Up Next" 
  */
 export default async function DecidePage({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = await params;
-  return <DecideSession sessionId={sessionId} />;
+  return <DecideSession key={sessionId} sessionId={sessionId} />;
 }

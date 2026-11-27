@@ -5,6 +5,9 @@ import Link from "next/link";
 import type { Vote } from "@/lib/decide";
 import {
   RECONNECT_AFTER_FAILURES,
+  TOAST_MS,
+  isRetryableStatus,
+  loginHrefFor,
   firstUnvotedIndex,
   nextUnvotedIndex,
   partnerLabel,
@@ -77,9 +80,24 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
 
   const api = `/api/decide/${encodeURIComponent(sessionId)}`;
 
+  const inFlight = useRef(false);
+  const abort = useRef<AbortController | null>(null);
+
+  const goToLogin = useCallback(() => {
+    window.location.assign(loginHrefFor(`/decide/${encodeURIComponent(sessionId)}`));
+  }, [sessionId]);
+
   const refresh = useCallback(async () => {
+    if (inFlight.current) return; // never overlap polls
+    inFlight.current = true;
+    const controller = new AbortController();
+    abort.current = controller;
     try {
-      const res = await fetch(api, { cache: "no-store" });
+      const res = await fetch(api, { cache: "no-store", signal: controller.signal });
+      if (res.status === 401) {
+        goToLogin();
+        return;
+      }
       if (res.status === 404) {
         setLoad({ kind: "not-found" });
         return;
@@ -96,17 +114,28 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
       }
       setLoad({ kind: "ready", data });
     } catch {
+      if (controller.signal.aborted) return; // unmounted
       // Polling errors are silent (§5.3); after a few, "Reconnecting…" shows.
       setFailures((n) => n + 1);
       setLoad((prev) => (prev.kind === "loading" ? { kind: "error" } : prev));
+    } finally {
+      inFlight.current = false;
     }
-  }, [api]);
+  }, [api, goToLogin]);
 
   useEffect(() => {
     // Initial load; the poll below keeps it fresh.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
+    return () => abort.current?.abort();
   }, [refresh]);
+
+  // A toast clears itself after a few seconds
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), TOAST_MS);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const data = load.kind === "ready" ? load.data : null;
   const myVotes = useMemo<Record<string, Vote>>(
@@ -125,11 +154,22 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
         : screenFor({ ...data, myVotes });
   }
 
+  // Final screens don't need a leftover toast
+  useEffect(() => {
+    if (screen === "ended" || screen === "reveal" || screen === "no-match") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setToast(null);
+    }
+  }, [screen]);
+
   // Poll: every 3 s while waiting, slower while voting, never on final screens
   useEffect(() => {
     const ms = screen ? pollInterval(screen) : null;
     if (!ms) return;
-    const timer = setInterval(() => void refresh(), ms);
+    // Hidden tabs skip ticks; the visibilitychange handler catches up on return
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void refresh();
+    }, ms);
     const onVisible = () => document.visibilityState === "visible" && void refresh();
     document.addEventListener("visibilitychange", onVisible);
     return () => {
@@ -154,7 +194,7 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
               body: JSON.stringify({ candidateId: current.id, vote }),
             });
           } catch {
-            res = new Response(null, { status: 503 });
+            res = new Response(null, { status: 0 });
           }
           if (res.ok) {
             const body = (await res.json().catch(() => ({}))) as { status?: string };
@@ -163,6 +203,10 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
             setIndex(nextUnvotedIndex(candidates, next, index));
             setToast(null);
             if (body.status && body.status !== "OPEN") void refresh(); // the round just resolved
+            return;
+          }
+          if (res.status === 401) {
+            goToLogin();
             return;
           }
           if (res.status === 404) {
@@ -175,6 +219,11 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
             void refresh();
             return;
           }
+          if (!isRetryableStatus(res.status)) {
+            // Any other 4xx will fail the same way again
+            setToast((await readError(res)) ?? "Couldn't save that vote");
+            return;
+          }
           if (attempt < VOTE_ATTEMPTS) {
             setToast("Couldn't save, retrying…");
             await sleep(1000 * attempt);
@@ -185,7 +234,7 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
         setSaving(false);
       }
     },
-    [api, candidates, current, index, myVotes, refresh, saving],
+    [api, candidates, current, goToLogin, index, myVotes, refresh, saving],
   );
 
   // ← No, → Yes, ↑ Really want (§5.3)
@@ -209,6 +258,7 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
     setActionError(null);
     try {
       const res = await fetch(`${api}/${kind === "next" ? "next-round" : "pick"}`, { method: "POST" });
+      if (res.status === 401) return goToLogin();
       if (res.status === 404) return setLoad({ kind: "not-found" });
       // 409 often means the partner got there first; the refresh then shows their choice
       if (!res.ok) setActionError(res.status === 409 ? ((await readError(res)) ?? "Couldn't do that.") : "Couldn't do that. Try again.");
@@ -223,7 +273,11 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
   async function endVote() {
     if (!window.confirm("End this vote for both of you?")) return;
     try {
-      await fetch(api, { method: "DELETE" });
+      const res = await fetch(api, { method: "DELETE" });
+      if (res.status === 401) return goToLogin();
+      if (!res.ok) setToast("Couldn't end the vote. Try again.");
+    } catch {
+      setToast("Couldn't end the vote. Check your connection and try again.");
     } finally {
       await refresh();
     }

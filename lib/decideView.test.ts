@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   cardMeta,
+  isRetryableStatus,
+  loginHrefFor,
   firstUnvotedIndex,
   nextUnvotedIndex,
   partnerLabel,
@@ -104,5 +106,20 @@ describe("copy", () => {
     expect(partnerLabel("Sam Jones")).toBe("Sam");
     expect(partnerLabel("  ")).toBe("your friend");
     expect(partnerLabel(null)).toBe("your friend");
+  });
+});
+
+describe("isRetryableStatus", () => {
+  it("retries network errors and 5xx only", () => {
+    expect(isRetryableStatus(0)).toBe(true);
+    expect(isRetryableStatus(500)).toBe(true);
+    expect(isRetryableStatus(503)).toBe(true);
+    for (const s of [400, 401, 403, 404, 409, 429]) expect(isRetryableStatus(s)).toBe(false);
+  });
+});
+
+describe("loginHrefFor", () => {
+  it("encodes the return path", () => {
+    expect(loginHrefFor("/decide/abc")).toBe("/login?callbackUrl=%2Fdecide%2Fabc");
   });
 });

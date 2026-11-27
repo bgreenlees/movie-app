@@ -141,3 +141,16 @@ export function partnerLabel(name: string | null | undefined): string {
 function isVote(v: unknown): v is Vote {
   return v === 0 || v === 1 || v === 2;
 }
+
+/** How long a toast stays on screen (ms). */
+export const TOAST_MS = 4_000;
+
+/** Only server errors and network failures (status 0) are worth retrying; a 4xx will fail the same way again. */
+export function isRetryableStatus(status: number): boolean {
+  return status === 0 || status >= 500;
+}
+
+/** Where to send someone whose session expired: sign in, then come back to this page. */
+export function loginHrefFor(path: string): string {
+  return `/login?callbackUrl=${encodeURIComponent(path)}`;
+}
