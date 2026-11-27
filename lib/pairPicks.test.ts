@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SELECTION } from "./moodPicker";
-import { drawPairPicks, drawWeight, emptyKind, pairPicksQuery } from "./pairPicks";
+import { drawPairPicks, drawWeight, emptyKind, pairPicksQuery, refillPicks } from "./pairPicks";
 
 const c = (id: number, pairScore: number, mediaType: "movie" | "tv" = "movie") => ({ id, mediaType, pairScore });
 
@@ -103,5 +103,39 @@ describe("emptyKind", () => {
     expect(emptyKind({ ...DEFAULT_SELECTION, vibe: "light" })).toBe("mood");
     expect(emptyKind({ ...DEFAULT_SELECTION, time: "30" })).toBe("mood");
     expect(emptyKind(DEFAULT_SELECTION)).toBe("none");
+  });
+});
+
+describe("refillPicks", () => {
+  const pool = Array.from({ length: 12 }, (_, i) => c(i + 1, 1 - i / 12));
+  const shownNow = pool.slice(0, 5);
+
+  it("returns the same array when nothing is hidden", () => {
+    expect(refillPicks(shownNow, pool, new Set())).toBe(shownNow);
+  });
+
+  it("tops up to 5 when picks are hidden, never repeating or using hidden titles", () => {
+    const hidden = new Set(shownNow.map((p) => `${p.mediaType}-${p.id}`));
+    const out = refillPicks(shownNow, pool, hidden, { random: seeded(1) });
+    expect(out).toHaveLength(5);
+    const ids = out.map((p) => p.id);
+    expect(new Set(ids).size).toBe(5);
+    expect(ids.every((id) => id > 5)).toBe(true);
+  });
+
+  it("keeps the visible picks and replaces only the hidden one", () => {
+    const hidden = new Set(["movie-3"]);
+    const out = refillPicks(shownNow, pool, hidden, { random: seeded(2) });
+    expect(out).toHaveLength(5);
+    expect(out.map((p) => p.id)).toEqual(expect.arrayContaining([1, 2, 4, 5]));
+    expect(out.some((p) => p.id === 3)).toBe(false);
+  });
+
+  it("gives what's left when the pool runs short, and none when it is empty", () => {
+    const small = pool.slice(0, 6);
+    const hidden = new Set(shownNow.slice(0, 4).map((p) => `${p.mediaType}-${p.id}`));
+    expect(refillPicks(shownNow, small, hidden).map((p) => p.id).sort()).toEqual([5, 6]);
+    const all = new Set(small.map((p) => `${p.mediaType}-${p.id}`));
+    expect(refillPicks(shownNow, small, all)).toEqual([]);
   });
 });

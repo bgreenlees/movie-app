@@ -7,6 +7,7 @@ import {
   excludedKeys,
   parsePairPicksQuery,
   reasonFor,
+  withArticle,
   resolveServices,
   type FullTitleFacts,
   type PairPoolInput,
@@ -280,6 +281,20 @@ describe("reasons", () => {
     );
     expect(reasonFor({ ...base, wantedBy: new Set() }, "Sam", { ...ANY, vibe: "light" })).toBe("Fits a light night");
     expect(reasonFor({ ...base, wantedBy: new Set() }, "Sam", ANY)).toBe("Highly rated");
+  });
+
+  it("uses 'an' before a vowel sound", () => {
+    const base = { c: cand("tv", 1, { voteAverage: 8, voteCount: 5000 }), seededBy: {}, wantedBy: new Set<"me" | "partner">() };
+    expect(reasonFor(base, "Sam", { ...ANY, vibe: "intense" })).toBe("Fits an intense night");
+    expect(reasonFor(base, "Sam", { ...ANY, vibe: "heavy" })).toBe("Fits a heavy night");
+  });
+});
+
+describe("withArticle", () => {
+  it("picks a or an from the first letter", () => {
+    expect(withArticle("intense")).toBe("an intense");
+    expect(withArticle("Easy")).toBe("an Easy");
+    expect(withArticle("light")).toBe("a light");
   });
 });
 

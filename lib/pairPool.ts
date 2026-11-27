@@ -615,6 +615,11 @@ export function rankWeight(i: number, n: number): number {
 
 // ── Reasons (§5.5) ───────────────────────────────────────────────────────────
 
+/** "a light" / "an intense": picks the article from the next word's first letter. */
+export function withArticle(word: string): string {
+  return `${/^[aeiou]/i.test(word) ? "an" : "a"} ${word}`;
+}
+
 const VIBE_WORDS: Record<Exclude<MoodSelection["vibe"], "any">, string> = {
   light: "light",
   heavy: "heavy",
@@ -648,7 +653,7 @@ export function reasonFor(
   if (myLove) return `Because you loved ${myLove}`;
   if (theirLove) return `Because ${name} loved ${theirLove}`;
 
-  if (selection.vibe !== "any") return `Fits a ${VIBE_WORDS[selection.vibe]} night`;
+  if (selection.vibe !== "any") return `Fits ${withArticle(VIBE_WORDS[selection.vibe])} night`;
   if (d.c.voteAverage >= 7.5 && (d.c.voteCount ?? 0) >= 300) return "Highly rated";
   return "Popular right now";
 }
