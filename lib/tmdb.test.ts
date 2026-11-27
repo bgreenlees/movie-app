@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+// "server-only" throws outside a React Server Components build; Vitest is neither.
+vi.mock("server-only", () => ({}));
 import { tvEpisodeRuntime } from "./tmdb";
 
 describe("tvEpisodeRuntime", () => {

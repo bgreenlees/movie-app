@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { tmdb } from "@/lib/tmdb";
+import { getBackdropUrl, getPosterUrl } from "@/lib/tmdbImages";
 import { auth } from "@/lib/auth";
 import ShareButton from "@/components/ui/ShareButton";
 import TrailerButton from "@/components/ui/TrailerButton";
@@ -34,7 +35,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   try {
     const details = await tmdb.getTVShowDetails(tvId);
-    const posterUrl = tmdb.getPosterUrl(details.poster_path, "original");
+    const posterUrl = getPosterUrl(details.poster_path, "original");
     return {
       title: `${details.name} — What's Up Next`,
       description: details.overview || undefined,
@@ -103,8 +104,8 @@ export default async function TVShowPage({ params }: Props) {
       <main id="main-content">
         <DetailHero
           title={details.name}
-          backdropUrl={tmdb.getBackdropUrl(details.backdrop_path)}
-          posterUrl={tmdb.getPosterUrl(details.poster_path)}
+          backdropUrl={getBackdropUrl(details.backdrop_path)}
+          posterUrl={getPosterUrl(details.poster_path)}
           eyebrow={heroEyebrow("tv", providers)}
           meta={joinMeta([
             tvYearSpan(details.first_air_date, details.last_air_date, ended),

@@ -1,3 +1,4 @@
+import "server-only";
 import { PROVIDER_NAME_OVERRIDES } from "./providers";
 
 interface TMDBMovie {
@@ -333,16 +334,6 @@ class TMDBClient {
     }
 
     return response.json();
-  }
-
-  getPosterUrl(posterPath: string | null, size: "w500" | "original" = "w500"): string | null {
-    if (!posterPath) return null;
-    return `https://image.tmdb.org/t/p/${size}${posterPath}`;
-  }
-
-  getBackdropUrl(backdropPath: string | null, size: "w780" | "w1280" = "w1280"): string | null {
-    if (!backdropPath) return null;
-    return `https://image.tmdb.org/t/p/${size}${backdropPath}`;
   }
 
   async getMovieDetailsWithCredits(movieId: number): Promise<{

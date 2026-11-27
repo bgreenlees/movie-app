@@ -8,6 +8,8 @@ const nextAuth = vi.hoisted(() => vi.fn((config: unknown) => {
 }));
 vi.mock("next-auth", () => ({ default: nextAuth }));
 vi.mock("./db", () => ({ prisma: {} }));
+// "server-only" throws outside a React Server Components build; Vitest is neither.
+vi.mock("server-only", () => ({}));
 
 async function providerIds(env: { NODE_ENV: string; DEV_LOGIN?: string; VERCEL_ENV?: string }) {
   vi.resetModules();
