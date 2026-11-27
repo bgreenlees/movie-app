@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import TVShowCard from "@/components/tv/TVShowCard";
+import PosterCard, { POSTER_GRID } from "@/components/ui/PosterCard";
+import { episodeMeta, seasonProgress, statusChip, yearMeta } from "@/lib/posterCard";
 import AddTVModal from "@/components/tv/AddTVModal";
-import ThumbRating from "@/components/ui/ThumbRating";
 import toast from "react-hot-toast";
 
 type Tab = "watching" | "want" | "finished";
@@ -36,6 +36,8 @@ interface NextEpisodeInfo {
     episode_number: number;
     season_number: number;
   } | null;
+  /** Episodes per season, for the card's progress bar. */
+  episodeCounts: Record<number, number>;
 }
 
 function formatAirDate(dateStr: string | null) {
@@ -85,6 +87,7 @@ export default function MyTVPage() {
   const [entries, setEntries] = useState<TVEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [nextEpisodes, setNextEpisodes] = useState<Record<number, NextEpisodeInfo["next_episode_to_air"]>>({});
+  const [episodeCounts, setEpisodeCounts] = useState<Record<number, NextEpisodeInfo["episodeCounts"]>>({});
   const [selectedShow, setSelectedShow] = useState<TVEntry | null>(null);
 
   // Reset per-tab state while rendering, when the tab changes
@@ -93,6 +96,7 @@ export default function MyTVPage() {
   if (prevTab !== activeTab) {
     setPrevTab(activeTab);
     setNextEpisodes({});
+    setEpisodeCounts({});
     setIsLoading(true);
   }
 
@@ -117,17 +121,28 @@ export default function MyTVPage() {
         loaded.map((entry) =>
           fetch(`/api/tv/${entry.tvShowId}/credits`)
             .then((r) => r.json())
-            .then((data) => ({ tvShowId: entry.tvShowId, next_episode_to_air: data.next_episode_to_air ?? null }))
+            .then((data): NextEpisodeInfo => ({
+              tvShowId: entry.tvShowId,
+              next_episode_to_air: data.next_episode_to_air ?? null,
+              episodeCounts: Object.fromEntries(
+                (Array.isArray(data.seasons) ? data.seasons : []).map(
+                  (season: { season_number: number; episode_count: number }) => [season.season_number, season.episode_count]
+                )
+              ),
+            }))
         )
       ).then((results) => {
         if (cancelled) return;
         const map: Record<number, NextEpisodeInfo["next_episode_to_air"]> = {};
+        const counts: Record<number, NextEpisodeInfo["episodeCounts"]> = {};
         results.forEach((r) => {
           if (r.status === "fulfilled") {
             map[r.value.tvShowId] = r.value.next_episode_to_air;
+            counts[r.value.tvShowId] = r.value.episodeCounts;
           }
         });
         setNextEpisodes(map);
+        setEpisodeCounts(counts);
       });
     });
     return () => {
@@ -267,83 +282,50 @@ export default function MyTVPage() {
             )}
 
           {/* Card grid */}
-          <div
-            className="grid gap-4"
-            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}
-          >
+          <div className={POSTER_GRID}>
             {displayEntries.map((entry) => {
-              const next = activeTab === "watching" ? nextEpisodes[entry.tvShowId] : undefined;
+              const watching = activeTab === "watching";
+              const next = watching ? nextEpisodes[entry.tvShowId] : undefined;
               const days = next ? daysUntil(next?.air_date ?? null) : null;
+              const progress =
+                watching && entry.currentSeason
+                  ? seasonProgress(entry.currentEpisode, episodeCounts[entry.tvShowId]?.[entry.currentSeason])
+                  : null;
+              const nextCode = next
+                ? `S${String(next.season_number).padStart(2, "0")}E${String(next.episode_number).padStart(2, "0")}`
+                : "";
               return (
-                <TVShowCard
+                <PosterCard
                   key={entry.id}
                   id={entry.tvShowId}
-                  name={entry.tvShow.name}
+                  mediaType="tv"
+                  title={entry.tvShow.name}
                   posterPath={entry.tvShow.posterPath}
-                  firstAirDate={entry.tvShow.firstAirDate ?? undefined}
                   overview={entry.tvShow.overview ?? undefined}
-                  watchingStatus={entry.status}
-                  thumbRating={
-                    <ThumbRating
-                      rating={entry.rating || 0}
-                      onChange={(r) => handleRating(entry, r)}
-                      showLabels={false}
-                    />
+                  meta={
+                    (watching ? episodeMeta(entry.currentSeason, entry.currentEpisode) : null) ??
+                    yearMeta(entry.tvShow.firstAirDate, "tv")
                   }
+                  progress={progress}
+                  statusChip={statusChip(entry.status, entry.rating)}
+                  onList
+                  onAdd={() => setSelectedShow(entry)}
+                  rating={entry.rating || 0}
+                  onRate={(r) => handleRating(entry, r)}
+                  onRemove={() => handleRemove(entry)}
                 >
-                  {activeTab === "watching" && (
-                    <>
-                      {(entry.currentSeason || entry.currentEpisode) && (
-                        <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>
-                          {entry.currentSeason && `S${String(entry.currentSeason).padStart(2, "0")}`}
-                          {entry.currentSeason && entry.currentEpisode && " "}
-                          {entry.currentEpisode && `E${String(entry.currentEpisode).padStart(2, "0")}`}
-                        </p>
-                      )}
-                      {next && (
-                        <div
-                          className="text-xs px-2 py-1 rounded text-center"
-                          style={{
-                            backgroundColor:
-                              days !== null && days >= 0
-                                ? "color-mix(in srgb, var(--accent) 15%, var(--card-bg))"
-                                : "var(--border)",
-                            color: days !== null && days >= 0 ? "var(--color-accent-text)" : "var(--text-muted)",
-                          }}
-                        >
-                          {days !== null && days >= 0 ? (
-                            <>
-                              Next: S{String(next.season_number).padStart(2, "0")}E{String(next.episode_number).padStart(2, "0")}
-                              {" · "}{days === 0 ? "Today!" : days === 1 ? "Tomorrow" : `${days}d`}
-                            </>
-                          ) : (
-                            <>
-                              S{String(next.season_number).padStart(2, "0")}E{String(next.episode_number).padStart(2, "0")}
-                              {next.air_date && ` · ${formatAirDate(next.air_date)}`}
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </>
+                  {next && (
+                    <p
+                      className={`mt-1 text-[13px] leading-[18px] ${
+                        days !== null && days >= 0 ? "text-accent-text" : "text-muted"
+                      }`}
+                    >
+                      {days !== null && days >= 0
+                        ? `Next: ${nextCode} · ${days === 0 ? "Today!" : days === 1 ? "Tomorrow" : `${days}d`}`
+                        : `${nextCode}${next.air_date ? ` · ${formatAirDate(next.air_date)}` : ""}`}
+                    </p>
                   )}
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setSelectedShow(entry)}
-                      className="flex-1 px-3 py-1.5 text-white rounded-md text-xs cursor-pointer hover:opacity-90 hover:scale-105 transition-all"
-                      style={{ backgroundColor: "var(--accent)" }}
-                    >
-                      Update
-                    </button>
-                    <button
-                      onClick={() => handleRemove(entry)}
-                      className="px-3 py-1.5 rounded-md text-xs cursor-pointer hover:opacity-90 transition-all"
-                      style={{ border: "1px solid var(--border)", color: "var(--text-muted)" }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </TVShowCard>
+                </PosterCard>
               );
             })}
           </div>

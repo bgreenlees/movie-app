@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import MovieCard from "@/components/movies/MovieCard";
+import PosterCard, { POSTER_GRID } from "@/components/ui/PosterCard";
+import { statusChip, yearMeta } from "@/lib/posterCard";
 import AddMovieModal from "@/components/movies/AddMovieModal";
 import TrailerModal from "@/components/movies/TrailerModal";
-import ThumbRating from "@/components/ui/ThumbRating";
 import toast from "react-hot-toast";
 
 type Tab = "want" | "watched";
@@ -110,6 +110,17 @@ export default function MyMoviesPage() {
     }
   };
 
+  const handleRemove = async (entryId: string) => {
+    try {
+      const response = await fetch(`/api/watchlist/${entryId}`, { method: "DELETE" });
+      if (!response.ok) throw new Error();
+      toast.success("Removed");
+      fetchEntries(activeTab);
+    } catch {
+      toast.error("Failed to remove movie");
+    }
+  };
+
   const emptyMessage =
     activeTab === "want"
       ? "Your watchlist is empty. Search for movies to add!"
@@ -149,53 +160,25 @@ export default function MyMoviesPage() {
           <p style={{ color: "var(--text-muted)" }}>{emptyMessage}</p>
         </div>
       ) : (
-        <div
-          className="grid gap-4"
-          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}
-        >
+        <div className={POSTER_GRID}>
           {entries.map((entry) => (
-            <MovieCard
+            <PosterCard
               key={entry.id}
               id={entry.movie.id}
+              mediaType="movie"
               title={entry.movie.title}
               posterPath={entry.movie.posterPath}
-              releaseDate={entry.movie.releaseDate || undefined}
-              onPlayTrailer={(id) => setTrailerMovie({ id, title: entry.movie.title })}
-              thumbRating={
-                <ThumbRating
-                  rating={entry.rating || 0}
-                  onChange={(r) => handleRating(entry.id, r)}
-                  showLabels={false}
-                  onNotInterested={() => handleNotInterested(entry.id)}
-                />
-              }
-            >
-              <div className="space-y-1.5">
-                <button
-                  onClick={() => setSelectedEntry(entry)}
-                  className="w-full px-3 py-1.5 text-white rounded-md transition-all duration-200 text-xs cursor-pointer hover:opacity-90 hover:scale-105"
-                  style={{ backgroundColor: "var(--accent)" }}
-                >
-                  Update
-                </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      const response = await fetch(`/api/watchlist/${entry.id}`, { method: "DELETE" });
-                      if (!response.ok) throw new Error();
-                      toast.success("Removed");
-                      fetchEntries(activeTab);
-                    } catch {
-                      toast.error("Failed to remove movie");
-                    }
-                  }}
-                  className="w-full px-3 py-1.5 border rounded-md transition-all duration-200 text-xs cursor-pointer hover:bg-[var(--hover-bg)] hover:scale-105"
-                  style={{ color: "var(--foreground)", borderColor: "var(--border)" }}
-                >
-                  Remove
-                </button>
-              </div>
-            </MovieCard>
+              overview={entry.movie.overview ?? undefined}
+              meta={yearMeta(entry.movie.releaseDate, "movie")}
+              statusChip={statusChip(entry.status, entry.rating)}
+              onList
+              onAdd={() => setSelectedEntry(entry)}
+              rating={entry.rating || 0}
+              onRate={(r) => handleRating(entry.id, r)}
+              onNotInterested={() => handleNotInterested(entry.id)}
+              onTrailer={() => setTrailerMovie({ id: entry.movie.id, title: entry.movie.title })}
+              onRemove={() => handleRemove(entry.id)}
+            />
           ))}
         </div>
       )}

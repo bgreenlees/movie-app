@@ -4,13 +4,12 @@ import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import MovieCard from "@/components/movies/MovieCard";
+import PosterCard, { POSTER_GRID } from "@/components/ui/PosterCard";
 import AddMovieModal from "@/components/movies/AddMovieModal";
 import TrailerModal from "@/components/movies/TrailerModal";
 import OnboardingModal from "@/components/movies/OnboardingModal";
-import TVShowCard, { type TVSeasonBanner } from "@/components/tv/TVShowCard";
+import { isOnList, seasonMeta, yearMeta, type SeasonBanner as TVSeasonBanner } from "@/lib/posterCard";
 import AddTVModal from "@/components/tv/AddTVModal";
-import ThumbRating from "@/components/ui/ThumbRating";
 import ResultFilters, { type CoStar } from "@/components/ui/ResultFilters";
 import { applyResultFilters, genresInResults, intersectIds, type SortOption } from "@/lib/resultFilters";
 import type { TMDBMovie, TMDBTVShow } from "@/lib/tmdb";
@@ -566,73 +565,50 @@ function DiscoverPageInner() {
   const isFilteredEmpty = !isEmpty && shownCount === 0;
 
   const renderMovieGrid = (arr: TMDBMovie[], key: string) => (
-    <div key={key} className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))" }}>
+    <div key={key} className={POSTER_GRID}>
       {arr.map((movie) => {
         const existingEntry = watchlistEntries[movie.id];
         return (
-          <MovieCard
+          <PosterCard
             key={movie.id}
             id={movie.id}
+            mediaType="movie"
             title={movie.title}
             posterPath={movie.poster_path}
-            releaseDate={movie.release_date}
             overview={movie.overview}
-            rating={movie.vote_average}
-            onPlayTrailer={(id) => setTrailerMovie({ id, title: movie.title })}
-            thumbRating={
-              <ThumbRating
-                rating={existingEntry?.rating || 0}
-                onChange={(r) => handleMovieRating(movie.id, r)}
-                showLabels={false}
-                notInterested={existingEntry?.status === "NOT_INTERESTED"}
-                onNotInterested={() => handleNotInterested(movie.id)}
-              />
-            }
-          >
-            <button
-              onClick={() => setSelectedMovie({ id: movie.id, title: movie.title })}
-              className="w-full px-3 py-2.5 text-white rounded-md transition-all duration-200 text-sm cursor-pointer hover:opacity-90 hover:scale-105"
-              style={{ backgroundColor: "var(--accent)" }}
-            >
-              {existingEntry ? "Update" : "Add"}
-            </button>
-          </MovieCard>
+            meta={yearMeta(movie.release_date, "movie")}
+            onList={isOnList(existingEntry?.status)}
+            onAdd={() => setSelectedMovie({ id: movie.id, title: movie.title })}
+            rating={existingEntry?.rating || 0}
+            onRate={(r) => handleMovieRating(movie.id, r)}
+            notInterested={existingEntry?.status === "NOT_INTERESTED"}
+            onNotInterested={() => handleNotInterested(movie.id)}
+            onTrailer={() => setTrailerMovie({ id: movie.id, title: movie.title })}
+          />
         );
       })}
     </div>
   );
 
   const renderTVGrid = (arr: TMDBTVShow[], key: string) => (
-    <div key={key} className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))" }}>
+    <div key={key} className={POSTER_GRID}>
       {arr.map((show) => {
         const existingEntry = tvEntries[show.id];
+        const banner = seasonBanners[show.id];
         return (
-          <TVShowCard
+          <PosterCard
             key={show.id}
             id={show.id}
-            name={show.name}
+            mediaType="tv"
+            title={show.name}
             posterPath={show.poster_path}
-            firstAirDate={show.first_air_date}
             overview={show.overview}
-            rating={show.vote_average}
-            watchingStatus={existingEntry?.status}
-            seasonBanner={seasonBanners[show.id] ?? null}
-            thumbRating={
-              <ThumbRating
-                rating={existingEntry?.rating || 0}
-                onChange={(r) => handleTVRating(show.id, r)}
-                showLabels={false}
-              />
-            }
-          >
-            <button
-              onClick={() => setSelectedShow({ id: show.id, name: show.name })}
-              className="w-full px-3 py-2.5 text-white rounded-md transition-all duration-200 text-sm cursor-pointer hover:opacity-90 hover:scale-105"
-              style={{ backgroundColor: "var(--accent)" }}
-            >
-              {existingEntry ? "Update" : "Add"}
-            </button>
-          </TVShowCard>
+            meta={banner ? seasonMeta(banner) : yearMeta(show.first_air_date, "tv")}
+            onList={isOnList(existingEntry?.status)}
+            onAdd={() => setSelectedShow({ id: show.id, name: show.name })}
+            rating={existingEntry?.rating || 0}
+            onRate={(r) => handleTVRating(show.id, r)}
+          />
         );
       })}
     </div>
