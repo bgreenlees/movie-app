@@ -10,7 +10,7 @@
 #   --note   extra instructions appended to the brief
 #   --dry-run  print the brief and the launch plan, launch nothing
 #   --in NAME  resume in an EXISTING worktree (e.g. after an interruption) instead of creating one
-#   --force    launch even if MAX_AGENTS are already working (default cap: 4)
+#   --force    launch even if MAX_AGENTS are already working (default cap: 4) or usage.sh gate refuses
 #
 # Cost controls (see docs/factory.md "Cost controls"): at most MAX_AGENTS (env, default 4)
 # agents run at once; the default model comes from the role file (Sonnet except planner/researcher);
@@ -45,6 +45,11 @@ ROLE_FILE="$ROOT/.claude/agents/$ROLE.md"
 [ -n "$MODEL" ] || MODEL=$(sed -n 's/^model: *//p' "$ROLE_FILE" | head -1)
 [ -n "$MODEL" ] || MODEL=sonnet
 ORCA=${ORCA_CLI_COMMAND:-orca}
+
+# --- Cost control: pace against the owner's plan usage (scripts/factory/usage.sh) ---
+if [ "$DRY" -eq 0 ] && [ "$FORCE" -eq 0 ]; then
+  "$ROOT/scripts/factory/usage.sh" gate || die "not launching: see the usage line above (--force overrides)"
+fi
 
 # --- Cost control: cap concurrent agents ---------------------------------
 MAX_AGENTS=${MAX_AGENTS:-4}
