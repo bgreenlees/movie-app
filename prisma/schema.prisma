@@ -45,6 +45,9 @@ model UserConnection {
 enum ConnectionStatus {
   PENDING
   ACCEPTED
+  // Kept (not deleted) when the addressee declines, so the requester can't
+  // simply re-send. Treated as "not connected" everywhere.
+  DECLINED
 }
 
 model Movie {
