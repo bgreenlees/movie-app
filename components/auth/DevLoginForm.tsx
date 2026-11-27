@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { safeCallbackUrl } from "@/lib/callbackUrl";
 
 /**
  * Local-development sign-in (issue #69). Rendered only when the server says the
  * dev-login provider is enabled (see lib/devLogin.ts). No password: the server
  * accepts only @example.test addresses, and only outside production.
  */
-export default function DevLoginForm() {
+export default function DevLoginForm({ callbackUrl }: { callbackUrl?: string }) {
   const [email, setEmail] = useState("tester@example.test");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -25,7 +26,7 @@ export default function DevLoginForm() {
       setError("Sign-in failed. Use an address ending in @example.test.");
       return;
     }
-    router.push("/search");
+    router.push(safeCallbackUrl(callbackUrl));
     router.refresh();
   };
 
