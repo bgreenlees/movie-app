@@ -13,14 +13,14 @@
 # tokens and runs at most every USAGE_STALE_MIN minutes; the result is cached in
 # ~/.claude/state/usage.json. If it can't be read, `gate` refuses: ask the owner, then --force.
 #
-# Thresholds (env): USAGE_LAUNCH_MAX (default 70) session % above which nothing new launches;
+# Thresholds (env): USAGE_LAUNCH_MAX (default 95) session % above which nothing new launches;
 # USAGE_WIP_AT (default 85) session % at which running agents are told to commit;
 # USAGE_WEEK_SLACK (default 15) how many points the week may run ahead of an even pace;
 # USAGE_STALE_MIN (default 10) minutes after which the cached numbers are refreshed.
 set -euo pipefail
 
 USAGE_FILE=${USAGE_FILE:-$HOME/.claude/state/usage.json}
-export USAGE_FILE USAGE_LAUNCH_MAX=${USAGE_LAUNCH_MAX:-70} USAGE_WIP_AT=${USAGE_WIP_AT:-85} \
+export USAGE_FILE USAGE_LAUNCH_MAX=${USAGE_LAUNCH_MAX:-95} USAGE_WIP_AT=${USAGE_WIP_AT:-85} \
   USAGE_WEEK_SLACK=${USAGE_WEEK_SLACK:-15} USAGE_STALE_MIN=${USAGE_STALE_MIN:-10}
 
 # Prints "<mode-result>\t<message>"; mode is line | gate | session.
