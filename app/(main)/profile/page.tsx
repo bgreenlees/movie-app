@@ -7,6 +7,8 @@ import { signOut } from "next-auth/react";
 import toast from "react-hot-toast";
 import type { TMDBWatchProvider } from "@/lib/tmdb";
 import { SkeletonBlock } from "@/components/ui/Skeleton";
+import { DecideEntry } from "@/components/decide/DecideEntry";
+import { CONSENT_LINE } from "@/lib/decideEntry";
 import EmptyState from "@/components/ui/EmptyState";
 import ErrorState from "@/components/ui/ErrorState";
 
@@ -313,6 +315,9 @@ export default function ProfilePage() {
               {isSendingRequest ? "Sending…" : "Send Request"}
             </button>
           </form>
+          <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+            {CONSENT_LINE}
+          </p>
         </div>
 
         {/* Pending incoming requests */}
@@ -321,6 +326,9 @@ export default function ProfilePage() {
             <h3 className="text-sm font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
               Pending Requests
             </h3>
+            <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
+              Accepting means: {CONSENT_LINE.charAt(0).toLowerCase() + CONSENT_LINE.slice(1)}
+            </p>
             <div className="space-y-2">
               {pending.map((req) => (
                 <div
@@ -376,9 +384,10 @@ export default function ProfilePage() {
               {friends.map(({ connectionId, friend }) => (
                 <div
                   key={connectionId}
-                  className="flex items-center justify-between p-3 rounded-lg border"
+                  className="p-3 rounded-lg border"
                   style={{ borderColor: "var(--border)", backgroundColor: "var(--card-bg)" }}
                 >
+                  <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
                       {friend.name || friend.email}
@@ -405,6 +414,8 @@ export default function ProfilePage() {
                       Remove
                     </button>
                   </div>
+                  </div>
+                  <DecideEntry partnerId={friend.id} partnerName={friend.name ?? ""} compact />
                 </div>
               ))}
             </div>

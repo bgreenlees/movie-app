@@ -5,6 +5,7 @@ import AddMovieModal from "@/components/movies/AddMovieModal";
 import TrailerModal from "@/components/movies/TrailerModal";
 import AddTVModal from "@/components/tv/AddTVModal";
 import PairCard, { PAIR_GRID, type PairCardTitle } from "@/components/watch-together/PairCard";
+import { DecideEntry } from "@/components/decide/DecideEntry";
 import TonightForYouBoth from "@/components/watch-together/TonightForYouBoth";
 import Skeleton from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
@@ -182,9 +183,12 @@ function WatchTogether({ userId }: { userId: string }) {
       <h1 className="text-3xl font-bold mb-2" style={{ color: "var(--primary)" }}>
         Watch Together
       </h1>
-      <p className="text-base mb-8" style={{ color: "var(--text-muted)" }}>
-        with <span style={{ color: "var(--foreground)" }}>{friendName ?? "…"}</span>
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <p className="text-base" style={{ color: "var(--text-muted)" }}>
+          with <span style={{ color: "var(--foreground)" }}>{friendName ?? "…"}</span>
+        </p>
+        <DecideEntry partnerId={userId} partnerName={friendName} />
+      </div>
 
       <TonightForYouBoth
         partnerId={userId}
