@@ -8,7 +8,7 @@ import { detailHref, type MediaType } from "@/lib/posterCard";
 import MovieDetailModal from "@/components/movies/MovieDetailModal";
 import TVShowDetailModal from "@/components/tv/TVShowDetailModal";
 
-export { POSTER_GRID_CLASS as POSTER_GRID } from "@/lib/posterGrid";
+export { POSTER_GRID_CLASS as POSTER_GRID } from "../../lib/posterGrid";
 
 // Every control on a poster shares one style (design D2): a 32px circle with a
 // shadow, and a 44px tap area from the ::before. White and purple are fixed

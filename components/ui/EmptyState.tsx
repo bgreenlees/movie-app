@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { primaryActionClass } from "@/components/ui/StatusPage";
+import { primaryActionClass } from "./StatusPage";
 
 interface EmptyStateProps {
   /** Decorative glyph/emoji or an SVG; hidden from screen readers. */

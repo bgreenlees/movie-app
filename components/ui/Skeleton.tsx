@@ -1,4 +1,4 @@
-import { POSTER_GRID_CLASS } from "@/lib/posterGrid";
+import { POSTER_GRID_CLASS } from "../../lib/posterGrid";
 
 /** Shimmer block. Pair with a fixed size or aspect ratio so the layout doesn't jump when content arrives. */
 export function SkeletonBlock({ className = "" }: { className?: string }) {
