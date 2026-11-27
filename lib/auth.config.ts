@@ -14,5 +14,8 @@ export const authConfig: NextAuthConfig = {
   },
   pages: {
     signIn: "/login",
+    // Failed sign-ins (e.g. an unverified Google email) come back to /login?error=…,
+    // which shows a message, instead of Auth.js's bare error page.
+    error: "/login",
   },
 };
