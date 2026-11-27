@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tmdb } from "@/lib/tmdb";
 import { fuzzySearch } from "@/lib/fuzzySearch";
+import { requireSession } from "@/lib/apiGuard";
 
 export async function GET(req: NextRequest) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   try {
     const searchParams = req.nextUrl.searchParams;
     const query = searchParams.get("q");

@@ -2,6 +2,9 @@
 // correction, so when a query returns nothing we retry with a spell-corrected
 // query plus looser variants (truncated words, dropped words) and keep results
 // whose titles are close to what the user typed.
+//
+// Each call costs up to MAX_CANDIDATES extra TMDB requests, so only call it from
+// routes that require a session (lib/apiGuard.ts requireSession; security audit F1).
 
 import { WORDS_BY_FREQUENCY } from "./data/wordFrequency";
 

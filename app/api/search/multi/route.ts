@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tmdb } from "@/lib/tmdb";
+import { requireSession } from "@/lib/apiGuard";
 
 export async function GET(req: NextRequest) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   try {
     const query = req.nextUrl.searchParams.get("q");
     if (!query || query.trim().length < 2) {

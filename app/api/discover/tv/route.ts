@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tmdb } from "@/lib/tmdb";
 import { isValidCountry } from "@/lib/countries";
+import { requireSession } from "@/lib/apiGuard";
 
 export async function GET(req: NextRequest) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   try {
     const genreId = req.nextUrl.searchParams.get("genreId");
     const country = req.nextUrl.searchParams.get("country");

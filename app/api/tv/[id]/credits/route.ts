@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tmdb } from "@/lib/tmdb";
+import { requireSession } from "@/lib/apiGuard";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   const { id } = await params;
   const tvId = parseInt(id);
 

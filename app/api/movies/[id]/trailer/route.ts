@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tmdb } from "@/lib/tmdb";
+import { limitByIp } from "@/lib/apiGuard";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const limited = limitByIp(req);
+  if (limited) return limited;
+
   try {
     const { id } = await params;
     const movieId = parseInt(id);
