@@ -50,5 +50,9 @@
     "prisma@6.19.1": true,
     "sharp@0.34.5": true,
     "unrs-resolver@1.11.1": true
+  },
+  "overrides": {
+    "effect": "3.22.4",
+    "deepmerge-ts": "8.0.2"
   }
 }
