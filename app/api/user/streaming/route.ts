@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { canonicalProviderIds } from "@/lib/providers";
+import { parseStreamingServices, readJsonObject } from "@/lib/validation";
 
 export async function GET() {
   const session = await auth();
@@ -20,12 +21,11 @@ export async function PATCH(req: NextRequest) {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const body = await req.json();
-    const streamingServices: number[] = body.streamingServices;
-
-    if (!Array.isArray(streamingServices)) {
-      return NextResponse.json({ error: "streamingServices must be an array" }, { status: 400 });
-    }
+    const body = await readJsonObject(req);
+    if (!body.ok) return NextResponse.json({ error: body.error }, { status: 400 });
+    const parsed = parseStreamingServices(body.value.streamingServices);
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const streamingServices = parsed.value;
 
     const user = await prisma.user.update({
       where: { id: session.user.id },

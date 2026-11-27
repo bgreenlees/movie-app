@@ -3,6 +3,15 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { TVWatchStatus } from "@prisma/client";
 import { tmdb } from "@/lib/tmdb";
+import {
+  parseEnum,
+  parseId,
+  parsePlatform,
+  parseProgress,
+  parseRating,
+  parseReview,
+  readJsonObject,
+} from "@/lib/validation";
 
 export async function GET(req: NextRequest) {
   try {
@@ -39,9 +48,26 @@ export async function POST(req: NextRequest) {
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const userId = session.user.id as string;
-    const { tvShowId, status, platform, rating, review, currentSeason, currentEpisode } = await req.json();
-
-    if (!tvShowId) return NextResponse.json({ error: "TV Show ID is required" }, { status: 400 });
+    const body = await readJsonObject(req);
+    if (!body.ok) return NextResponse.json({ error: body.error }, { status: 400 });
+    const b = body.value;
+    const tvShowIdResult = parseId(b.tvShowId, "tvShowId");
+    const statusResult =
+      b.status === undefined || b.status === null
+        ? ({ ok: true, value: "WANT_TO_WATCH" } as const)
+        : parseEnum(b.status, Object.values(TVWatchStatus), "status");
+    const platform = parsePlatform(b.platform);
+    const rating = parseRating(b.rating);
+    const review = parseReview(b.review);
+    const currentSeason = parseProgress(b.currentSeason, "currentSeason");
+    const currentEpisode = parseProgress(b.currentEpisode, "currentEpisode");
+    for (const r of [tvShowIdResult, statusResult, platform, rating, review, currentSeason, currentEpisode]) {
+      if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
+    }
+    if (!tvShowIdResult.ok || !statusResult.ok || !platform.ok || !rating.ok || !review.ok || !currentSeason.ok || !currentEpisode.ok) {
+      return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+    }
+    const tvShowId = tvShowIdResult.value;
 
     // Upsert TV show in DB
     let tvShow = await prisma.tVShow.findUnique({ where: { id: tvShowId } });
@@ -65,20 +91,20 @@ export async function POST(req: NextRequest) {
       create: {
         userId,
         tvShowId,
-        status: status || "WANT_TO_WATCH",
-        platform: platform || null,
-        rating: rating || null,
-        review: review || null,
-        currentSeason: currentSeason || null,
-        currentEpisode: currentEpisode || null,
+        status: statusResult.value,
+        platform: platform.value,
+        rating: rating.value,
+        review: review.value,
+        currentSeason: currentSeason.value,
+        currentEpisode: currentEpisode.value,
       },
       update: {
-        status: status || "WANT_TO_WATCH",
-        platform: platform || null,
-        rating: rating || null,
-        review: review || null,
-        currentSeason: currentSeason || null,
-        currentEpisode: currentEpisode || null,
+        status: statusResult.value,
+        platform: platform.value,
+        rating: rating.value,
+        review: review.value,
+        currentSeason: currentSeason.value,
+        currentEpisode: currentEpisode.value,
       },
       include: { tvShow: true },
     });
