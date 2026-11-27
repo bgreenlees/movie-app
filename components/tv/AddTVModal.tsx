@@ -108,7 +108,11 @@ export default function AddTVModal({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        if (!res.ok) { toast.error("Failed to update"); return; }
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          toast.error(data.error || "Failed to update");
+          return;
+        }
         toast.success("Updated!");
       } else {
         const res = await fetch("/api/tv/watchlist", {
@@ -116,7 +120,11 @@ export default function AddTVModal({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        if (!res.ok) { toast.error("Failed to add show"); return; }
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          toast.error(data.error || "Failed to add show");
+          return;
+        }
         toast.success("Added to TV list!");
       }
 
@@ -229,6 +237,7 @@ export default function AddTVModal({
                 <input
                   type="number"
                   min="1"
+                  max="500"
                   value={formData.currentSeason}
                   onChange={(e) => setFormData({ ...formData, currentSeason: e.target.value })}
                   className="w-16 px-2 py-1.5 border rounded-md text-sm"
@@ -241,6 +250,7 @@ export default function AddTVModal({
                 <input
                   type="number"
                   min="1"
+                  max="500"
                   value={formData.currentEpisode}
                   onChange={(e) => setFormData({ ...formData, currentEpisode: e.target.value })}
                   className="w-16 px-2 py-1.5 border rounded-md text-sm"

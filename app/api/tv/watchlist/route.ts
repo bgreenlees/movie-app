@@ -7,6 +7,7 @@ import {
   parseEnum,
   parseId,
   parsePlatform,
+  firstError,
   parseProgress,
   parseRating,
   parseReview,
@@ -61,11 +62,25 @@ export async function POST(req: NextRequest) {
     const review = parseReview(b.review);
     const currentSeason = parseProgress(b.currentSeason, "currentSeason");
     const currentEpisode = parseProgress(b.currentEpisode, "currentEpisode");
-    for (const r of [tvShowIdResult, statusResult, platform, rating, review, currentSeason, currentEpisode]) {
-      if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
-    }
-    if (!tvShowIdResult.ok || !statusResult.ok || !platform.ok || !rating.ok || !review.ok || !currentSeason.ok || !currentEpisode.ok) {
-      return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+    if (
+      !tvShowIdResult.ok ||
+      !statusResult.ok ||
+      !platform.ok ||
+      !rating.ok ||
+      !review.ok ||
+      !currentSeason.ok ||
+      !currentEpisode.ok
+    ) {
+      const error = firstError(
+        tvShowIdResult,
+        statusResult,
+        platform,
+        rating,
+        review,
+        currentSeason,
+        currentEpisode
+      );
+      return NextResponse.json({ error }, { status: 400 });
     }
     const tvShowId = tvShowIdResult.value;
 
