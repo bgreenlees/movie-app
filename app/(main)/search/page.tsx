@@ -850,7 +850,7 @@ function DiscoverPageInner() {
 
 export default function DiscoverPage() {
   return (
-    <Suspense fallback={<div className="max-w-7xl mx-auto p-6"><p style={{ color: "var(--text-muted)" }}>Loading...</p></div>}>
+    <Suspense fallback={<div className="max-w-7xl mx-auto p-6"><Skeleton label="Loading results" /></div>}>
       <DiscoverPageInner />
     </Suspense>
   );
