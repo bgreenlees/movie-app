@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_SELECTION, candidateKey, type MediaType, type MoodCandidate, type MoodSelection } from "./moodPicker";
 import {
   FACTS_BUDGET,
+  JOINT_SEEDS,
+  REC_CALLS_MAX,
   PAIR_POOL_SIZE,
   buildPairPool,
   excludedKeys,
@@ -98,11 +100,11 @@ function input(over: Partial<PairPoolInput> & { fetchers: PoolFetchers }): PairP
 const keys = (pool: { id: number; mediaType: MediaType }[]) => pool.map(candidateKey).sort();
 
 describe("excludes", () => {
-  it("drops anything either person watched, is watching or isn't interested in, from every source", async () => {
+  it("drops anything either person watched or isn't interested in, from every source, but keeps shows being watched", async () => {
     const me: PoolPerson = {
       entries: [
         entry("movie", 1, { status: "WATCHED", rating: 2 }),
-        entry("tv", 2, { status: "WANT_TO_WATCH" }), // partner is watching it
+        entry("tv", 2, { status: "WANT_TO_WATCH" }), // partner is watching it: stays in
         entry("movie", 9, { status: "WANT_TO_WATCH" }),
         entry("movie", 50, { rating: 3, status: "WATCHED" }), // a Love seed
       ],
@@ -123,8 +125,132 @@ describe("excludes", () => {
 
     const { pool } = await buildPairPool(input({ me, partner, fetchers }));
 
-    expect(keys(pool)).toEqual(["movie-4", "movie-6", "movie-9", "tv-5"]);
-    expect(excludedKeys(me, partner)).toEqual(new Set(["movie-1", "movie-50", "tv-2", "movie-3"]));
+    expect(keys(pool)).toEqual(["movie-4", "movie-6", "movie-9", "tv-2", "tv-5"]);
+    expect(excludedKeys(me, partner)).toEqual(new Set(["movie-1", "movie-50", "movie-3"]));
+  });
+});
+
+describe("watching", () => {
+  const pool = async (me: PoolEntry[], partner: PoolEntry[], over: Partial<PairPoolInput> = {}) =>
+    (await buildPairPool(input({
+      me: { entries: me, providerIds: [] },
+      partner: { entries: partner, providerIds: [] },
+      fetchers: fakeFetchers(),
+      ...over,
+    }))).pool;
+  const reasonOf = (p: { id: number; reason: string }[], id: number) => p.find((c) => c.id === id)?.reason;
+
+  it("includes a show one person is watching, with a reason on each side", async () => {
+    const mine = await pool([entry("tv", 7, { status: "WATCHING" })], []);
+    expect(reasonOf(mine, 7)).toBe("You're watching this");
+    expect(mine.find((c) => c.id === 7)?.onMyList).toBe(true);
+    const theirs = await pool([], [entry("tv", 7, { status: "WATCHING" })]);
+    expect(reasonOf(theirs, 7)).toBe("Sam is watching this");
+    expect(theirs.find((c) => c.id === 7)?.onMyList).toBe(false);
+  });
+
+  it("words a mix and a shared watch, and a missing name", async () => {
+    const w = (id: number, status: "WATCHING" | "WANT_TO_WATCH") => entry("tv", id, { status });
+    const p = await pool([w(1, "WATCHING"), w(2, "WANT_TO_WATCH"), w(3, "WATCHING")], [w(1, "WATCHING"), w(2, "WATCHING"), w(3, "WANT_TO_WATCH")]);
+    expect(reasonOf(p, 1)).toBe("You're both watching this");
+    expect(reasonOf(p, 2)).toBe("Sam is watching this, and it's on your list");
+    expect(reasonOf(p, 3)).toBe("You're watching this, and it's on Sam's list");
+    const noName = await pool([], [entry("tv", 7, { status: "WATCHING" })], { partnerName: null });
+    expect(reasonOf(noName, 7)).toBe("Your friend is watching this");
+  });
+
+  it("never shows a title the other person watched or isn't interested in", async () => {
+    const p = await pool(
+      [entry("tv", 1, { status: "WATCHING" }), entry("tv", 2, { status: "WATCHING" })],
+      [entry("tv", 1, { status: "WATCHED" }), entry("tv", 2, { status: "NOT_INTERESTED" })]
+    );
+    expect(p).toEqual([]);
+  });
+
+  it("boosts watching like want-to-watch: one person 0.5, both 1.0", async () => {
+    // Same traits, so the order comes down to the source boost
+    const p = await pool(
+      [entry("tv", 1, { status: "WATCHING" }), entry("tv", 2, { status: "WATCHING" }), entry("tv", 3, { status: "WANT_TO_WATCH" })],
+      [entry("tv", 1, { status: "WATCHING" }), entry("tv", 3, { status: "WANT_TO_WATCH" })]
+    );
+    const order = p.map((c) => c.id);
+    expect(order.indexOf(1)).toBeLessThan(order.indexOf(2));
+    expect(order.indexOf(3)).toBeLessThan(order.indexOf(2));
+  });
+});
+
+describe("seeds from titles you both liked (the old Fresh Picks)", () => {
+  const run = async (me: PoolEntry[], partner: PoolEntry[], recs: Record<string, MoodCandidate[]>) => {
+    const fetchers = fakeFetchers({ recs, discover: { movie: [cand("movie", 99)], tv: [] } });
+    const { pool } = await buildPairPool(
+      input({ me: { entries: me, providerIds: [] }, partner: { entries: partner, providerIds: [] }, fetchers })
+    );
+    return { pool, fetchers };
+  };
+  const calls = (f: { recommendations: { mock: { calls: unknown[][] } } }) =>
+    f.recommendations.mock.calls.map(([m, id]) => `${m}-${id}`).sort();
+
+  it("recommends from a title both rated Like, counts it for both people, and says liked", async () => {
+    const { pool, fetchers } = await run(
+      [entry("tv", 5, { status: "WATCHED", rating: 2 })],
+      [entry("tv", 5, { status: "WATCHED", rating: 2 })],
+      { "tv-5": [cand("tv", 60), cand("tv", 61)] }
+    );
+    expect(calls(fetchers)).toEqual(["tv-5"]);
+    expect(pool.find((c) => c.id === 60)?.reason).toBe("Because you both liked tv 5");
+    // seeded by both people: source boost 0.6, so it outranks plain discover
+    expect(pool.findIndex((c) => c.id === 60)).toBeLessThan(pool.findIndex((c) => c.id === 99));
+  });
+
+  it("says loved when both loved it, and makes one call, not one per person", async () => {
+    const { pool, fetchers } = await run(
+      [entry("movie", 5, { status: "WATCHED", rating: 3 })],
+      [entry("movie", 5, { status: "WATCHED", rating: 3 })],
+      { "movie-5": [cand("movie", 60)] }
+    );
+    expect(calls(fetchers)).toEqual(["movie-5"]);
+    expect(pool.find((c) => c.id === 60)?.reason).toBe("Because you both loved movie 5");
+  });
+
+  it("drops anything either person has on a list, and never recommends from a title someone disliked", async () => {
+    const { pool, fetchers } = await run(
+      [entry("movie", 5, { status: "WATCHED", rating: 2 }), entry("movie", 6, { status: "WATCHED", rating: 2 })],
+      [entry("movie", 5, { status: "WATCHED", rating: 2 }), entry("movie", 6, { status: "WATCHED", rating: 1 }), entry("movie", 60, { status: "WATCHED" })],
+      { "movie-5": [cand("movie", 60), cand("movie", 61)], "movie-6": [cand("movie", 62)] }
+    );
+    expect(calls(fetchers)).toEqual(["movie-5"]);
+    expect(pool.some((c) => c.id === 60 || c.id === 62)).toBe(false);
+    expect(pool.some((c) => c.id === 61)).toBe(true);
+  });
+
+  it("caps recommendation calls, joint seeds first, then each person's Loves", async () => {
+    const mine = [
+      ...Array.from({ length: 6 }, (_, i) => entry("movie", 100 + i, { status: "WATCHED", rating: 2 })),
+      ...Array.from({ length: 6 }, (_, i) => entry("movie", 200 + i, { status: "WATCHED", rating: 3 })),
+    ];
+    const theirs = [
+      ...Array.from({ length: 6 }, (_, i) => entry("movie", 100 + i, { status: "WATCHED", rating: 2 })),
+      ...Array.from({ length: 6 }, (_, i) => entry("movie", 300 + i, { status: "WATCHED", rating: 3 })),
+    ];
+    const { fetchers } = await run(mine, theirs, {});
+    const asked = calls(fetchers);
+    expect(asked.length).toBe(REC_CALLS_MAX);
+    expect(asked.filter((k) => /^movie-10\d$/.test(k))).toHaveLength(JOINT_SEEDS);
+    expect(asked.some((k) => k.startsWith("movie-2"))).toBe(true);
+    expect(asked.some((k) => k.startsWith("movie-3"))).toBe(true);
+  });
+});
+
+describe("taste signal counts", () => {
+  it("returns each person's count (numbers only)", async () => {
+    const r = await buildPairPool(
+      input({
+        me: { entries: [entry("movie", 1, { rating: 3 }), entry("movie", 2, { rating: 2 }), entry("tv", 3)], providerIds: [] },
+        partner: { entries: [entry("movie", 4, { rating: 3 })], providerIds: [] },
+        fetchers: fakeFetchers(),
+      })
+    );
+    expect(r.signals).toEqual({ me: 3, partner: 1 });
   });
 });
 

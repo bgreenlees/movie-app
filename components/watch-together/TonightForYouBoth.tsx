@@ -5,7 +5,15 @@ import Link from "next/link";
 import MoodControls from "@/components/mood/MoodControls";
 import { DEFAULT_SELECTION, type MoodSelection } from "@/lib/moodPicker";
 import type { PairCandidate } from "@/lib/pairPool";
-import { TONIGHT_COUNT, drawPairPicks, emptyKind, pairPicksQuery, refillPicks } from "@/lib/pairPicks";
+import {
+  TONIGHT_COUNT,
+  drawPairPicks,
+  emptyKind,
+  nextShuffle,
+  pairPicksQuery,
+  ratingsNudge,
+  refillPicks,
+} from "@/lib/pairPicks";
 import PairCard, { type PairCardTitle } from "./PairCard";
 import Skeleton from "@/components/ui/Skeleton";
 import ErrorState from "@/components/ui/ErrorState";
@@ -17,6 +25,8 @@ interface PicksData {
   pool: PairCandidate[];
   services: { mine: boolean; partners: boolean; shared: number[] };
   coldStart: { me: boolean; partner: boolean };
+  /** Taste signals per person: numbers only */
+  signals?: { me: number; partner: number };
   partial?: boolean;
 }
 
@@ -37,7 +47,7 @@ function Notice({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * "Tonight for you both" (spec §5.3, §7): mood controls, 5 picks drawn from
+ * "Tonight for you both" (spec §5.3, §7): mood controls, 12 picks drawn from
  * the pair pool with a weighted shuffle, a reason under each, and Shuffle.
  */
 export default function TonightForYouBoth({
@@ -73,6 +83,8 @@ export default function TonightForYouBoth({
   const [picks, setPicks] = useState<PairCandidate[]>([]);
   const [failed, setFailed] = useState<string | null>(null);
   const loadedOnce = useRef(false);
+  // Keys shown since the pool loaded, so Shuffle gives new titles while the pool lasts
+  const seen = useRef<Set<string>>(new Set());
   const [attempt, setAttempt] = useState(0);
   // Text for the screen-reader live line; `n` makes a repeat announcement count as new
   const [announcement, setAnnouncement] = useState<{ n: number; text: string }>({ n: 0, text: "" });
@@ -98,6 +110,7 @@ export default function TonightForYouBoth({
         setFailed(null);
         setLoaded({ partnerId, query, data });
         const drawn = drawPairPicks(data.pool);
+        seen.current = new Set(drawn.map(keyOf));
         setPicks(drawn);
         // The first load isn't news; later loads (a mood change) are
         if (loadedOnce.current) announce(drawn.length);
@@ -116,7 +129,7 @@ export default function TonightForYouBoth({
   const isLoading = !current && !hasError;
   // Never another friend's picks: only data loaded for this partner counts
   const data = hasError ? undefined : loaded?.partnerId === partnerId ? loaded.data : undefined;
-  // The pool minus anything I've hidden; the empty check and Shuffle use this, not the 5 on screen
+  // The pool minus anything I've hidden; the empty check and Shuffle use this, not the 12 on screen
   const pool = useMemo(() => (data?.pool ?? []).filter((c) => !hidden.has(keyOf(c))), [data, hidden]);
   const shown = picks.filter((p) => !hidden.has(keyOf(p)));
 
@@ -129,9 +142,10 @@ export default function TonightForYouBoth({
   }
 
   const shuffle = () => {
-    const next = drawPairPicks(pool, { avoid: new Set(shown.map(keyOf)) });
-    setPicks(next);
-    announce(next.length);
+    const next = nextShuffle(pool, new Set([...seen.current, ...shown.map(keyOf)]));
+    seen.current = next.seen;
+    setPicks(next.picks);
+    announce(next.picks.length);
   };
   const retry = () => {
     setFailed(null);
@@ -142,6 +156,9 @@ export default function TonightForYouBoth({
     setSelection(DEFAULT_SELECTION);
   };
 
+  // Shown until each person has 10 signals, with their own count (numbers only from the API)
+  const myNudge = ratingsNudge(data?.signals?.me);
+  const partnerNudge = ratingsNudge(data?.signals?.partner);
   const bothHaveServices = !!data?.services.mine && !!data?.services.partners;
   const noServices = data && !data.services.mine && !data.services.partners;
   const empty = emptyKind(selection);
@@ -179,14 +196,15 @@ export default function TonightForYouBoth({
       />
 
       <div className="mt-4">
-        {data?.coldStart.partner && (
+        {partnerNudge && (
           <Notice>
-            {partnerName ?? "Your friend"} hasn&apos;t rated much yet, so picks lean on your taste.
+            {partnerName ?? "Your friend"} has rated {partnerNudge.count} of {partnerNudge.target}, so picks lean on
+            your taste.
           </Notice>
         )}
-        {data?.coldStart.me && (
+        {myNudge && (
           <Notice>
-            Rate a few things you&apos;ve seen so picks fit you both.{" "}
+            You&apos;ve rated {myNudge.count} of {myNudge.target} — rate a few more so picks fit you both.{" "}
             <Link href="/watched" className="underline" style={{ color: "var(--accent)" }}>
               Go to My Movies
             </Link>

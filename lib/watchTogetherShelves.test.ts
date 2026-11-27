@@ -4,10 +4,8 @@ import {
   SHELF_SIZE,
   buildShelves,
   freshSeeds,
-  rankFreshPicks,
   shelfKey,
   type ShelfEntry,
-  type ShelfItem,
 } from "./watchTogetherShelves";
 
 let t = 0;
@@ -83,27 +81,17 @@ describe("freshSeeds", () => {
     ];
     const seeds = freshSeeds(mine, theirs);
     expect(seeds).toHaveLength(FRESH_SEEDS);
-    expect(seeds[0]).toEqual({ mediaType: "tv", tmdbId: 2 });
-    expect(seeds[1]).toEqual({ mediaType: "movie", tmdbId: 3 });
-    expect(seeds).not.toContainEqual({ mediaType: "movie", tmdbId: 4 }); // I disliked it
+    expect(seeds[0]).toEqual({ mediaType: "tv", tmdbId: 2, bothLoved: true });
+    expect(seeds[1]).toEqual({ mediaType: "movie", tmdbId: 3, bothLoved: false });
+    expect(seeds.map((x) => `${x.mediaType}-${x.tmdbId}`)).not.toContain("movie-4"); // I disliked it
+  });
+
+  it("takes a limit", () => {
+    const both = Array.from({ length: 6 }, (_, i) => e("movie", i + 1, "WATCHED", 3));
+    expect(freshSeeds(both, both, 2)).toHaveLength(2);
   });
 
   it("ignores a 999 rating", () => {
     expect(freshSeeds([e("movie", 1, "WATCHED", 999)], [e("movie", 1, "WATCHED", 3)])).toEqual([]);
-  });
-});
-
-describe("rankFreshPicks", () => {
-  const item = (mediaType: "movie" | "tv", id: number, posterPath: string | null = "/p.jpg"): ShelfItem => ({
-    id, mediaType, title: `${id}`, posterPath, date: null,
-  });
-
-  it("ranks titles recommended by more seeds first and drops excluded or posterless ones", () => {
-    const lists = [
-      [item("movie", 1), item("movie", 2), item("tv", 9, null)],
-      [item("tv", 3), item("movie", 2)],
-    ];
-    const picks = rankFreshPicks(lists, new Set(["movie-1"]));
-    expect(keys(picks)).toEqual(["movie-2", "tv-3"]);
   });
 });

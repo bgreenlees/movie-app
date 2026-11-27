@@ -1,11 +1,12 @@
 /**
- * Client-side helpers for "Tonight for you both" (spec §5.3, §7): draw the 5
+ * Client-side helpers for "Tonight for you both" (spec §5.3, §7): draw the 12
  * cards from the ranked pair pool, and build the /picks query string.
  * Pure, so the draw is unit-tested with an injected random.
  */
 import type { MoodSelection } from "./moodPicker";
+import { FULL_CONFIDENCE_SIGNALS } from "./pairTaste";
 
-export const TONIGHT_COUNT = 5;
+export const TONIGHT_COUNT = 12;
 
 /** The minimum a candidate needs from the pool to be drawn. */
 export interface Drawable {
@@ -79,6 +80,24 @@ function drawFrom<C extends Drawable>(items: readonly C[], count: number, random
 }
 
 /**
+ * Shuffle: draw the next `count` titles, avoiding everything shown since the
+ * pool loaded (`seen`) while enough unseen titles remain. When fewer than
+ * `count` are left, the draw tops up with repeats and the cycle starts again
+ * from what's on screen. Returns the new picks and the new `seen` set.
+ */
+export function nextShuffle<C extends Drawable>(
+  pool: readonly C[],
+  seen: ReadonlySet<string>,
+  opts: { count?: number; random?: () => number } = {}
+): { picks: C[]; seen: Set<string> } {
+  const count = opts.count ?? TONIGHT_COUNT;
+  const unseen = new Set(pool.map(keyOf).filter((k) => !seen.has(k))).size;
+  const picks = drawPairPicks(pool, { count, avoid: seen, random: opts.random });
+  const shown = picks.map(keyOf);
+  return { picks, seen: new Set(unseen >= count ? [...seen, ...shown] : shown) };
+}
+
+/**
  * Keep the picks still on screen and top them up to `count` from the pool,
  * so hiding a card (watched, not interested) refills the row instead of
  * leaving a gap. Replacements avoid cards already shown and hidden titles.
@@ -115,6 +134,16 @@ export function pairPicksQuery(selection: MoodSelection, sharedOnly: boolean): s
   // "Only services we both have" narrows "On our services"; alone it means nothing
   if (selection.onMyServices && sharedOnly) q.set("sharedOnly", "1");
   return q.toString();
+}
+
+/** Taste signals a person needs for the model to be fully confident in them. */
+export const RATINGS_TARGET = FULL_CONFIDENCE_SIGNALS;
+
+/** The rate-more note: shown until a person has RATINGS_TARGET signals. */
+export function ratingsNudge(signals: number | undefined): { count: number; target: number } | null {
+  if (typeof signals !== "number" || !Number.isFinite(signals)) return null;
+  const count = Math.max(0, Math.floor(signals));
+  return count < RATINGS_TARGET ? { count, target: RATINGS_TARGET } : null;
 }
 
 /** Which empty state to show when a load returns no titles (§5.3). */

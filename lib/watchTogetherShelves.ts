@@ -37,9 +37,9 @@ export interface Shelves {
   iLovedForFriend: ShelfItem[];
 }
 
-/** Cards per "loved" shelf, and per fresh-picks shelf. */
+/** Cards per "loved" shelf. */
 export const SHELF_SIZE = 12;
-/** TMDB recommendation calls per page load (spec §6, F1). */
+/** Default cap on joint seeds (titles both liked); the pair pool passes its own. */
 export const FRESH_SEEDS = 5;
 
 export const shelfKey = (x: { mediaType: ShelfMedia; tmdbId?: number; id?: number }) =>
@@ -96,44 +96,21 @@ export function buildShelves(mine: readonly ShelfEntry[], theirs: readonly Shelf
 }
 
 /**
- * Seeds for "Fresh picks": titles both people liked, Loves first, at most
- * FRESH_SEEDS. Each seed costs one TMDB call of its own type.
+ * Seeds for the pair pool's recommendation source: titles both people liked,
+ * Loves first, at most `limit`. Each seed costs one TMDB call of its own type.
+ * `bothLoved` is true when both rated it a Love (else one only liked it), so a
+ * reason can say "loved" or "liked".
  */
 export function freshSeeds(
   mine: readonly ShelfEntry[],
-  theirs: readonly ShelfEntry[]
-): { mediaType: ShelfMedia; tmdbId: number }[] {
+  theirs: readonly ShelfEntry[],
+  limit = FRESH_SEEDS
+): { mediaType: ShelfMedia; tmdbId: number; bothLoved: boolean }[] {
   const theirLiked = new Map(theirs.filter(isLikedEntry).map((e) => [shelfKey(e), e]));
   return mine
     .filter((e) => isLikedEntry(e) && theirLiked.has(shelfKey(e)))
     .map((e) => ({ e, sum: (e.rating ?? 0) + (theirLiked.get(shelfKey(e))!.rating ?? 0) }))
     .sort((a, b) => b.sum - a.sum || b.e.addedAt - a.e.addedAt)
-    .slice(0, FRESH_SEEDS)
-    .map(({ e }) => ({ mediaType: e.mediaType, tmdbId: e.tmdbId }));
-}
-
-/**
- * Merge recommendation lists into one shelf: titles recommended by more seeds
- * first, then by the order TMDB gave. Drops anything on either person's lists
- * and anything without a poster.
- */
-export function rankFreshPicks(
-  recLists: readonly ShelfItem[][],
-  exclude: ReadonlySet<string>
-): ShelfItem[] {
-  const tally = new Map<string, { item: ShelfItem; count: number; first: number }>();
-  let order = 0;
-  for (const list of recLists) {
-    for (const item of list) {
-      const key = shelfKey(item);
-      if (exclude.has(key) || !item.posterPath) continue;
-      const seen = tally.get(key);
-      if (seen) seen.count += 1;
-      else tally.set(key, { item, count: 1, first: order++ });
-    }
-  }
-  return [...tally.values()]
-    .sort((a, b) => b.count - a.count || a.first - b.first)
-    .slice(0, SHELF_SIZE)
-    .map((t) => t.item);
+    .slice(0, limit)
+    .map(({ e, sum }) => ({ mediaType: e.mediaType, tmdbId: e.tmdbId, bothLoved: sum === 6 }));
 }

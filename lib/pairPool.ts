@@ -26,13 +26,18 @@ import {
 } from "./moodPicker";
 import { affinity, buildTasteProfile, pairScore, sourceBoost, type TasteStatus } from "./pairTaste";
 import { canonicalProviderIds } from "./providers";
+import { freshSeeds } from "./watchTogetherShelves";
 
 // ── Caps (§5.2, §6 F1) ───────────────────────────────────────────────────────
 
 /** B: most recent want-list titles per person, beyond the shared ones */
 export const ONE_SIDED_WANTS_PER_PERSON = 15;
-/** C: each person's most recent Loves used as recommendation seeds (≤ 6 rec calls) */
+/** C: each person's most recent Loves used as recommendation seeds */
 export const REC_SEEDS_PER_PERSON = 3;
+/** C: titles both people liked (Loves first) used as seeds; these go first */
+export const JOINT_SEEDS = 3;
+/** C: total recommendation calls per request, joint seeds first, then each person's Loves */
+export const REC_CALLS_MAX = 8;
 /** C: recommendations kept, best seed count first */
 export const REC_POOL_SIZE = 30;
 /** D: discover pages per media type (2 × 2 = 4 discover calls) */
@@ -149,6 +154,8 @@ export interface PairPoolResult {
   coldStart: { me: boolean; partner: boolean };
   /** Every discover call failed (the route may treat an empty pool as an error) */
   discoverFailed: boolean;
+  /** Taste signals per person (entries that count towards the model); the UI's rate-10 nudge */
+  signals: { me: number; partner: number };
   /** Some TMDB calls failed but titles survived: the UI can say "some picks couldn't load" */
   partial: boolean;
 }
@@ -232,12 +239,18 @@ export function resolveServices(
 
 // ── Excludes (§5.2) ──────────────────────────────────────────────────────────
 
-/** Watched, watching or not interested, by either person: never in the pool. */
+/** On a person's list and still to watch: want to watch, or a show they're partway through. */
+const isOpen = (status: TasteStatus) => status === "WANT_TO_WATCH" || status === "WATCHING";
+
+/**
+ * Watched or not interested, by either person: never in the pool. A show
+ * someone is WATCHING stays in: it's a good thing to watch together.
+ */
 export function excludedKeys(...people: readonly PoolPerson[]): Set<string> {
   const out = new Set<string>();
   for (const p of people) {
     for (const e of p.entries) {
-      if (e.status !== "WANT_TO_WATCH") out.add(candidateKey({ id: e.tmdbId, mediaType: e.mediaType }));
+      if (!isOpen(e.status)) out.add(candidateKey({ id: e.tmdbId, mediaType: e.mediaType }));
     }
   }
   return out;
@@ -249,9 +262,14 @@ type Who = "me" | "partner";
 
 interface Draft {
   c: MoodCandidate;
+  /** Who has it on their list to watch (want to watch or watching) */
   wantedBy: Set<Who>;
-  /** Title of the first Love of each person that recommended this */
+  /** Of those, who is partway through it (TV only) */
+  watchingBy: Set<Who>;
+  /** Title of the first seed (a Love, or a title both liked) of each person that recommended this */
   seededBy: Partial<Record<Who, string>>;
+  /** Seed titles that were liked, not loved, by one of the two: "liked", not "loved", in the reason */
+  likedSeeds: Set<string>;
   providerIds?: number[];
 }
 
@@ -313,6 +331,7 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
     partner: buildTasteProfile(partner.entries),
   };
   const coldStart = { me: profiles.me.coldStart, partner: profiles.partner.coldStart };
+  const signals = { me: profiles.me.signals, partner: profiles.partner.signals };
 
   const services = resolveServices(me.providerIds, partner.providerIds, sharedOnly);
   const servicesOn = input.selection.onMyServices && services.mode !== "none";
@@ -321,7 +340,7 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
   // "Only services we both have" with nothing in common: nothing can qualify.
   // (moodToDiscoverParams would otherwise drop the filter for an empty list.)
   if (servicesOn && services.providerIds.length === 0) {
-    return { pool: [], services: services.state, coldStart, discoverFailed: false, partial: false };
+    return { pool: [], services: services.state, coldStart, signals, discoverFailed: false, partial: false };
   }
 
   const ctx = { today, providerIds: services.providerIds };
@@ -367,27 +386,38 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
   };
 
   const drafts = new Map<string, Draft>();
-  const add = (c: MoodCandidate, extra?: { wantBy?: Who; seed?: [Who, string]; providerIds?: number[] }) => {
+  const add = (
+    c: MoodCandidate,
+    extra?: { wantBy?: Who; watching?: boolean; seed?: [Who, string, boolean]; providerIds?: number[] }
+  ) => {
     const key = candidateKey(c);
     if (exclude.has(key)) return;
     let d = drafts.get(key);
     if (!d) {
-      d = { c, wantedBy: new Set(), seededBy: {} };
+      d = { c, wantedBy: new Set(), watchingBy: new Set(), seededBy: {}, likedSeeds: new Set() };
       drafts.set(key, d);
     } else if ((d.c.voteCount ?? 0) === 0 && (c.voteCount ?? 0) > 0) {
       d.c = c; // prefer the richer TMDB data over the cached row
     }
-    if (extra?.wantBy) d.wantedBy.add(extra.wantBy);
-    if (extra?.seed && !d.seededBy[extra.seed[0]]) d.seededBy[extra.seed[0]] = extra.seed[1];
+    if (extra?.wantBy) {
+      d.wantedBy.add(extra.wantBy);
+      if (extra.watching) d.watchingBy.add(extra.wantBy);
+    }
+    if (extra?.seed) {
+      if (!d.seededBy[extra.seed[0]]) d.seededBy[extra.seed[0]] = extra.seed[1];
+      if (extra.seed[2]) d.likedSeeds.add(extra.seed[1]);
+    }
     if (extra?.providerIds) d.providerIds = extra.providerIds;
   };
 
-  // ── A and B: want lists ──
+  // ── A and B: want lists, and shows someone is watching (counted as wanted) ──
   const wants: Record<Who, PoolEntry[]> = {
-    me: me.entries.filter((e) => e.status === "WANT_TO_WATCH" && !exclude.has(entryKey(e))).sort(byRecent),
-    partner: partner.entries
-      .filter((e) => e.status === "WANT_TO_WATCH" && !exclude.has(entryKey(e)))
-      .sort(byRecent),
+    me: me.entries.filter((e) => isOpen(e.status) && !exclude.has(entryKey(e))).sort(byRecent),
+    partner: partner.entries.filter((e) => isOpen(e.status) && !exclude.has(entryKey(e))).sort(byRecent),
+  };
+  const watchingKeys: Record<Who, Set<string>> = {
+    me: new Set(me.entries.filter((e) => e.status === "WATCHING").map(entryKey)),
+    partner: new Set(partner.entries.filter((e) => e.status === "WATCHING").map(entryKey)),
   };
   const wantKeys = { me: new Set(wants.me.map(entryKey)), partner: new Set(wants.partner.map(entryKey)) };
   const both = wants.me.filter((e) => wantKeys.partner.has(entryKey(e))); // A: all
@@ -408,17 +438,46 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
   });
 
   // ── C and D: TMDB calls, in parallel with the want-list lookups ──
-  // Seeds alternate between the two people (my 1st, their 1st, my 2nd…), so
-  // neither person's Loves get first claim on the recommendation slots.
+  // Seeds: first the titles both people liked (Loves first; each counts for both
+  // people), then each person's own recent Loves, alternating (my 1st, their
+  // 1st, my 2nd…) so neither person's Loves get first claim. One call per
+  // title, even when it's in both groups, within REC_CALLS_MAX in all.
+  interface Seed {
+    e: PoolEntry;
+    by: Who[];
+    /** One of the two only liked it (rating 2): the reason says "liked" */
+    liked: boolean;
+  }
+  const seeds: Seed[] = [];
+  const seedAt = new Map<string, Seed>();
+  const addSeed = (e: PoolEntry, by: Who[], liked: boolean) => {
+    const key = entryKey(e);
+    const seen = seedAt.get(key);
+    if (seen) {
+      seen.by = [...new Set([...seen.by, ...by])];
+      seen.liked = seen.liked || liked;
+      return;
+    }
+    const seed = { e, by, liked };
+    seedAt.set(key, seed);
+    seeds.push(seed);
+  };
+  const entryAt = (who: Who) => new Map(people[who].entries.map((e) => [entryKey(e), e]));
+  const mine = entryAt("me");
+  const asShelf = (p: PoolPerson) => p.entries.map((e) => ({ ...e, rating: e.rating ?? null }));
+  for (const j of freshSeeds(asShelf(me), asShelf(partner), JOINT_SEEDS)) {
+    const key = candidateKey({ id: j.tmdbId, mediaType: j.mediaType });
+    addSeed(mine.get(key)!, ["me", "partner"], !j.bothLoved);
+  }
   const lovesOf = (who: Who) =>
     people[who].entries.filter((e) => e.rating === 3).sort(byRecent).slice(0, REC_SEEDS_PER_PERSON);
   const myLoves = lovesOf("me");
   const theirLoves = lovesOf("partner");
-  const seeds: { who: Who; e: PoolEntry }[] = [];
   for (let i = 0; i < REC_SEEDS_PER_PERSON; i++) {
-    if (myLoves[i]) seeds.push({ who: "me", e: myLoves[i] });
-    if (theirLoves[i]) seeds.push({ who: "partner", e: theirLoves[i] });
+    if (myLoves[i]) addSeed(myLoves[i], ["me"], false);
+    if (theirLoves[i]) addSeed(theirLoves[i], ["partner"], false);
   }
+  seeds.length = Math.min(seeds.length, REC_CALLS_MAX);
   const recCalls = Promise.allSettled(
     seeds.map(({ e }) => fetchers.recommendations(e.mediaType, e.tmdbId))
   );
@@ -454,7 +513,9 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
       }
     }
     if (!matchesDiscoverParams(paramsFor[e.mediaType], tf)) continue;
-    for (const who of by) add(candidate, { wantBy: who, providerIds });
+    for (const who of by) {
+      add(candidate, { wantBy: who, watching: watchingKeys[who].has(entryKey(e)), providerIds });
+    }
   }
 
   // C: rank recommendations by how many people's Loves led to them, then by
@@ -462,9 +523,12 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
   // seeds interleaved. Ordering by first appearance would let the first seeds
   // (the viewer's, before the interleave) fill every slot.
   const recResults = await recCalls;
-  const recs = new Map<string, { c: MoodCandidate; by: Partial<Record<Who, string>>; hits: number; order: number }>();
+  const recs = new Map<
+    string,
+    { c: MoodCandidate; by: Partial<Record<Who, string>>; liked: Set<string>; hits: number; order: number }
+  >();
   recResults.forEach((r, i) => {
-    const { who, e } = seeds[i];
+    const { by, e, liked } = seeds[i];
     if (r.status === "rejected") {
       tmdbFailures++;
       onError(`recommendations for ${entryKey(e)}`, r.reason);
@@ -474,10 +538,11 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
       const key = candidateKey(c);
       if (exclude.has(key)) return;
       const order = position * seeds.length + i;
-      const rec = recs.get(key) ?? { c, by: {}, hits: 0, order };
+      const rec = recs.get(key) ?? { c, by: {}, liked: new Set<string>(), hits: 0, order };
       rec.order = Math.min(rec.order, order);
       rec.hits++;
-      if (!rec.by[who]) rec.by[who] = e.title;
+      for (const who of by) if (!rec.by[who]) rec.by[who] = e.title;
+      if (liked) rec.liked.add(e.title);
       recs.set(key, rec);
     });
   });
@@ -505,7 +570,7 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
   );
 
   for (let i = 0; i < topRecs.length; i++) {
-    const { c, by } = topRecs[i];
+    const { c, by, liked } = topRecs[i];
     let tf = looseFacts(c);
     let providerIds: number[] | undefined;
     const facts = recFacts[i];
@@ -520,7 +585,7 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
       }
     }
     if (!matchesDiscoverParams(paramsFor[c.mediaType], tf)) continue;
-    for (const who of Object.keys(by) as Who[]) add(c, { seed: [who, by[who]!], providerIds });
+    for (const who of Object.keys(by) as Who[]) add(c, { seed: [who, by[who]!, liked.has(by[who]!)], providerIds });
   }
 
   // Discover movies: drop one only when a real lookup shows its runtime breaks
@@ -617,7 +682,7 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
   });
 
   const partial = tmdbFailures > 0 && pool.length > 0;
-  return { pool, services: services.state, coldStart, discoverFailed, partial };
+  return { pool, services: services.state, coldStart, signals, discoverFailed, partial };
 }
 
 /** The same title seen from the partner's side: "me" and "partner" swap. */
@@ -650,30 +715,40 @@ const VIBE_WORDS: Record<Exclude<MoodSelection["vibe"], "any">, string> = {
 
 /**
  * One line on why a title is here. Built only from things the partner may
- * see (§5.5): want lists, Loves, and the title's own rating or the mood. It
- * never uses dislikes, not-interested, the taste profile or affinity, so a
- * reason can't reveal what either person disliked.
+ * see (§5.5): want lists, shows being watched, Loves and shared Likes, and
+ * the title's own rating or the mood. It never uses dislikes, not-interested,
+ * the taste profile or affinity, so a reason can't reveal what either person
+ * disliked.
  */
 export function reasonFor(
-  d: Pick<Draft, "c" | "wantedBy" | "seededBy">,
+  d: Pick<Draft, "c" | "wantedBy" | "seededBy"> & Partial<Pick<Draft, "watchingBy" | "likedSeeds">>,
   partnerName: string | null,
   selection: MoodSelection
 ): string {
   const name = partnerName?.trim() || "your friend";
   const mine = d.wantedBy.has("me");
   const theirs = d.wantedBy.has("partner");
-  if (mine && theirs) return "On both your lists";
-  if (mine) return "On your list";
-  if (theirs) return `On ${name}'s list`;
+  const myWatching = !!d.watchingBy?.has("me");
+  const theirWatching = !!d.watchingBy?.has("partner");
+  const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  if (mine && theirs) {
+    if (myWatching && theirWatching) return "You're both watching this";
+    if (myWatching) return `You're watching this, and it's on ${name}'s list`;
+    if (theirWatching) return sentence(`${name} is watching this, and it's on your list`);
+    return "On both your lists";
+  }
+  if (mine) return myWatching ? "You're watching this" : "On your list";
+  if (theirs) return theirWatching ? sentence(`${name} is watching this`) : `On ${name}'s list`;
 
   const { me: myLove, partner: theirLove } = d.seededBy;
+  const verb = (title: string) => (d.likedSeeds?.has(title) ? "liked" : "loved");
   if (myLove && theirLove) {
     return myLove === theirLove
-      ? `Because you both loved ${myLove}`
-      : `Because you loved ${myLove} and ${name} loved ${theirLove}`;
+      ? `Because you both ${verb(myLove)} ${myLove}`
+      : `Because you ${verb(myLove)} ${myLove} and ${name} ${verb(theirLove)} ${theirLove}`;
   }
-  if (myLove) return `Because you loved ${myLove}`;
-  if (theirLove) return `Because ${name} loved ${theirLove}`;
+  if (myLove) return `Because you ${verb(myLove)} ${myLove}`;
+  if (theirLove) return `Because ${name} ${verb(theirLove)} ${theirLove}`;
 
   if (selection.vibe !== "any") return `Fits ${withArticle(VIBE_WORDS[selection.vibe])} night`;
   if (d.c.voteAverage >= 7.5 && (d.c.voteCount ?? 0) >= 300) return "Highly rated";

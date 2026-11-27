@@ -17,7 +17,6 @@ interface WatchTogetherData {
   bothWantToWatch: ShelfItem[];
   friendLovedForMe: ShelfItem[];
   iLovedForFriend: ShelfItem[];
-  freshPicks: ShelfItem[];
 }
 
 /** One of my watchlist rows, movie or TV, as the Add modals take it. */
@@ -147,9 +146,14 @@ function WatchTogether({ userId }: { userId: string }) {
 
   const hasEntry = useCallback((t: { id: number; mediaType: "movie" | "tv" }) => !!entries[keyOf(t)], [entries]);
 
-  // Titles I've since watched, started or ruled out drop out of "Tonight"
+  // Titles I've since watched or ruled out drop out of "Tonight". A show I'm watching stays: it can be a pick.
   const hidden = useMemo(
-    () => new Set(Object.entries(entries).filter(([, e]) => e.status !== "WANT_TO_WATCH").map(([k]) => k)),
+    () =>
+      new Set(
+        Object.entries(entries)
+          .filter(([, e]) => e.status !== "WANT_TO_WATCH" && e.status !== "WATCHING")
+          .map(([k]) => k)
+      ),
     [entries]
   );
 
@@ -175,8 +179,7 @@ function WatchTogether({ userId }: { userId: string }) {
     !!data &&
     data.bothWantToWatch.length === 0 &&
     data.friendLovedForMe.length === 0 &&
-    data.iLovedForFriend.length === 0 &&
-    data.freshPicks.length === 0;
+    data.iLovedForFriend.length === 0;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 sm:p-6">
@@ -233,14 +236,6 @@ function WatchTogether({ userId }: { userId: string }) {
         title={`You Loved — ${nameForCopy} Hasn't Seen`}
         subtitle={`Your top-rated titles that ${nameForCopy} hasn't added yet`}
         items={data.iLovedForFriend}
-        hasEntry={hasEntry}
-        onAdd={setAdding}
-        onTrailer={setTrailer}
-      />
-      <Shelf
-        title="Fresh Picks for Both of You"
-        subtitle="Recommended from titles you both liked"
-        items={data.freshPicks}
         hasEntry={hasEntry}
         onAdd={setAdding}
         onTrailer={setTrailer}
