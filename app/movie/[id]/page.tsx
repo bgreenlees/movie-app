@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { tmdb } from "@/lib/tmdb";
+import { getBackdropUrl, getPosterUrl } from "@/lib/tmdbImages";
 import { auth } from "@/lib/auth";
 import ShareButton from "@/components/ui/ShareButton";
 import TrailerButton from "@/components/ui/TrailerButton";
@@ -24,7 +25,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   try {
     const details = await tmdb.getMovieDetailsWithCredits(movieId);
-    const posterUrl = tmdb.getPosterUrl(details.poster_path, "original");
+    const posterUrl = getPosterUrl(details.poster_path, "original");
     return {
       title: `${details.title} — What's Up Next`,
       description: details.overview || undefined,
@@ -86,8 +87,8 @@ export default async function MoviePage({ params }: Props) {
       <main id="main-content">
         <DetailHero
           title={details.title}
-          backdropUrl={tmdb.getBackdropUrl(details.backdrop_path)}
-          posterUrl={tmdb.getPosterUrl(details.poster_path)}
+          backdropUrl={getBackdropUrl(details.backdrop_path)}
+          posterUrl={getPosterUrl(details.poster_path)}
           eyebrow={heroEyebrow("movie", providers)}
           meta={joinMeta([yearOf(details.release_date), formatRuntime(details.runtime), genreList(details.genres), formatRating(details.vote_average)])}
           tagline={details.tagline}

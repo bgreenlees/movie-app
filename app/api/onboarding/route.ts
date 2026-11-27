@@ -2,22 +2,35 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { tmdb } from "@/lib/tmdb";
+import { createLimiter } from "@/lib/concurrency";
+import { parseOnboardingIds } from "@/lib/onboarding";
+
+// TMDB detail lookups in flight at once for one request (same reasoning as mood-picks).
+const TMDB_CONCURRENCY = 5;
 
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = session.user.id as string;
 
-  const { movieIds, skipped } = await req.json();
+  const body = await req.json().catch(() => null);
+  const skipped = body?.skipped === true;
+  // Only curated ids, at most 40: anything else would let one request trigger
+  // unbounded TMDB calls and database writes (security audit F2).
+  const movieIds = skipped ? [] : parseOnboardingIds(body?.movieIds ?? []);
+  if (movieIds === null) {
+    return NextResponse.json({ error: "Invalid movieIds" }, { status: 400 });
+  }
 
-  if (!skipped && Array.isArray(movieIds) && movieIds.length > 0) {
+  if (movieIds.length > 0) {
+    const limit = createLimiter(TMDB_CONCURRENCY);
     // Bulk-create watchlist entries for selected movies
     await Promise.allSettled(
-      movieIds.map(async (movieId: number) => {
+      movieIds.map(async (movieId) => {
         // Ensure movie exists in DB
         let movie = await prisma.movie.findUnique({ where: { id: movieId } });
         if (!movie) {
-          const tmdbMovie = await tmdb.getMovieDetails(movieId);
+          const tmdbMovie = await limit(() => tmdb.getMovieDetails(movieId));
           movie = await prisma.movie.create({
             data: {
               id: tmdbMovie.id,

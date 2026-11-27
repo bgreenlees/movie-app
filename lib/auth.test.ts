@@ -8,6 +8,8 @@ const nextAuth = vi.hoisted(() => vi.fn((config: unknown) => {
 }));
 vi.mock("next-auth", () => ({ default: nextAuth }));
 vi.mock("./db", () => ({ prisma: {} }));
+// "server-only" throws outside a React Server Components build; Vitest is neither.
+vi.mock("server-only", () => ({}));
 
 async function providerIds(env: { NODE_ENV: string; DEV_LOGIN?: string; VERCEL_ENV?: string }) {
   vi.resetModules();
@@ -47,5 +49,34 @@ describe("lib/auth providers", () => {
       "google",
       "dev-login",
     ]);
+  });
+});
+
+describe("lib/auth signIn callback", () => {
+  type SignIn = (params: { account?: { provider: string } | null; profile?: { email_verified?: unknown } }) => Promise<boolean>;
+  async function signInCallback() {
+    vi.resetModules();
+    nextAuth.mockClear();
+    await import("./auth");
+    const config = nextAuth.mock.calls[0][0] as { callbacks: { signIn: SignIn } };
+    return config.callbacks.signIn;
+  }
+
+  it("accepts a Google profile whose email is verified", async () => {
+    const signIn = await signInCallback();
+    expect(await signIn({ account: { provider: "google" }, profile: { email_verified: true } })).toBe(true);
+  });
+
+  it("rejects a Google profile whose email is unverified or not stated", async () => {
+    const signIn = await signInCallback();
+    for (const email_verified of [false, undefined, "true", 1]) {
+      expect(await signIn({ account: { provider: "google" }, profile: { email_verified } })).toBe(false);
+    }
+    expect(await signIn({ account: { provider: "google" } })).toBe(false);
+  });
+
+  it("leaves dev-login to its own gates", async () => {
+    const signIn = await signInCallback();
+    expect(await signIn({ account: { provider: "dev-login" } })).toBe(true);
   });
 });

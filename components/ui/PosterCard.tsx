@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
-import { tmdb } from "@/lib/tmdb";
+import { getPosterUrl } from "@/lib/tmdbImages";
 import { detailHref, type MediaType } from "@/lib/posterCard";
 import MovieDetailModal from "@/components/movies/MovieDetailModal";
 import TVShowDetailModal from "@/components/tv/TVShowDetailModal";
@@ -78,7 +78,7 @@ export default function PosterCard({
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressClick = useRef(false);
 
-  const posterUrl = tmdb.getPosterUrl(posterPath);
+  const posterUrl = getPosterUrl(posterPath);
   const hasMenu = !!(onRate || onNotInterested || onTrailer || onRemove);
   const pct = progress == null ? null : Math.round(progress * 100);
 

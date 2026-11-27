@@ -2,11 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 // Vitest has no "@/" alias, so map the component's imports by hand. The detail
-// modals fetch on open and are never open in a static render; tmdb would read env.
+// modals fetch on open and are never open in a static render.
 vi.mock("@/lib/posterCard", () => import("../../lib/posterCard"));
-vi.mock("@/lib/tmdb", () => ({
-  tmdb: { getPosterUrl: (p: string | null) => (p ? `https://image.tmdb.org/t/p/w500${p}` : null) },
-}));
+vi.mock("@/lib/tmdbImages", () => import("../../lib/tmdbImages"));
 vi.mock("@/components/movies/MovieDetailModal", () => ({ default: () => null }));
 vi.mock("@/components/tv/TVShowDetailModal", () => ({ default: () => null }));
 

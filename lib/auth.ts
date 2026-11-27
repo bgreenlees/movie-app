@@ -1,3 +1,4 @@
+import "server-only";
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { prisma } from "./db";
@@ -15,6 +16,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     ...devLoginProviders(),
   ],
   callbacks: {
+    // Users are matched by email in jwt() below, so only trust an email Google has
+    // verified (security audit F12). Other providers (dev-login) have their own gates.
+    async signIn({ account, profile }) {
+      if (account?.provider === "google") return profile?.email_verified === true;
+      return true;
+    },
     async jwt({ token, user }) {
       if (user?.email) {
         let dbUser = await prisma.user.findUnique({ where: { email: user.email } });
