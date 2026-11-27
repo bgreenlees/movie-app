@@ -118,7 +118,7 @@ BRIEF="$BRIEF_DIR/$NAME.md"
   case $ROLE in
     worker)
       echo "- Fresh branch off \`main\`. Stay inside the issue's files; other agents are working in parallel."
-      echo "- \`npx tsc --noEmit\`, \`npm run lint\` and \`npm test\` must pass. For auth, API or data-access changes, run \`/security-review\` on your diff and summarise it in the PR."
+      echo "- \`npx tsc --noEmit\`, \`npm run lint\` and \`npm test\` must pass. For auth, API or data-access changes, run \`/security-review\` on your diff and summarise it in the PR. The review is a middle step, not your final answer: after it, carry on and push, open the PR and wait for CI."
       echo "- Open a **ready** (not draft) PR whose body contains \`Closes #$ISSUE\`, explains *why*, and has a \"how to verify\" section. Wait for \`gh pr checks --watch\` to go green. **Do not merge.** Finish by printing the PR URL." ;;
     planner|researcher)
       echo "- Docs only. Open a **ready** PR (body contains \`Refs #$ISSUE\`, or \`Closes #$ISSUE\` if the issue is the doc itself). Wait for CI. Do not merge. Do not create issues: propose them in the PR body." ;;
