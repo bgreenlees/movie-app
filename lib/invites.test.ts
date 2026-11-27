@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const m = vi.hoisted(() => ({
   send: vi.fn(),
-  invites: [] as { id: string; inviterId: string; email: string; sentAt: Date | null; acceptedAt: Date | null }[],
+  invites: [] as { id: string; inviterId: string; email: string; sentAt: Date | null; acceptedAt: Date | null; createdAt?: Date | null }[],
   conns: [] as { requesterId: string; addresseeId: string }[],
   raw: [] as { id: string; inviter_id: string }[],
 }));
@@ -20,10 +20,13 @@ vi.mock("./db", () => {
     upsert: vi.fn(async ({ where, create, update }) => {
       const hit = byKey(where);
       if (hit) return Object.assign(hit, update);
-      const row = { id: `i${m.invites.length + 1}`, sentAt: null, acceptedAt: null, ...create };
+      const row = { id: `i${m.invites.length + 1}`, sentAt: null, acceptedAt: null, createdAt: create.sentAt, ...create };
       m.invites.push(row);
       return row;
     }),
+    count: vi.fn(async ({ where }) =>
+      m.invites.filter((i) => i.inviterId === where.inviterId && i.createdAt && i.createdAt >= where.createdAt.gte).length,
+    ),
     update: vi.fn(async ({ where, data }) => {
       const hit = where.id ? m.invites.find((i) => i.id === where.id) : byKey(where);
       return Object.assign(hit!, data);
@@ -45,7 +48,7 @@ vi.mock("./db", () => {
   };
 });
 
-import { buildInviteEmail, convertInvites, deliverInvite, recordInvite, RESEND_COOLDOWN_MS } from "./invites";
+import { buildInviteEmail, convertInvites, deliverInvite, MAX_INVITES_PER_DAY, recordInvite, RESEND_COOLDOWN_MS } from "./invites";
 import { isValidEmail, normalizeEmail } from "./emailAddress";
 
 beforeEach(() => {
@@ -87,6 +90,19 @@ describe("createInvite", () => {
     expect(claim).toEqual({ previousSentAt: null });
     expect(m.invites).toHaveLength(1);
     expect(m.send).not.toHaveBeenCalled();
+  });
+  it("keeps the inviter's name out of the subject", () => {
+    expect(buildInviteEmail("Ann Example").subject).not.toContain("Ann");
+  });
+  it("silently skips once the inviter has created 10 invites in 24h, and allows it again later", async () => {
+    for (let i = 0; i < MAX_INVITES_PER_DAY; i++) {
+      expect(await recordInvite(`p${i}@example.test`, "u1", now)).not.toBeNull();
+    }
+    expect(await recordInvite("extra@example.test", "u1", now)).toBeNull();
+    expect(m.invites).toHaveLength(MAX_INVITES_PER_DAY);
+    expect(await recordInvite("other@example.test", "u2", now)).not.toBeNull(); // per inviter
+    const later = new Date(now.getTime() + 24 * 60 * 60 * 1000 + 1000);
+    expect(await recordInvite("extra@example.test", "u1", later)).not.toBeNull();
   });
   it("records and emails a new invite", async () => {
     await createInvite("new@example.test", "u1", "Ann", now);
@@ -140,6 +156,19 @@ describe("convertInvites", () => {
     await convertInvites("u2", "x@example.test");
     expect(m.conns).toHaveLength(1);
     expect(m.invites[0].acceptedAt).not.toBeNull();
+  });
+  it("one failing invite doesn't stop the others", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    m.invites = [
+      { id: "i1", inviterId: "u1", email: "x@example.test", sentAt: null, acceptedAt: null },
+      { id: "i2", inviterId: "u3", email: "x@example.test", sentAt: null, acceptedAt: null },
+    ];
+    m.raw = [{ id: "i1", inviter_id: "u1" }, { id: "i2", inviter_id: "u3" }];
+    const { prisma } = await import("./db");
+    vi.mocked(prisma.userConnection.create).mockRejectedValueOnce(new Error("P2002"));
+    await convertInvites("u2", "x@example.test");
+    expect(m.conns).toEqual([{ requesterId: "u3", addresseeId: "u2" }]);
+    expect(m.invites[1].acceptedAt).not.toBeNull();
   });
   it("never throws", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});

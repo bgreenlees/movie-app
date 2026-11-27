@@ -18,6 +18,7 @@ const m = vi.hoisted(() => ({
   deliverInvite: vi.fn<(...args: unknown[]) => Promise<void>>(async () => {}),
   allow: vi.fn((key: string) => key !== ""),
   limiterOpts: undefined as unknown,
+  openInvites: 0,
   users: [] as { id: string; email: string; name: string }[],
   rows: [] as Row[],
   nextId: 1,
@@ -48,6 +49,7 @@ vi.mock("next/server", async (orig) => ({
   after: (fn: () => unknown) => void fn(),
 }));
 vi.mock("@/lib/db", () => {
+  const connectionInvite = { count: vi.fn(async () => m.openInvites) };
   const userConnection = {
     count: vi.fn(async ({ where }: { where: Where }) => {
       const n = m.rows.filter((r) => matches(r, where)).length;
@@ -89,6 +91,7 @@ vi.mock("@/lib/db", () => {
         m.users.filter((u) => u.email.toLowerCase() === value).slice(0, 1),
       ),
       userConnection,
+      connectionInvite,
       // Interactive transactions only. $executeRaw stands in for the advisory
       // lock: the first call per tx takes a mutex that is released when the
       // transaction ends, so parallel sends by one user run one at a time.
@@ -96,6 +99,7 @@ vi.mock("@/lib/db", () => {
         let release: (() => void) | undefined;
         const tx = {
           userConnection,
+          connectionInvite,
           $executeRaw: async () => {
             const prev = m.lock;
             let done!: () => void;
@@ -147,10 +151,31 @@ beforeEach(() => {
   as(ME);
   m.allow.mockReset().mockReturnValue(true);
   m.recordInvite.mockClear();
+  m.openInvites = 0;
   m.deliverInvite.mockClear();
 });
 
 describe("POST /api/connections: invites (#135)", () => {
+  it("counts unaccepted invites toward the pending cap, so known and unknown emails both get the same 429", async () => {
+    for (let i = 0; i < MAX_PENDING_OUTGOING - 1; i++) {
+      m.rows.push({ id: `p${i}`, requesterId: ME.id, addresseeId: `x${i}`, status: "PENDING" });
+    }
+    m.openInvites = 1;
+    const unknown = await send("nobody@example.test");
+    const known = await send(PAL.email);
+    expect(unknown.status).toBe(429);
+    expect(known.status).toBe(429);
+    expect(await known.json()).toEqual(await unknown.json());
+    expect(m.recordInvite).not.toHaveBeenCalled();
+  });
+  it("answers the neutral 200 even if recording the invite fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    m.recordInvite.mockRejectedValueOnce(new Error("db down"));
+    const res = await send("nobody@example.test");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(m.deliverInvite).not.toHaveBeenCalled();
+  });
   it("invites an unknown email, normalised, with the neutral response", async () => {
     const res = await send("  New.Person@Example.TEST ");
     expect(res.status).toBe(200);

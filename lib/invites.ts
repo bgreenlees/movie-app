@@ -5,6 +5,8 @@ import { normalizeEmail } from "./emailAddress";
 export const SITE_URL = "https://whatsupnext.site";
 /** Don't email the same address from the same inviter more often than this. */
 export const RESEND_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+/** Most new invites one user may create per rolling 24 hours (durable, unlike the in-memory limiter). */
+export const MAX_INVITES_PER_DAY = 10;
 
 export function escapeHtml(s: string): string {
   return s
@@ -20,7 +22,8 @@ export function buildInviteEmail(inviterName: string) {
   const name = inviterName.trim().slice(0, 100) || "A friend";
   const line = `${name} wants to share what to watch with you on What's Up Next`;
   return {
-    subject: line,
+    // Fixed subject: the inviter's name only appears (escaped) in the body.
+    subject: "You're invited to What's Up Next",
     text: `${line}\n\nJoin them: ${SITE_URL}\n`,
     html: `<p>${escapeHtml(line)}</p><p><a href="${SITE_URL}">Join What's Up Next</a></p>`,
   };
@@ -56,7 +59,9 @@ export type InviteClaim = { previousSentAt: Date | null };
 /**
  * Step 1, inside the request (DB only, no network): records an invite from `inviterId` to
  * `email` (already normalised) unless the same inviter already emailed that address within
- * RESEND_COOLDOWN_MS. Returns a claim when an email should be sent, else null. Runs under
+ * RESEND_COOLDOWN_MS, or already created MAX_INVITES_PER_DAY invites in the last 24h (then it
+ * silently skips: the route still answers the neutral 200, which is what a known email gets,
+ * so the cap can't reveal whether an account exists). Returns a claim when an email should be sent, else null. Runs under
  * the per-user lock, like the known-account path, so the two take comparable time.
  */
 export async function recordInvite(
@@ -71,6 +76,12 @@ export async function recordInvite(
     });
     if (existing?.acceptedAt) return null;
     if (existing?.sentAt && now.getTime() - existing.sentAt.getTime() < RESEND_COOLDOWN_MS) return null;
+    if (!existing) {
+      const recent = await tx.connectionInvite.count({
+        where: { inviterId, createdAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) } },
+      });
+      if (recent >= MAX_INVITES_PER_DAY) return null;
+    }
     await tx.connectionInvite.upsert({
       where: { inviterId_email: { inviterId, email } },
       create: { inviterId, email, sentAt: now },
@@ -114,23 +125,29 @@ export async function convertInvites(userId: string, email: string): Promise<voi
       SELECT "id", "inviter_id" FROM "connection_invites"
       WHERE "email" = ${lower} AND "accepted_at" IS NULL`;
     for (const invite of invites) {
-      await prisma.$transaction(async (tx) => {
-        if (invite.inviter_id !== userId) {
-          const existing = await tx.userConnection.findFirst({
-            where: {
-              OR: [
-                { requesterId: invite.inviter_id, addresseeId: userId },
-                { requesterId: userId, addresseeId: invite.inviter_id },
-              ],
-            },
-            select: { id: true },
-          });
-          if (!existing) {
-            await tx.userConnection.create({ data: { requesterId: invite.inviter_id, addresseeId: userId } });
+      // Per invite, so one conflict (e.g. a concurrent sign-in made the same request)
+      // doesn't skip the rest.
+      try {
+        await prisma.$transaction(async (tx) => {
+          if (invite.inviter_id !== userId) {
+            const existing = await tx.userConnection.findFirst({
+              where: {
+                OR: [
+                  { requesterId: invite.inviter_id, addresseeId: userId },
+                  { requesterId: userId, addresseeId: invite.inviter_id },
+                ],
+              },
+              select: { id: true },
+            });
+            if (!existing) {
+              await tx.userConnection.create({ data: { requesterId: invite.inviter_id, addresseeId: userId } });
+            }
           }
-        }
-        await tx.connectionInvite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } });
-      });
+          await tx.connectionInvite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } });
+        });
+      } catch (err) {
+        console.error("Converting one invite failed", err instanceof Error ? err.message : err);
+      }
     }
   } catch (err) {
     console.error("Converting invites failed", err instanceof Error ? err.message : err);

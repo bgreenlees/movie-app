@@ -81,8 +81,15 @@ export async function POST(req: NextRequest) {
       },
       { status: 429 },
     );
-  const countPending = (db: Pick<typeof prisma, "userConnection">) =>
-    db.userConnection.count({ where: { requesterId: userId, status: "PENDING" } });
+  // Unanswered invites count toward the same cap. Otherwise a 429 would appear only for
+  // unknown emails (which add invites, not requests) and reveal whether an account exists.
+  const countPending = async (db: Pick<typeof prisma, "userConnection" | "connectionInvite">) => {
+    const [requests, invites] = await Promise.all([
+      db.userConnection.count({ where: { requesterId: userId, status: "PENDING" } }),
+      db.connectionInvite.count({ where: { inviterId: userId, acceptedAt: null } }),
+    ]);
+    return requests + invites;
+  };
 
   // Checked before the lookup, so it applies the same way to every email.
   // This early check is a cheap fast path; the authoritative one is re-run
@@ -109,8 +116,13 @@ export async function POST(req: NextRequest) {
     // response time can't reveal whether an account exists.
     const invitee = normalizeEmail(email);
     const inviterName = session.user.name ?? "";
-    const claim = await recordInvite(invitee, userId, new Date());
-    if (claim) after(() => deliverInvite(invitee, userId, inviterName, claim));
+    try {
+      const claim = await recordInvite(invitee, userId, new Date());
+      if (claim) after(() => deliverInvite(invitee, userId, inviterName, claim));
+    } catch (err) {
+      // A failure here must look like success, or a 500 would mark "no account".
+      console.error("Recording invite failed", err instanceof Error ? err.message : err);
+    }
     return neutralOk();
   }
   if (target.id === userId) {
