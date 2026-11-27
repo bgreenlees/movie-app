@@ -5,6 +5,8 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import PosterCard, { POSTER_GRID } from "@/components/ui/PosterCard";
+import Skeleton from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
 import AddMovieModal from "@/components/movies/AddMovieModal";
 import TrailerModal from "@/components/movies/TrailerModal";
 import OnboardingModal from "@/components/movies/OnboardingModal";
@@ -707,19 +709,7 @@ function DiscoverPageInner() {
         />
       )}
 
-      {isLoading && (
-        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))" }}>
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="rounded-lg overflow-hidden" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--border)" }}>
-              <div className="w-full aspect-[2/3] animate-pulse" style={{ backgroundColor: "var(--border)" }} />
-              <div className="p-3 flex flex-col gap-2">
-                <div className="h-8 rounded animate-pulse" style={{ backgroundColor: "var(--border)" }} />
-                <div className="h-7 rounded animate-pulse" style={{ backgroundColor: "var(--border)" }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {isLoading && <Skeleton label="Loading results" />}
 
       {/* Person mode: sections */}
       {!isLoading && isPersonMode && mediaType === "movie" && (
@@ -793,12 +783,10 @@ function DiscoverPageInner() {
       )}
 
       {!isLoading && isEmpty && (
-        <div className="text-center py-16 flex flex-col items-center gap-3">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: "var(--text-muted)" }}>
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <p className="text-base" style={{ color: "var(--text-muted)" }}>
-            {isPersonMode
+        <EmptyState
+          icon="🔎"
+          title={
+            isPersonMode
               ? `No ${mediaType === "tv" ? "TV credits" : "movie credits"} for ${personData?.name || personNameParam}`
               : isGenreMode
                 ? `No ${mediaType === "tv" ? "TV shows" : "movies"} found for ${genreName}${country ? ` from ${countryName(country)}` : ""}`
@@ -806,14 +794,14 @@ function DiscoverPageInner() {
                   ? `No ${mediaType === "tv" ? "TV shows" : "movies"} found for "${urlQuery}"`
                   : country
                     ? `No ${mediaType === "tv" ? "TV shows" : "movies"} found from ${countryName(country)}`
-                    : `No ${mediaType === "tv" ? "TV shows" : "movies"} available.`}
-          </p>
-          {urlQuery && !isPersonMode && !isGenreMode && (
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-              Check the spelling, try fewer words, or switch to {mediaType === "tv" ? "Movies" : "TV Shows"}
-            </p>
-          )}
-        </div>
+                    : `No ${mediaType === "tv" ? "TV shows" : "movies"} available`
+          }
+          body={
+            urlQuery && !isPersonMode && !isGenreMode
+              ? `Check the spelling, try fewer words, or switch to ${mediaType === "tv" ? "Movies" : "TV Shows"}.`
+              : undefined
+          }
+        />
       )}
 
       <TrailerModal

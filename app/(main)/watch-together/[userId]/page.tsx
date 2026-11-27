@@ -7,6 +7,8 @@ import TrailerModal from "@/components/movies/TrailerModal";
 import AddTVModal from "@/components/tv/AddTVModal";
 import PairCard, { PAIR_GRID, type PairCardTitle } from "@/components/watch-together/PairCard";
 import TonightForYouBoth from "@/components/watch-together/TonightForYouBoth";
+import Skeleton from "@/components/ui/Skeleton";
+import ErrorState from "@/components/ui/ErrorState";
 import type { ShelfItem } from "@/lib/watchTogetherShelves";
 
 interface WatchTogetherData {
@@ -198,25 +200,15 @@ function WatchTogether({ userId }: { userId: string }) {
         onTrailer={setTrailer}
       />
 
-      {status === "loading" && (
-        <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-          Loading shelves…
-        </p>
-      )}
+      {status === "loading" && <Skeleton count={5} label="Loading shelves" />}
       {status === "error" && (
-        <div role="alert" className="flex flex-wrap items-center gap-3 py-6">
-          <p style={{ color: "var(--text-muted)" }}>Couldn&apos;t load the shelves.</p>
-          <button
-            onClick={() => {
-              setStatus("loading");
-              setAttempt((n) => n + 1);
-            }}
-            className="min-h-11 px-4 py-1.5 text-sm rounded-md cursor-pointer hover:opacity-80"
-            style={{ color: "var(--accent)", border: "1px solid var(--accent)" }}
-          >
-            Retry
-          </button>
-        </div>
+        <ErrorState
+          title="Couldn't load the shelves"
+          onRetry={() => {
+            setStatus("loading");
+            setAttempt((n) => n + 1);
+          }}
+        />
       )}
       {data && (
         <>

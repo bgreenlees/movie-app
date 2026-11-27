@@ -5,6 +5,9 @@ import PosterCard, { POSTER_GRID } from "@/components/ui/PosterCard";
 import { statusChip, yearMeta } from "@/lib/posterCard";
 import AddMovieModal from "@/components/movies/AddMovieModal";
 import TrailerModal from "@/components/movies/TrailerModal";
+import Skeleton from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
+import ErrorState from "@/components/ui/ErrorState";
 import toast from "react-hot-toast";
 
 type Tab = "want" | "watched";
@@ -46,6 +49,7 @@ export default function MyMoviesPage() {
   const [activeTab, setActiveTab] = useState<Tab>("want");
   const [entries, setEntries] = useState<WatchlistEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<WatchlistEntry | null>(null);
   const [trailerMovie, setTrailerMovie] = useState<{ id: number; title: string } | null>(null);
 
@@ -55,6 +59,7 @@ export default function MyMoviesPage() {
   if (prevTab !== activeTab) {
     setPrevTab(activeTab);
     setIsLoading(true);
+    setLoadFailed(false);
   }
 
   // Refresh after a mutation (called from event handlers); shows the spinner like a tab switch.
@@ -62,6 +67,7 @@ export default function MyMoviesPage() {
     setIsLoading(true);
     const loaded = await loadEntries(tab);
     if (loaded) setEntries(loaded);
+    setLoadFailed(!loaded);
     setIsLoading(false);
   };
 
@@ -71,6 +77,7 @@ export default function MyMoviesPage() {
     loadEntries(activeTab).then((loaded) => {
       if (cancelled) return;
       if (loaded) setEntries(loaded);
+      setLoadFailed(!loaded);
       setIsLoading(false);
     });
     return () => {
@@ -78,10 +85,18 @@ export default function MyMoviesPage() {
     };
   }, [activeTab]);
 
-  const emptyMessage =
+  const empty =
     activeTab === "want"
-      ? "Your watchlist is empty. Search for movies to add!"
-      : "You haven't marked any movies as watched yet.";
+      ? {
+          title: "Your watchlist is empty",
+          body: "Find something to watch and add it here.",
+          action: { label: "Browse Discover", href: "/search" },
+        }
+      : {
+          title: "Nothing watched yet",
+          body: "Movies you mark as watched show up here, with your ratings.",
+          action: { label: "Browse Discover", href: "/search" },
+        };
 
   return (
     <div className="max-w-7xl mx-auto p-6">
@@ -111,11 +126,14 @@ export default function MyMoviesPage() {
       </div>
 
       {isLoading ? (
-        <p style={{ color: "var(--text-muted)" }}>Loading...</p>
+        <Skeleton label="Loading your movies" />
+      ) : loadFailed ? (
+        <ErrorState
+          title="Couldn't load your movies"
+          onRetry={() => fetchEntries(activeTab)}
+        />
       ) : entries.length === 0 ? (
-        <div className="text-center py-12">
-          <p style={{ color: "var(--text-muted)" }}>{emptyMessage}</p>
-        </div>
+        <EmptyState icon="🎬" {...empty} />
       ) : (
         <div className={POSTER_GRID}>
           {entries.map((entry) => (

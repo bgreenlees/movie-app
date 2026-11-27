@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Skeleton from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
+import ErrorState from "@/components/ui/ErrorState";
 import toast from "react-hot-toast";
-import PosterCard from "@/components/ui/PosterCard";
+import PosterCard, { POSTER_GRID } from "@/components/ui/PosterCard";
 import AddMovieModal from "@/components/movies/AddMovieModal";
 import TrailerModal from "@/components/movies/TrailerModal";
 import MoodControls, { MediaControl } from "@/components/mood/MoodControls";
@@ -174,25 +177,18 @@ export default function WhatToWatchPage() {
       </div>
 
       {hasError ? (
-        <div role="alert" className="flex flex-wrap items-center gap-3">
-          <p style={{ color: "var(--text-muted)" }}>Couldn&apos;t load suggestions.</p>
-          <button
-            onClick={retry}
-            className="px-4 py-1.5 text-sm rounded-md cursor-pointer transition-opacity hover:opacity-80"
-            style={{ color: "var(--color-accent-text)", border: "1px solid var(--accent)" }}
-          >
-            Retry
-          </button>
-        </div>
+        <ErrorState title="Couldn't load suggestions" onRetry={retry} />
       ) : isLoading && !data ? (
-        <p style={{ color: "var(--text-muted)" }}>Loading…</p>
+        <Skeleton count={PICK_COUNT} label="Loading suggestions" />
       ) : picks.length === 0 && !isLoading ? (
-        <p style={{ color: "var(--text-muted)" }}>
-          Nothing matches all of those — try turning a mood off.
-        </p>
+        <EmptyState
+          icon="🎲"
+          title="Nothing matches all of those"
+          body="Try turning a mood off to widen the search."
+        />
       ) : (
         <div
-          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 transition-opacity"
+          className={`${POSTER_GRID} transition-opacity`}
           style={{ opacity: isLoading ? 0.5 : 1 }}
           aria-busy={isLoading}
         >

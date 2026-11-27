@@ -6,6 +6,9 @@ import Link from "next/link";
 import { signOut } from "next-auth/react";
 import toast from "react-hot-toast";
 import type { TMDBWatchProvider } from "@/lib/tmdb";
+import { SkeletonBlock } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
+import ErrorState from "@/components/ui/ErrorState";
 
 interface Friend {
   connectionId: string;
@@ -34,6 +37,8 @@ export default function ProfilePage() {
   const [allProviders, setAllProviders] = useState<TMDBWatchProvider[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
 
   // Account deletion state
@@ -59,17 +64,24 @@ export default function ProfilePage() {
     // Ignore responses that arrive after the page unmounted.
     let cancelled = false;
     const load = async () => {
-      const [providersRes, userRes] = await Promise.all([
-        fetch("/api/movies/providers"),
-        fetch("/api/user/streaming"),
-      ]);
-      const providers = providersRes.ok ? await providersRes.json() : null;
-      const user = userRes.ok ? await userRes.json() : null;
-      if (cancelled) return;
+      try {
+        const [providersRes, userRes] = await Promise.all([
+          fetch("/api/movies/providers"),
+          fetch("/api/user/streaming"),
+        ]);
+        if (!providersRes.ok || !userRes.ok) throw new Error();
+        const providers = await providersRes.json();
+        const user = await userRes.json();
+        if (cancelled) return;
 
-      if (providers) setAllProviders(providers.providers || []);
-      if (user) setSelected(new Set(user.streamingServices || []));
-      setIsLoading(false);
+        setAllProviders(providers.providers || []);
+        setSelected(new Set(user.streamingServices || []));
+        setLoadFailed(false);
+      } catch {
+        if (!cancelled) setLoadFailed(true);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
     };
 
     load();
@@ -82,7 +94,7 @@ export default function ProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
   const toggle = async (providerId: number) => {
     const next = new Set(selected);
@@ -184,8 +196,28 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="max-w-7xl mx-auto p-6">
-        <p style={{ color: "var(--text-muted)" }}>Loading...</p>
+      <div className="max-w-2xl mx-auto p-6 space-y-4" role="status" aria-busy="true">
+        <span className="sr-only">Loading your profile…</span>
+        <SkeletonBlock className="h-8 w-48" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          {Array.from({ length: 8 }, (_, i) => (
+            <SkeletonBlock key={i} className="h-16" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <div className="max-w-2xl mx-auto p-6">
+        <ErrorState
+          title="Couldn't load your profile"
+          onRetry={() => {
+            setIsLoading(true);
+            setAttempt((n) => n + 1);
+          }}
+        />
       </div>
     );
   }
@@ -331,9 +363,11 @@ export default function ProfilePage() {
             My Friends
           </h3>
           {friends.length === 0 ? (
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-              No friends yet. Send a request above to get started.
-            </p>
+            <EmptyState
+              icon="👥"
+              title="No friends yet"
+              body="Send a request above to compare lists and find something to watch together."
+            />
           ) : (
             <div className="space-y-2">
               {friends.map(({ connectionId, friend }) => (

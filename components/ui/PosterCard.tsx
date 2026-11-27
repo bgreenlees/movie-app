@@ -8,12 +8,7 @@ import { detailHref, type MediaType } from "@/lib/posterCard";
 import MovieDetailModal from "@/components/movies/MovieDetailModal";
 import TVShowDetailModal from "@/components/tv/TVShowDetailModal";
 
-/**
- * The one grid rule for poster lists (design review, "Grid"): 3 columns on
- * phones (2 under 360px), then as many ~150px columns as fit.
- */
-export const POSTER_GRID =
-  "grid grid-cols-2 min-[360px]:grid-cols-3 sm:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3 sm:gap-4";
+export { POSTER_GRID_CLASS as POSTER_GRID } from "@/lib/posterGrid";
 
 // Every control on a poster shares one style (design D2): a 32px circle with a
 // shadow, and a 44px tap area from the ::before. White and purple are fixed

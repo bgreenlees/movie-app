@@ -8,6 +8,7 @@ import { canonicalProviderId } from "@/lib/providers";
 import AddMovieModal from "./AddMovieModal";
 import ShareButton from "@/components/ui/ShareButton";
 import TrailerButton from "@/components/ui/TrailerButton";
+import { SkeletonBlock } from "@/components/ui/Skeleton";
 
 interface CastMember {
   id: number;
@@ -251,8 +252,14 @@ export default function MovieDetailModal({
         {/* Body */}
         <div className="p-5">
           {isLoading && (
-            <div className="flex items-center justify-center py-16">
-              <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading...</p>
+            <div role="status" aria-busy="true" className="flex gap-4 py-4">
+              <span className="sr-only">Loading details…</span>
+              <SkeletonBlock className="aspect-[2/3] w-28 shrink-0" />
+              <div className="flex flex-1 flex-col gap-3">
+                <SkeletonBlock className="h-6 w-2/3" />
+                <SkeletonBlock className="h-4 w-1/3" />
+                <SkeletonBlock className="h-20 w-full" />
+              </div>
             </div>
           )}
 

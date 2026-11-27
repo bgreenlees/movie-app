@@ -7,7 +7,8 @@ import { isOnList, yearMeta } from "@/lib/posterCard";
 import AddMovieModal from "@/components/movies/AddMovieModal";
 import TrailerModal from "@/components/movies/TrailerModal";
 import AddTVModal from "@/components/tv/AddTVModal";
-import toast from "react-hot-toast";
+import { SkeletonBlock, PosterSkeleton } from "@/components/ui/Skeleton";
+import ErrorState from "@/components/ui/ErrorState";
 import type { NewsItem, ServiceRow } from "@/app/api/movies/news/route";
 
 interface WatchlistEntry {
@@ -163,6 +164,8 @@ async function loadTVEntries(): Promise<Record<number, TVEntry> | null> {
 export default function NewsPage() {
   const [data, setData] = useState<NewsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [filter, setFilter] = useState<MediaFilter>("both");
   const [watchlistEntries, setWatchlistEntries] = useState<Record<number, WatchlistEntry>>({});
   const [tvEntries, setTVEntries] = useState<Record<number, TVEntry>>({});
@@ -189,9 +192,12 @@ export default function NewsPage() {
         const res = await fetch("/api/movies/news");
         if (!res.ok) throw new Error();
         const loaded = await res.json();
-        if (!cancelled) setData(loaded);
+        if (!cancelled) {
+          setData(loaded);
+          setLoadFailed(false);
+        }
       } catch {
-        if (!cancelled) toast.error("Failed to load news");
+        if (!cancelled) setLoadFailed(true);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -215,7 +221,12 @@ export default function NewsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
+
+  const retry = () => {
+    setIsLoading(true);
+    setAttempt((n) => n + 1);
+  };
 
   const changeFilter = (next: MediaFilter) => {
     setFilter(next);
@@ -228,8 +239,32 @@ export default function NewsPage() {
 
   if (isLoading) {
     return (
+      <div className="max-w-7xl mx-auto p-6" role="status" aria-busy="true">
+        <span className="sr-only">Loading new releases…</span>
+        <SkeletonBlock className="mb-8 h-9 w-56" />
+        {[0, 1].map((row) => (
+          <div key={row} className="mb-8">
+            <SkeletonBlock className="mb-3 h-6 w-40" />
+            <div className="flex gap-4 overflow-hidden">
+              {Array.from({ length: 7 }, (_, i) => (
+                <div key={i} className="w-[150px] shrink-0">
+                  <PosterSkeleton />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (loadFailed && !data) {
+    return (
       <div className="max-w-7xl mx-auto p-6">
-        <p style={{ color: "var(--text-muted)" }}>Loading…</p>
+        <h1 className="text-3xl font-bold mb-6" style={{ color: "var(--primary)" }}>
+          New Releases
+        </h1>
+        <ErrorState title="Couldn't load new releases" onRetry={retry} />
       </div>
     );
   }

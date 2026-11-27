@@ -7,6 +7,9 @@ import { DEFAULT_SELECTION, type MoodSelection } from "@/lib/moodPicker";
 import type { PairCandidate } from "@/lib/pairPool";
 import { TONIGHT_COUNT, drawPairPicks, emptyKind, pairPicksQuery, refillPicks } from "@/lib/pairPicks";
 import PairCard, { type PairCardTitle } from "./PairCard";
+import Skeleton from "@/components/ui/Skeleton";
+import ErrorState from "@/components/ui/ErrorState";
+import { POSTER_GRID } from "@/components/ui/PosterCard";
 
 /** The `GET /api/watch-together/[userId]/picks` response. */
 interface PicksData {
@@ -19,27 +22,8 @@ interface PicksData {
 
 const keyOf = (c: { mediaType: string; id: number }) => `${c.mediaType}-${c.id}`;
 
-/** 5 cards in one row on desktop, 3 columns on phones (2 under 360px). */
-const TONIGHT_GRID = "grid grid-cols-2 min-[360px]:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4";
-
 const buttonClass =
   "min-h-11 sm:min-h-9 px-4 py-1.5 text-sm rounded-md cursor-pointer transition-opacity hover:opacity-80";
-
-function Skeletons() {
-  return (
-    <div className={TONIGHT_GRID} aria-hidden="true">
-      {Array.from({ length: TONIGHT_COUNT }, (_, i) => (
-        <div key={i} className="rounded-lg overflow-hidden border" style={{ borderColor: "var(--border)" }}>
-          <div className="aspect-[2/3] animate-pulse motion-reduce:animate-none" style={{ backgroundColor: "var(--hover-bg)" }} />
-          <div className="p-3 space-y-2">
-            <div className="h-3 w-3/4 rounded animate-pulse motion-reduce:animate-none" style={{ backgroundColor: "var(--hover-bg)" }} />
-            <div className="h-3 w-1/2 rounded animate-pulse motion-reduce:animate-none" style={{ backgroundColor: "var(--hover-bg)" }} />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function Notice({ children }: { children: React.ReactNode }) {
   return (
@@ -224,14 +208,9 @@ export default function TonightForYouBoth({
 
       <div aria-busy={isLoading}>
         {hasError ? (
-          <div role="alert" className="flex flex-wrap items-center gap-3 py-6">
-            <p style={{ color: "var(--text-muted)" }}>Couldn&apos;t load picks for you both.</p>
-            <button onClick={retry} className={buttonClass} style={{ color: "var(--accent)", border: "1px solid var(--accent)" }}>
-              Retry
-            </button>
-          </div>
+          <ErrorState title="Couldn't load picks for you both" onRetry={retry} />
         ) : isLoading && !data ? (
-          <Skeletons />
+          <Skeleton count={TONIGHT_COUNT} label="Loading picks for you both" />
         ) : pool.length === 0 && !isLoading ? (
           <div className="rounded-lg border px-6 py-10 text-center" style={{ borderColor: "var(--border)" }}>
             <p className="font-bold mb-1" style={{ color: "var(--foreground)" }}>
@@ -275,7 +254,7 @@ export default function TonightForYouBoth({
                 Some picks couldn&apos;t load, so this set may be smaller than usual.
               </p>
             )}
-            <ul className={`${TONIGHT_GRID} transition-opacity`} style={{ opacity: isLoading ? 0.5 : 1 }}>
+            <ul className={`${POSTER_GRID} transition-opacity`} style={{ opacity: isLoading ? 0.5 : 1 }}>
               {shown.map((p) => {
                 const item: PairCardTitle = {
                   id: p.id, mediaType: p.mediaType, title: p.title,

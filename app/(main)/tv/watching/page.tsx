@@ -5,6 +5,9 @@ import PosterCard, { POSTER_GRID } from "@/components/ui/PosterCard";
 import { episodeMeta, seasonProgress, statusChip, yearMeta } from "@/lib/posterCard";
 import TrailerModal from "@/components/movies/TrailerModal";
 import AddTVModal from "@/components/tv/AddTVModal";
+import Skeleton from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
+import ErrorState from "@/components/ui/ErrorState";
 import toast from "react-hot-toast";
 
 type Tab = "watching" | "want" | "finished";
@@ -63,10 +66,22 @@ const TAB_LABELS: Record<Tab, string> = {
   finished: "Finished",
 };
 
-const EMPTY_MESSAGES: Record<Tab, string> = {
-  watching: "Nothing in progress. Find a show and mark it as Watching.",
-  want: "Your TV watchlist is empty. Discover TV shows and add them here.",
-  finished: "No finished shows yet.",
+const EMPTY_STATES: Record<Tab, { title: string; body: string; action: { label: string; href: string } }> = {
+  watching: {
+    title: "Nothing in progress",
+    body: "Find a show and mark it as Watching to track your next episodes here.",
+    action: { label: "Browse TV shows", href: "/tv" },
+  },
+  want: {
+    title: "Your TV watchlist is empty",
+    body: "Discover TV shows and add them here.",
+    action: { label: "Browse TV shows", href: "/tv" },
+  },
+  finished: {
+    title: "No finished shows yet",
+    body: "Shows you finish show up here.",
+    action: { label: "Browse TV shows", href: "/tv" },
+  },
 };
 
 // Returns null (after toasting) when the request fails.
@@ -77,6 +92,7 @@ async function loadEntries(tab: Tab): Promise<TVEntry[] | null> {
       const data = await res.json();
       return data.entries || [];
     }
+    toast.error("Failed to load TV shows");
   } catch {
     toast.error("Failed to load TV shows");
   }
@@ -87,6 +103,7 @@ export default function MyTVPage() {
   const [activeTab, setActiveTab] = useState<Tab>("watching");
   const [entries, setEntries] = useState<TVEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [nextEpisodes, setNextEpisodes] = useState<Record<number, NextEpisodeInfo["next_episode_to_air"]>>({});
   const [episodeCounts, setEpisodeCounts] = useState<Record<number, NextEpisodeInfo["episodeCounts"]>>({});
   const [trailer, setTrailer] = useState<{ id: number; title: string } | null>(null);
@@ -100,6 +117,7 @@ export default function MyTVPage() {
     setNextEpisodes({});
     setEpisodeCounts({});
     setIsLoading(true);
+    setLoadFailed(false);
   }
 
   // Refresh after a mutation (called from event handlers); shows the spinner like a tab switch.
@@ -107,6 +125,7 @@ export default function MyTVPage() {
     setIsLoading(true);
     const loaded = await loadEntries(tab);
     if (loaded) setEntries(loaded);
+    setLoadFailed(!loaded);
     setIsLoading(false);
     return loaded ?? [];
   }, []);
@@ -117,6 +136,7 @@ export default function MyTVPage() {
     loadEntries(activeTab).then((loaded) => {
       if (cancelled) return;
       if (loaded) setEntries(loaded);
+      setLoadFailed(!loaded);
       setIsLoading(false);
       if (activeTab !== "watching" || !loaded || loaded.length === 0) return;
       Promise.allSettled(
@@ -194,14 +214,11 @@ export default function MyTVPage() {
       </div>
 
       {isLoading ? (
-        <p style={{ color: "var(--text-muted)" }}>Loading...</p>
+        <Skeleton label="Loading your shows" />
+      ) : loadFailed ? (
+        <ErrorState title="Couldn't load your shows" onRetry={() => fetchEntries(activeTab)} />
       ) : displayEntries.length === 0 ? (
-        <div
-          className="text-center py-16 rounded-xl"
-          style={{ border: "1px dashed var(--border)" }}
-        >
-          <p style={{ color: "var(--text-muted)" }}>{EMPTY_MESSAGES[activeTab]}</p>
-        </div>
+        <EmptyState icon="📺" {...EMPTY_STATES[activeTab]} />
       ) : (
         <>
           {/* Upcoming episodes (watching tab only) */}

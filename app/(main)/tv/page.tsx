@@ -7,6 +7,9 @@ import { isOnList, seasonMeta, yearMeta, type SeasonBanner as TVSeasonBanner } f
 import TrailerModal from "@/components/movies/TrailerModal";
 import AddTVModal from "@/components/tv/AddTVModal";
 import type { TMDBTVShow } from "@/lib/tmdb";
+import Skeleton from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
+import ErrorState from "@/components/ui/ErrorState";
 import toast from "react-hot-toast";
 
 interface TVEntry {
@@ -50,7 +53,9 @@ function TVDiscoverInner() {
 
   const [shows, setShows] = useState<TMDBTVShow[]>([]);
   const [isPersonalized, setIsPersonalized] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [selectedShow, setSelectedShow] = useState<{ id: number; name: string } | null>(null);
   const [trailer, setTrailer] = useState<{ id: number; title: string } | null>(null);
   const [tvEntries, setTVEntries] = useState<Record<number, TVEntry>>({});
@@ -100,6 +105,7 @@ function TVDiscoverInner() {
     if (urlQuery) {
       const fetchResults = async () => {
         setIsLoading(true);
+        setLoadFailed(false);
         try {
           const res = await fetch(`/api/tv/search?q=${encodeURIComponent(urlQuery)}`);
           if (res.ok) {
@@ -108,13 +114,12 @@ function TVDiscoverInner() {
               .filter((s: TMDBTVShow) => s.poster_path)
               .sort((a: TMDBTVShow, b: TMDBTVShow) => b.popularity - a.popularity);
             setShows(results);
-            if (!results.length) toast.error("No TV shows found");
             fetchSeasonBanners(results);
           } else {
-            toast.error("Search failed");
+            setLoadFailed(true);
           }
         } catch {
-          toast.error("Search failed");
+          setLoadFailed(true);
         } finally {
           setIsLoading(false);
         }
@@ -123,6 +128,7 @@ function TVDiscoverInner() {
     } else {
       const loadShows = async () => {
         setIsLoading(true);
+        setLoadFailed(false);
         try {
           const recRes = await fetch("/api/tv/recommended");
           if (recRes.ok) {
@@ -132,17 +138,17 @@ function TVDiscoverInner() {
             setIsPersonalized(recData.personalized);
             fetchSeasonBanners(results);
           } else {
-            toast.error("Failed to load TV shows");
+            setLoadFailed(true);
           }
         } catch {
-          toast.error("Failed to load TV shows");
+          setLoadFailed(true);
         } finally {
           setIsLoading(false);
         }
       };
       loadShows();
     }
-  }, [urlQuery, fetchSeasonBanners]);
+  }, [urlQuery, fetchSeasonBanners, reloadKey]);
 
   useEffect(() => {
     if (!gridRef.current) return;
@@ -169,13 +175,16 @@ function TVDiscoverInner() {
         {urlQuery ? `TV Results for "${urlQuery}"` : isPersonalized ? "TV Recommended for You" : "Discover TV Shows"}
       </h1>
 
-      {isLoading && (
-        <div className="text-center py-12">
-          <p style={{ color: "var(--text-muted)" }}>Loading...</p>
-        </div>
+      {isLoading && <Skeleton label="Loading TV shows" />}
+
+      {!isLoading && loadFailed && (
+        <ErrorState
+          title={urlQuery ? "Search failed" : "Couldn't load TV shows"}
+          onRetry={() => setReloadKey((k) => k + 1)}
+        />
       )}
 
-      {!isLoading && displayShows.length > 0 && (
+      {!isLoading && !loadFailed && displayShows.length > 0 && (
         <div ref={gridRef} className={POSTER_GRID}>
           {displayShows.map((show) => {
             const existingEntry = tvEntries[show.id];
@@ -198,12 +207,12 @@ function TVDiscoverInner() {
         </div>
       )}
 
-      {!isLoading && displayShows.length === 0 && (
-        <div className="text-center py-12">
-          <p style={{ color: "var(--text-muted)" }}>
-            {urlQuery ? "No TV shows found. Try a different search term." : "No TV shows available."}
-          </p>
-        </div>
+      {!isLoading && !loadFailed && displayShows.length === 0 && (
+        <EmptyState
+          icon="📺"
+          title={urlQuery ? "No TV shows found" : "No TV shows to show yet"}
+          body={urlQuery ? "Try a different search term." : "Check back soon, or try searching for a show."}
+        />
       )}
 
       <TrailerModal
@@ -232,7 +241,7 @@ function TVDiscoverInner() {
 
 export default function TVDiscoverPage() {
   return (
-    <Suspense fallback={<div className="max-w-7xl mx-auto p-6"><p style={{ color: "var(--text-muted)" }}>Loading...</p></div>}>
+    <Suspense fallback={<div className="max-w-7xl mx-auto p-6"><Skeleton label="Loading TV shows" /></div>}>
       <TVDiscoverInner />
     </Suspense>
   );

@@ -255,3 +255,13 @@ main[tabindex="-1"]:focus-visible {
   0%, 100% { transform: translate(0, 0) scale(1); }
   50%       { transform: translate(40px, 70px) scale(1.05); }
 }
+
+/* Loading skeleton shimmer (components/ui/Skeleton.tsx). Reduced motion: the global rule above freezes it. */
+@keyframes skeleton-shimmer {
+  0% { opacity: 1; }
+  50% { opacity: 0.55; }
+  100% { opacity: 1; }
+}
+.skeleton {
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
