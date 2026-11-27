@@ -324,9 +324,9 @@ export default function Navbar() {
         {/* Top row: Logo | desktop nav | icons */}
         <div className="flex items-center gap-2 sm:gap-4">
           {/* Logo */}
-          <Link href="/search" className="shrink-0" aria-label="What's Up Next: Discover">
-            <Logo variant="horizontal" size={30} className="max-sm:hidden" />
-            <LogoMark size={32} decorative className="sm:hidden" />
+          <Link href="/search" className="flex shrink-0 items-center" aria-label="What's Up Next: Discover">
+            <Logo variant="horizontal" size={22} cropped className="max-sm:hidden" />
+            <LogoMark size={24} decorative cropped className="block sm:hidden" />
           </Link>
 
           {/* Desktop nav links */}
