@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { tmdb } from "@/lib/tmdb";
 import { detailHref, type MediaType } from "@/lib/posterCard";
 import MovieDetailModal from "@/components/movies/MovieDetailModal";
@@ -82,6 +82,27 @@ export default function PosterCard({
   const hasMenu = !!(onRate || onNotInterested || onTrailer || onRemove);
   const pct = progress == null ? null : Math.round(progress * 100);
 
+  // Place the menu against the viewport (not the poster, which is only ~110px
+  // wide on a phone): right-aligned under the ⋯ button, clamped to the screen,
+  // flipped above the button when there's no room below.
+  useLayoutEffect(() => {
+    if (!menuOpen) return;
+    const btn = menuButtonRef.current?.getBoundingClientRect();
+    const menu = menuRef.current;
+    if (!btn || !menu) return;
+    const margin = 8;
+    const w = menu.offsetWidth;
+    const h = menu.offsetHeight;
+    const vw = document.documentElement.clientWidth;
+    const vh = window.innerHeight;
+    const left = Math.max(margin, Math.min(btn.right - w, vw - w - margin));
+    let top = btn.bottom + 4;
+    if (top + h > vh - margin) top = Math.max(margin, btn.top - 4 - h);
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+    menu.style.visibility = "visible";
+  }, [menuOpen]);
+
   // Close the menu on Escape (focus back to ⋯) and on a press outside the card.
   useEffect(() => {
     if (!menuOpen) return;
@@ -95,9 +116,15 @@ export default function PosterCard({
     const onPointer = (e: globalThis.PointerEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) setMenuOpen(false);
     };
+    // The menu is fixed to the viewport, so it would drift from its card.
+    const close = () => setMenuOpen(false);
     document.addEventListener("keydown", onKey);
     document.addEventListener("pointerdown", onPointer);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
     return () => {
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("pointerdown", onPointer);
     };
@@ -108,6 +135,14 @@ export default function PosterCard({
   function clearPress() {
     if (pressTimer.current) clearTimeout(pressTimer.current);
     pressTimer.current = null;
+  }
+
+  // The click that follows a long-press fires right after pointerup. If the
+  // finger dragged off the poster no click comes, so clear the flag afterwards
+  // rather than let it swallow the next real click.
+  function endPress() {
+    clearPress();
+    if (suppressClick.current) setTimeout(() => (suppressClick.current = false), 0);
   }
 
   // Long-press on the poster (touch) opens the ⋯ menu instead of the details.
@@ -146,11 +181,12 @@ export default function PosterCard({
       <div ref={rootRef} className="relative aspect-[2/3] rounded-card bg-surface-2 shadow-card">
         <Link
           href={detailHref(mediaType, id)}
+          prefetch={false}
           onClick={onPosterClick}
           onPointerDown={onPointerDown}
-          onPointerUp={clearPress}
+          onPointerUp={endPress}
           onPointerMove={clearPress}
-          onPointerCancel={clearPress}
+          onPointerCancel={endPress}
           onContextMenu={(e) => {
             if (suppressClick.current || pressTimer.current) e.preventDefault();
           }}
@@ -211,7 +247,8 @@ export default function PosterCard({
             id={menuId}
             role="group"
             aria-label={`Options for ${title}`}
-            className="absolute inset-x-1 top-11 z-30 flex flex-col gap-0.5 rounded-control border border-border bg-surface p-1 shadow-pop"
+            style={{ top: 0, left: 0, visibility: "hidden" }}
+            className="fixed z-50 flex w-max min-w-40 max-w-[calc(100vw-16px)] flex-col gap-0.5 rounded-control border border-border bg-surface p-1 shadow-pop"
           >
             {onNotInterested && (
               <button
