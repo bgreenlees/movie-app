@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import PosterCard, { POSTER_GRID } from "@/components/ui/PosterCard";
 import { isOnList, seasonMeta, yearMeta, type SeasonBanner as TVSeasonBanner } from "@/lib/posterCard";
+import TrailerModal from "@/components/movies/TrailerModal";
 import AddTVModal from "@/components/tv/AddTVModal";
 import type { TMDBTVShow } from "@/lib/tmdb";
 import toast from "react-hot-toast";
@@ -51,6 +52,7 @@ function TVDiscoverInner() {
   const [isPersonalized, setIsPersonalized] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedShow, setSelectedShow] = useState<{ id: number; name: string } | null>(null);
+  const [trailer, setTrailer] = useState<{ id: number; title: string } | null>(null);
   const [tvEntries, setTVEntries] = useState<Record<number, TVEntry>>({});
   const [seasonBanners, setSeasonBanners] = useState<Record<number, TVSeasonBanner>>({});
   const [columns, setColumns] = useState(6);
@@ -154,36 +156,6 @@ function TVDiscoverInner() {
     return () => obs.disconnect();
   }, [shows]);
 
-  const handleRating = async (tvShowId: number, rating: number) => {
-    const entry = tvEntries[tvShowId];
-    if (entry) {
-      setTVEntries((prev) => ({ ...prev, [tvShowId]: { ...entry, rating: rating || null } }));
-      try {
-        const res = await fetch(`/api/tv/watchlist/${entry.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rating: rating || null }),
-        });
-        if (!res.ok) throw new Error();
-      } catch {
-        toast.error("Failed to save rating");
-        fetchTVEntries();
-      }
-    } else if (rating > 0) {
-      try {
-        const res = await fetch("/api/tv/watchlist", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tvShowId, status: "WATCHED", rating }),
-        });
-        if (!res.ok) throw new Error();
-        fetchTVEntries();
-      } catch {
-        toast.error("Failed to save rating");
-      }
-    }
-  };
-
   const filteredShows = shows.filter((show) =>
     urlQuery ? true : !tvEntries[show.id]
   );
@@ -219,8 +191,7 @@ function TVDiscoverInner() {
                 meta={banner ? seasonMeta(banner) : yearMeta(show.first_air_date, "tv")}
                 onList={isOnList(existingEntry?.status)}
                 onAdd={() => setSelectedShow({ id: show.id, name: show.name })}
-                rating={existingEntry?.rating || 0}
-                onRate={(r) => handleRating(show.id, r)}
+                onTrailer={() => setTrailer({ id: show.id, title: show.name })}
               />
             );
           })}
@@ -234,6 +205,13 @@ function TVDiscoverInner() {
           </p>
         </div>
       )}
+
+      <TrailerModal
+        movieId={trailer?.id ?? null}
+        movieTitle={trailer?.title ?? ""}
+        mediaType="tv"
+        onClose={() => setTrailer(null)}
+      />
 
       {selectedShow && (
         <AddTVModal

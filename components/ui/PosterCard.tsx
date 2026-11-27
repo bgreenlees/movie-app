@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useId, useLayoutEffect, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 import { getPosterUrl } from "@/lib/tmdbImages";
 import { detailHref, type MediaType } from "@/lib/posterCard";
 import MovieDetailModal from "@/components/movies/MovieDetailModal";
@@ -15,13 +15,14 @@ import TVShowDetailModal from "@/components/tv/TVShowDetailModal";
 export const POSTER_GRID =
   "grid grid-cols-2 min-[360px]:grid-cols-3 sm:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3 sm:gap-4";
 
-const RATINGS = [
-  { value: 1, label: "Didn't like", icon: "👎" },
-  { value: 2, label: "Like", icon: "👍" },
-  { value: 3, label: "Love", icon: "♥" },
-] as const;
-
-const LONG_PRESS_MS = 500;
+// Every control on a poster shares one style (design D2): a 32px circle with a
+// shadow, and a 44px tap area from the ::before. White and purple are fixed
+// colours, not theme tokens, so they read on dark and bright art in both themes.
+// Purple means only "on your list".
+const POSTER_CONTROL =
+  "absolute flex h-8 w-8 cursor-pointer items-center justify-center rounded-full shadow-[0_1px_4px_rgba(0,0,0,0.5)] transition-colors duration-150 motion-reduce:transition-none before:absolute before:-inset-1.5 before:content-['']";
+const CONTROL_WHITE = "bg-[#f4f4f6] text-[#0b0b0f] hover:bg-white";
+const CONTROL_PURPLE = "bg-accent text-white hover:bg-accent-hover";
 
 export interface PosterCardProps {
   id: number;
@@ -39,13 +40,8 @@ export interface PosterCardProps {
   onList?: boolean;
   /** The one action: opens the Add / Update sheet. */
   onAdd: () => void;
-  /** Current thumb rating, 0 = none, 1–3. Shown in the ⋯ menu when onRate is set. */
-  rating?: number | null;
-  onRate?: (rating: number) => void;
-  notInterested?: boolean;
-  onNotInterested?: () => void;
+  /** Shows the play button (bottom left) and opens the trailer. Omit when there is none. */
   onTrailer?: () => void;
-  onRemove?: () => void;
   /** Extra lines under the caption (e.g. a "why" line, next episode). */
   children?: ReactNode;
 }
@@ -61,137 +57,29 @@ export default function PosterCard({
   statusChip,
   onList = false,
   onAdd,
-  rating,
-  onRate,
-  notInterested,
-  onNotInterested,
   onTrailer,
-  onRemove,
   children,
 }: PosterCardProps) {
   const [detailOpen, setDetailOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuId = useId();
-  const rootRef = useRef<HTMLDivElement>(null);
-  const menuButtonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const suppressClick = useRef(false);
-
   const posterUrl = getPosterUrl(posterPath);
-  const hasMenu = !!(onRate || onNotInterested || onTrailer || onRemove);
   const pct = progress == null ? null : Math.round(progress * 100);
-
-  // Place the menu against the viewport (not the poster, which is only ~110px
-  // wide on a phone): right-aligned under the ⋯ button, clamped to the screen,
-  // flipped above the button when there's no room below.
-  useLayoutEffect(() => {
-    if (!menuOpen) return;
-    const btn = menuButtonRef.current?.getBoundingClientRect();
-    const menu = menuRef.current;
-    if (!btn || !menu) return;
-    const margin = 8;
-    const w = menu.offsetWidth;
-    const h = menu.offsetHeight;
-    const vw = document.documentElement.clientWidth;
-    const vh = window.innerHeight;
-    const left = Math.max(margin, Math.min(btn.right - w, vw - w - margin));
-    let top = btn.bottom + 4;
-    if (top + h > vh - margin) top = Math.max(margin, btn.top - 4 - h);
-    menu.style.left = `${left}px`;
-    menu.style.top = `${top}px`;
-    menu.style.visibility = "visible";
-  }, [menuOpen]);
-
-  // Close the menu on Escape (focus back to ⋯) and on a press outside the card.
-  useEffect(() => {
-    if (!menuOpen) return;
-    menuRef.current?.querySelector<HTMLElement>("button")?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setMenuOpen(false);
-        menuButtonRef.current?.focus();
-      }
-    };
-    const onPointer = (e: globalThis.PointerEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setMenuOpen(false);
-    };
-    // The menu is fixed to the viewport, so it would drift from its card.
-    const close = () => setMenuOpen(false);
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onPointer);
-    window.addEventListener("resize", close);
-    window.addEventListener("scroll", close, true);
-    return () => {
-      window.removeEventListener("resize", close);
-      window.removeEventListener("scroll", close, true);
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onPointer);
-    };
-  }, [menuOpen]);
-
-  useEffect(() => () => clearPress(), []);
-
-  function clearPress() {
-    if (pressTimer.current) clearTimeout(pressTimer.current);
-    pressTimer.current = null;
-  }
-
-  // The click that follows a long-press fires right after pointerup. If the
-  // finger dragged off the poster no click comes, so clear the flag afterwards
-  // rather than let it swallow the next real click.
-  function endPress() {
-    clearPress();
-    if (suppressClick.current) setTimeout(() => (suppressClick.current = false), 0);
-  }
-
-  // Long-press on the poster (touch) opens the ⋯ menu instead of the details.
-  function onPointerDown(e: PointerEvent) {
-    if (!hasMenu || e.pointerType !== "touch") return;
-    suppressClick.current = false;
-    clearPress();
-    pressTimer.current = setTimeout(() => {
-      suppressClick.current = true;
-      setMenuOpen(true);
-    }, LONG_PRESS_MS);
-  }
 
   // A plain click opens the detail modal; new-tab clicks follow the real link.
   function onPosterClick(e: MouseEvent) {
-    if (suppressClick.current) {
-      e.preventDefault();
-      suppressClick.current = false;
-      return;
-    }
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
     e.preventDefault();
     setDetailOpen(true);
   }
 
-  const pick = (fn: () => void) => () => {
-    setMenuOpen(false);
-    fn();
-  };
-
-  const menuItem =
-    "flex w-full items-center gap-2 rounded-chip px-2 min-h-11 sm:min-h-9 text-left text-[13px] leading-[18px] text-text hover:bg-surface-2 cursor-pointer";
-
   return (
     <article className="group/card flex min-w-0 flex-col gap-2.5">
-      <div ref={rootRef} className="relative aspect-[2/3] rounded-card bg-surface-2 shadow-card">
+      <div className="relative aspect-[2/3] rounded-card bg-surface-2 shadow-card">
         <Link
           href={detailHref(mediaType, id)}
           prefetch={false}
           onClick={onPosterClick}
-          onPointerDown={onPointerDown}
-          onPointerUp={endPress}
-          onPointerMove={clearPress}
-          onPointerCancel={endPress}
-          onContextMenu={(e) => {
-            if (suppressClick.current || pressTimer.current) e.preventDefault();
-          }}
           aria-label={`${title}: details`}
-          className="absolute inset-0 select-none overflow-hidden rounded-card [-webkit-touch-callout:none]"
+          className="absolute inset-0 select-none overflow-hidden rounded-card"
         >
           {posterUrl ? (
             <Image
@@ -219,93 +107,31 @@ export default function PosterCard({
           </span>
         )}
 
-        {hasMenu && (
+        {onTrailer && (
           <button
-            ref={menuButtonRef}
             type="button"
-            onClick={() => setMenuOpen((o) => !o)}
-            aria-label={`More for ${title}`}
-            aria-expanded={menuOpen}
-            aria-controls={menuOpen ? menuId : undefined}
-            className={`absolute right-2 top-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white transition-opacity duration-150 motion-reduce:transition-none before:absolute before:-inset-1.5 before:content-[''] hover:bg-black/80 ${
-              menuOpen
-                ? "opacity-100"
-                : "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/card:opacity-100 focus-visible:opacity-100"
-            }`}
+            onClick={onTrailer}
+            aria-label={`Watch trailer: ${title}`}
+            className={`${POSTER_CONTROL} bottom-2 left-2 ${CONTROL_WHITE}`}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <circle cx="5" cy="12" r="2" />
-              <circle cx="12" cy="12" r="2" />
-              <circle cx="19" cy="12" r="2" />
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M8 5.14v13.72a1 1 0 0 0 1.52.85l11-6.86a1 1 0 0 0 0-1.7l-11-6.86A1 1 0 0 0 8 5.14z" />
             </svg>
           </button>
-        )}
-
-        {hasMenu && menuOpen && (
-          <div
-            ref={menuRef}
-            id={menuId}
-            role="group"
-            aria-label={`Options for ${title}`}
-            style={{ top: 0, left: 0, visibility: "hidden" }}
-            className="fixed z-50 flex w-max min-w-40 max-w-[calc(100vw-16px)] flex-col gap-0.5 rounded-control border border-border bg-surface p-1 shadow-pop"
-          >
-            {onNotInterested && (
-              <button
-                type="button"
-                aria-pressed={!!notInterested}
-                onClick={pick(onNotInterested)}
-                className={`${menuItem} ${notInterested ? "bg-surface-2 font-bold" : ""}`}
-              >
-                <span aria-hidden="true" className="w-4 text-center">✕</span>
-                Not for me
-              </button>
-            )}
-            {onRate &&
-              RATINGS.map((r) => {
-                const selected = rating === r.value;
-                return (
-                  <button
-                    key={r.value}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={pick(() => onRate(selected ? 0 : r.value))}
-                    className={`${menuItem} ${selected ? "bg-surface-2 font-bold" : ""}`}
-                  >
-                    <span aria-hidden="true" className="w-4 text-center">{r.icon}</span>
-                    {r.label}
-                  </button>
-                );
-              })}
-            {onTrailer && (
-              <button type="button" onClick={pick(onTrailer)} className={menuItem}>
-                <span aria-hidden="true" className="w-4 text-center">▶</span>
-                Trailer
-              </button>
-            )}
-            {onRemove && (
-              <button type="button" onClick={pick(onRemove)} className={`${menuItem} text-danger`}>
-                <span aria-hidden="true" className="w-4 text-center">🗑</span>
-                Remove
-              </button>
-            )}
-          </div>
         )}
 
         <button
           type="button"
           onClick={onAdd}
           aria-label={onList ? `On your list: ${title}. Update` : `Add ${title} to a list`}
-          className={`absolute bottom-2 right-2 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full shadow-card transition-colors duration-150 motion-reduce:transition-none before:absolute before:-inset-1 before:content-[''] ${
-            onList ? "bg-text text-bg" : "bg-accent text-white hover:bg-accent-hover"
-          }`}
+          className={`${POSTER_CONTROL} bottom-2 right-2 ${onList ? CONTROL_PURPLE : CONTROL_WHITE}`}
         >
           {onList ? (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polyline points="20 6 9 17 4 12" />
             </svg>
           ) : (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" aria-hidden="true">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>

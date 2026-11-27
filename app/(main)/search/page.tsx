@@ -109,7 +109,7 @@ function DiscoverPageInner() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState<{ id: number; title: string } | null>(null);
   const [watchlistEntries, setWatchlistEntries] = useState<Record<number, WatchlistEntry>>({});
-  const [trailerMovie, setTrailerMovie] = useState<{ id: number; title: string } | null>(null);
+  const [trailerMovie, setTrailerMovie] = useState<{ id: number; title: string; mediaType: "movie" | "tv" } | null>(null);
 
   // TV state
   const [tvShows, setTVShows] = useState<TMDBTVShow[]>([]);
@@ -435,58 +435,6 @@ function DiscoverPageInner() {
     router.replace(qs ? `${pathname}?${qs}` : pathname);
   };
 
-  // ── Movie handlers ────────────────────────────────────────────────────────
-
-  const handleMovieRating = async (movieId: number, rating: number) => {
-    const entry = watchlistEntries[movieId];
-    if (entry) {
-      setWatchlistEntries((prev) => ({ ...prev, [movieId]: { ...entry, rating: rating || null } }));
-      try {
-        const res = await fetch(`/api/watchlist/${entry.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rating: rating || null }) });
-        if (!res.ok) throw new Error();
-      } catch { toast.error("Failed to save rating"); fetchWatchlist(); }
-    } else if (rating > 0) {
-      try {
-        const res = await fetch("/api/watchlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ movieId, status: "WATCHED", rating }) });
-        if (!res.ok) throw new Error();
-        fetchWatchlist();
-      } catch { toast.error("Failed to save rating"); }
-    }
-  };
-
-  const handleNotInterested = async (movieId: number) => {
-    const entry = watchlistEntries[movieId];
-    if (entry?.status === "NOT_INTERESTED") {
-      try { await fetch(`/api/watchlist/${entry.id}`, { method: "DELETE" }); fetchWatchlist(); }
-      catch { toast.error("Failed to update"); }
-    } else if (!entry) {
-      try {
-        const res = await fetch("/api/watchlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ movieId, status: "NOT_INTERESTED" }) });
-        if (!res.ok) throw new Error();
-        fetchWatchlist();
-      } catch { toast.error("Failed to update"); }
-    }
-  };
-
-  // ── TV handlers ───────────────────────────────────────────────────────────
-
-  const handleTVRating = async (tvShowId: number, rating: number) => {
-    const entry = tvEntries[tvShowId];
-    if (entry) {
-      setTVEntries((prev) => ({ ...prev, [tvShowId]: { ...entry, rating: rating || null } }));
-      try {
-        const res = await fetch(`/api/tv/watchlist/${entry.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rating: rating || null }) });
-        if (!res.ok) throw new Error();
-      } catch { toast.error("Failed to save rating"); fetchTVEntries(); }
-    } else if (rating > 0) {
-      try {
-        const res = await fetch("/api/tv/watchlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tvShowId, status: "WATCHED", rating }) });
-        if (!res.ok) throw new Error();
-        fetchTVEntries();
-      } catch { toast.error("Failed to save rating"); }
-    }
-  };
-
   // ── Display calculations ──────────────────────────────────────────────────
 
   const isPersonMode = !!personId;
@@ -579,11 +527,7 @@ function DiscoverPageInner() {
             meta={yearMeta(movie.release_date, "movie")}
             onList={isOnList(existingEntry?.status)}
             onAdd={() => setSelectedMovie({ id: movie.id, title: movie.title })}
-            rating={existingEntry?.rating || 0}
-            onRate={(r) => handleMovieRating(movie.id, r)}
-            notInterested={existingEntry?.status === "NOT_INTERESTED"}
-            onNotInterested={() => handleNotInterested(movie.id)}
-            onTrailer={() => setTrailerMovie({ id: movie.id, title: movie.title })}
+            onTrailer={() => setTrailerMovie({ id: movie.id, title: movie.title, mediaType: "movie" })}
           />
         );
       })}
@@ -606,8 +550,7 @@ function DiscoverPageInner() {
             meta={banner ? seasonMeta(banner) : yearMeta(show.first_air_date, "tv")}
             onList={isOnList(existingEntry?.status)}
             onAdd={() => setSelectedShow({ id: show.id, name: show.name })}
-            rating={existingEntry?.rating || 0}
-            onRate={(r) => handleTVRating(show.id, r)}
+            onTrailer={() => setTrailerMovie({ id: show.id, title: show.name, mediaType: "tv" })}
           />
         );
       })}
@@ -876,6 +819,7 @@ function DiscoverPageInner() {
       <TrailerModal
         movieId={trailerMovie?.id ?? null}
         movieTitle={trailerMovie?.title ?? ""}
+        mediaType={trailerMovie?.mediaType}
         onClose={() => setTrailerMovie(null)}
       />
 

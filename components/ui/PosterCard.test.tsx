@@ -34,14 +34,38 @@ describe("PosterCard", () => {
     expect(added).toContain('href="/tv/1"');
   });
 
-  it("shows the ⋯ menu button only when there is something in it", () => {
+  it("shows the play button only when there is a trailer handler", () => {
     const bare = renderToStaticMarkup(<PosterCard id={1} mediaType="movie" title="X" posterPath={null} onAdd={noop} />);
-    expect(bare).not.toContain("More for X");
-    const rated = renderToStaticMarkup(
-      <PosterCard id={1} mediaType="movie" title="X" posterPath={null} onAdd={noop} onRate={noop} />
+    expect(bare).not.toContain("Watch trailer");
+    const withTrailer = renderToStaticMarkup(
+      <PosterCard id={1} mediaType="tv" title="X" posterPath={null} onAdd={noop} onTrailer={noop} />
     );
-    expect(rated).toContain('aria-label="More for X"');
-    expect(rated).toContain('aria-expanded="false"');
+    expect(withTrailer).toContain('aria-label="Watch trailer: X"');
+  });
+
+  it("styles + as white and ✓ as purple (purple only means on your list)", () => {
+    const add = renderToStaticMarkup(<PosterCard id={1} mediaType="movie" title="X" posterPath={null} onAdd={noop} onTrailer={noop} />);
+    const added = renderToStaticMarkup(<PosterCard id={1} mediaType="movie" title="X" posterPath={null} onAdd={noop} onTrailer={noop} onList />);
+    expect(add).not.toContain("bg-accent");
+    expect(added.match(/bg-accent/g)).toHaveLength(1);
+    expect(added).toContain("polyline");
+    expect(add).toContain("line");
+  });
+
+  it("has no ⋯ menu", () => {
+    const html = renderToStaticMarkup(
+      <PosterCard id={1} mediaType="movie" title="X" posterPath={null} onAdd={noop} onTrailer={noop} />
+    );
+    expect(html).not.toContain("More for X");
+    expect(html).not.toContain("aria-expanded");
+  });
+
+  it("makes every poster control a 44px tap area around a 32px circle", () => {
+    const html = renderToStaticMarkup(
+      <PosterCard id={1} mediaType="movie" title="X" posterPath={null} onAdd={noop} onTrailer={noop} />
+    );
+    expect(html.match(/h-8 w-8/g)).toHaveLength(2);
+    expect(html.match(/before:-inset-1\.5/g)).toHaveLength(2);
   });
 
   it("renders the status chip and the progress bar when given", () => {

@@ -49,6 +49,7 @@ const FILTERS: { value: MediaFilter; label: string }[] = [
 ];
 
 type Selected = { id: number; title: string };
+type TrailerTarget = Selected & { mediaType: "movie" | "tv" };
 
 function ScrollRow({
   title,
@@ -69,7 +70,7 @@ function ScrollRow({
   tvEntries: Record<number, TVEntry>;
   onAddMovie: (movie: Selected) => void;
   onAddTV: (show: Selected) => void;
-  onTrailer: (movie: Selected) => void;
+  onTrailer: (title: TrailerTarget) => void;
 }) {
   const visible =
     filter === "both"
@@ -110,7 +111,7 @@ function ScrollRow({
                 meta={yearMeta(item.date, item.mediaType)}
                 onList={isOnList(existing?.status)}
                 onAdd={() => (item.mediaType === "movie" ? onAddMovie : onAddTV)(selected)}
-                onTrailer={item.mediaType === "movie" ? () => onTrailer(selected) : undefined}
+                onTrailer={() => onTrailer({ ...selected, mediaType: item.mediaType })}
               />
             </div>
           );
@@ -167,7 +168,7 @@ export default function NewsPage() {
   const [tvEntries, setTVEntries] = useState<Record<number, TVEntry>>({});
   const [selectedMovie, setSelectedMovie] = useState<Selected | null>(null);
   const [selectedShow, setSelectedShow] = useState<Selected | null>(null);
-  const [trailerMovie, setTrailerMovie] = useState<Selected | null>(null);
+  const [trailerMovie, setTrailerMovie] = useState<TrailerTarget | null>(null);
 
   // Refresh after a mutation (called from event handlers).
   const fetchWatchlist = async () => {
@@ -305,6 +306,7 @@ export default function NewsPage() {
       <TrailerModal
         movieId={trailerMovie?.id ?? null}
         movieTitle={trailerMovie?.title ?? ""}
+        mediaType={trailerMovie?.mediaType}
         onClose={() => setTrailerMovie(null)}
       />
 
