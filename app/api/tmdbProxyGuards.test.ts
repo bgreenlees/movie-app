@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Security audit F1: the TMDB proxies only the signed-in UI uses must answer 401
@@ -22,6 +24,10 @@ vi.mock("@/lib/apiGuard", () => import("../../lib/apiGuard"));
 vi.mock("@/lib/rateLimit", () => import("../../lib/rateLimit"));
 vi.mock("@/lib/fuzzySearch", () => import("../../lib/fuzzySearch"));
 vi.mock("@/lib/countries", () => import("../../lib/countries"));
+vi.mock("@/lib/onboarding", () => import("../../lib/onboarding"));
+vi.mock("@/lib/providers", () => import("../../lib/providers"));
+// news reads the signed-in user's streaming services.
+vi.mock("@/lib/db", () => ({ prisma: { user: { findUnique: vi.fn().mockResolvedValue({ streamingServices: [] }) } } }));
 
 type Handler = (req: Request, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
 
@@ -38,6 +44,12 @@ const PROTECTED: Array<[string, () => Promise<{ GET: unknown }>, string, Record<
   ["/api/tv/[id]/season/[number]", () => import("./tv/[id]/season/[number]/route"), "/api/tv/1396/season/1", { id: "1396", number: "1" }],
   ["/api/movies/[id]/recommendations", () => import("./movies/[id]/recommendations/route"), "/api/movies/550/recommendations", { id: "550" }],
   ["/api/tv/[id]/recommendations", () => import("./tv/[id]/recommendations/route"), "/api/tv/1396/recommendations", { id: "1396" }],
+  // Only called from signed-in pages (search, profile, onboarding, new releases).
+  ["/api/genres", () => import("./genres/route"), "/api/genres?media=tv", {}],
+  ["/api/movies/contextual", () => import("./movies/contextual/route"), "/api/movies/contextual", {}],
+  ["/api/movies/providers", () => import("./movies/providers/route"), "/api/movies/providers", {}],
+  ["/api/onboarding/movies", () => import("./onboarding/movies/route"), "/api/onboarding/movies", {}],
+  ["/api/movies/news", () => import("./movies/news/route"), "/api/movies/news", {}],
 ];
 
 // Public (fetched by the signed-out /movie/[id] and /tv/[id] pages, or harmless), rate-limited per IP.
@@ -111,5 +123,32 @@ describe("public TMDB proxies", () => {
     // Another IP is unaffected.
     const [, load, url, params] = PUBLIC[0];
     expect((await call(load, url, params, "192.0.2.56")).status).not.toBe(429);
+  });
+});
+
+// Routes that call TMDB but already check the session themselves (they read the user's
+// own data too), so they are covered by their own tests rather than this table.
+const OWN_AUTH = new Set([
+  "decide", "mood-picks", "movies/recommended", "tv/recommended", "tv/watchlist",
+  "watchlist", "watch-together/[userId]", "onboarding",
+]);
+
+function routeFiles(dir: string, base = dir): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const full = join(dir, e.name);
+    if (e.isDirectory()) return routeFiles(full, base);
+    return e.name === "route.ts" ? [full.slice(base.length + 1).replace(/\/?route\.ts$/, "")] : [];
+  });
+}
+
+describe("coverage", () => {
+  it("every route that calls TMDB is listed above or has its own auth", () => {
+    const listed = new Set([...PROTECTED, ...PUBLIC].map(([route]) => route.replace(/^\/api\//, "")));
+    const unlisted = routeFiles(__dirname).filter((route) => {
+      const src = readFileSync(join(__dirname, route, "route.ts"), "utf8");
+      const callsTmdb = /@\/lib\/(tmdb|fuzzySearch)"/.test(src);
+      return callsTmdb && !listed.has(route) && ![...OWN_AUTH].some((o) => route === o || route.startsWith(o + "/"));
+    });
+    expect(unlisted).toEqual([]);
   });
 });
