@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import { authConfig } from "@/lib/auth.config";
+import { loginUrlWithCallback } from "@/lib/callbackUrl";
 import { NextResponse } from "next/server";
 
 const { auth } = NextAuth(authConfig);
@@ -14,7 +15,8 @@ export default auth((req) => {
     /^\/movie\/\d+$/.test(req.nextUrl.pathname) || /^\/tv\/\d+$/.test(req.nextUrl.pathname);
 
   if (!isLoggedIn && !isAuthPage && !isPublicDetailPage && req.nextUrl.pathname !== "/") {
-    return NextResponse.redirect(new URL("/login", req.url));
+    const { pathname, search } = req.nextUrl;
+    return NextResponse.redirect(new URL(loginUrlWithCallback(pathname + search), req.url));
   }
 
   if (isLoggedIn && (isAuthPage || req.nextUrl.pathname === "/")) {

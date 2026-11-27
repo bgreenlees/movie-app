@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/brand/Logo";
 import LoginForm from "@/components/auth/LoginForm";
 import { isDevLoginEnabled } from "@/lib/devLogin";
+import { safeCallbackUrl } from "@/lib/callbackUrl";
 import { signInErrorMessage } from "@/lib/signInError";
 
 export default async function LoginPage({
@@ -9,7 +10,9 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const error = signInErrorMessage((await searchParams).error);
+  const params = await searchParams;
+  const error = signInErrorMessage(params.error);
+  const callbackUrl = safeCallbackUrl(params.callbackUrl);
   return (
     <main className="force-dark relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-bg">
 
@@ -80,7 +83,7 @@ export default async function LoginPage({
               {error}
             </p>
           )}
-          <LoginForm devLogin={isDevLoginEnabled()} />
+          <LoginForm devLogin={isDevLoginEnabled()} callbackUrl={callbackUrl} />
 
           <div className="mt-6 text-center">
             <p className="text-sm text-muted">

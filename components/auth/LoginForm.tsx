@@ -2,18 +2,27 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { safeCallbackUrl } from "@/lib/callbackUrl";
 import DevLoginForm from "./DevLoginForm";
 
 /**
  * `devLogin` is true only when the server-side gate in lib/devLogin.ts is open.
  * The NODE_ENV check is inlined at build time, so production bundles drop the form.
  */
-export default function LoginForm({ devLogin = false }: { devLogin?: boolean }) {
+export default function LoginForm({
+  devLogin = false,
+  callbackUrl,
+}: {
+  devLogin?: boolean;
+  /** Already sanitised on the server (safeCallbackUrl); re-checked here as defence in depth. */
+  callbackUrl?: string;
+}) {
+  const target = safeCallbackUrl(callbackUrl);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleGoogle = async () => {
     setIsLoading(true);
-    await signIn("google", { callbackUrl: "/search" });
+    await signIn("google", { callbackUrl: target });
   };
 
   return (
@@ -44,7 +53,7 @@ export default function LoginForm({ devLogin = false }: { devLogin?: boolean }) 
         </svg>
         {isLoading ? "Redirecting…" : "Continue with Google"}
       </button>
-      {devLogin && process.env.NODE_ENV !== "production" && <DevLoginForm />}
+      {devLogin && process.env.NODE_ENV !== "production" && <DevLoginForm callbackUrl={target} />}
     </>
   );
 }
