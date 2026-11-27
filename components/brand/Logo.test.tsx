@@ -11,6 +11,14 @@ describe("Logo", () => {
     expect(html).toContain('d="M32 17.34A16 16 0 0 1 32 46.66A16 16 0 0 1 32 17.34Z" fill="#FBBF24"');
   });
 
+  it("cropped hugs the artwork at 1.4:1 with the same shapes", () => {
+    const html = renderToStaticMarkup(<LogoMark size={20} cropped />);
+    expect(html).toContain('viewBox="9.6 16 44.8 32"');
+    expect(html).toContain('width="28"');
+    expect(html).toContain('height="20"');
+    expect(html).toContain('cx="25.6" cy="32" r="16"');
+  });
+
   it("has an accessible name", () => {
     expect(renderToStaticMarkup(<LogoMark />)).toContain('aria-label="What&#x27;s Up Next"');
     expect(renderToStaticMarkup(<Logo />)).toContain('aria-label="What&#x27;s Up Next"');
