@@ -1,47 +1,243 @@
 @import "tailwindcss";
 
-/* Dark mode — Apple TV: pure black + vivid purple */
+/* ── Design tokens: "Cinema dark" (docs/reviews/design.md) ───────────────────
+   Tailwind v4 turns each namespace into utilities:
+     --color-*  → bg-surface, text-muted, border-border, text-accent-text, outline-focus …
+     --text-*   → text-h1, text-meta, text-label … (size + line height + weight)
+     --radius-* → rounded-chip, rounded-control, rounded-card, rounded-sheet
+     --ease-*   → ease-overlay
+   shadow-card / shadow-pop are custom @utility rules below, not --shadow-* tokens.
+   Values here are the dark theme (the default). The light theme overrides the
+   same variables below, so every utility follows [data-theme] and the OS setting.
+   Not `@theme inline`: utilities must read the variable at runtime to switch theme.
+   `static` emits every token even before a utility uses it, so inline styles and the
+   legacy aliases below can rely on them. */
+@theme static {
+  /* Palette (dark) */
+  --color-bg: #0b0b0f;
+  --color-surface: #15151c;
+  --color-surface-2: #1f1f29;
+  --color-border: #2e2e3a;
+  --color-text: #f4f4f6;
+  --color-muted: #a1a1aa;
+  --color-accent: #7c3aed;
+  --color-accent-hover: #6d28d9;
+  --color-accent-text: #c4b5fd;
+  --color-focus: #c4b5fd;
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+
+  /* Fonts: next/font sets --font-lato / --font-playfair on <html> (app/layout.tsx). */
+  --font-sans: var(--font-lato), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: var(--font-playfair), Georgia, serif;
+
+  /* Type scale (html is 16px, so 1rem = 16px). Mobile sizes for display/h1 are below. */
+  --text-display: 2.5rem;
+  --text-display--line-height: 2.75rem;
+  --text-display--font-weight: 700;
+  --text-h1: 1.875rem;
+  --text-h1--line-height: 2.25rem;
+  --text-h1--font-weight: 700;
+  --text-h2: 1.25rem;
+  --text-h2--line-height: 1.75rem;
+  --text-h2--font-weight: 700;
+  --text-title: 0.9375rem;
+  --text-title--line-height: 1.25rem;
+  --text-title--font-weight: 700;
+  --text-body: 1rem;
+  --text-body--line-height: 1.5rem;
+  --text-meta: 0.8125rem;
+  --text-meta--line-height: 1.125rem;
+  --text-label: 0.75rem;
+  --text-label--line-height: 1rem;
+  --text-label--letter-spacing: 0.06em;
+  --text-label--font-weight: 700;
+
+  /* Spacing: Tailwind's default --spacing (0.25rem = 4px) already is the 4px base,
+     so p-3 = 12px, gap-4 = 16px, gap-12 = 48px. */
+
+  /* Radii. Named so they don't change Tailwind's rounded-sm/-md/-xl, which are
+     still used across the app; F7/F9 move components onto these. */
+  --radius-chip: 6px;     /* chips, badges        (design doc: sm)   */
+  --radius-control: 10px; /* buttons, inputs      (design doc: md)   */
+  --radius-card: 12px;    /* cards, posters       (design doc: card) */
+  --radius-sheet: 20px;   /* modals, sheets       (design doc: xl)   */
+
+  /* Elevation, used by the shadow-card / shadow-pop utilities below. Deliberately
+     not in the --shadow-* namespace: Tailwind copies --shadow-* values into the
+     utility at build time, so a theme override would never reach it. The light
+     theme swaps these for a hairline border (a 1px ring, so no layout shift). */
+  --elevation-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --elevation-pop: 0 12px 32px rgb(0 0 0 / 0.45);
+
+  /* Motion: 150ms for hover, 200ms ease-out for overlays; none under reduced motion. */
+  --ease-overlay: cubic-bezier(0, 0, 0.2, 1);
+  --duration-hover: 150ms;
+  --duration-overlay: 200ms;
+
+  /* Gradients and scrims (use as background: var(--gradient-brand)) */
+  --gradient-brand: linear-gradient(135deg, #a855f7, #3b82f6);
+  --scrim-bottom: linear-gradient(to top, rgb(0 0 0 / 0.85), transparent 60%);
+}
+
 :root {
-  --background: #000000;
-  --foreground: #f5f5f7;
-  --secondary-bg: #0a0a0a;
-  --primary: #ffffff;
-  --accent: #a855f7;
-  --border: #2a2a2a;
-  --text-muted: #6e6e73;
-  --card-bg: #141414;
-  --hover-bg: #1f1f1f;
+  color-scheme: dark;
 }
 
-/* Light mode — Apple: clean off-white + deeper purple */
+/* Read the elevation variables at runtime so they follow the theme. */
+@utility shadow-card {
+  box-shadow: var(--elevation-card);
+}
+@utility shadow-pop {
+  box-shadow: var(--elevation-pop);
+}
+
+/* Light theme: an explicit choice, or the OS setting when the user hasn't picked one.
+   The two blocks must stay identical. */
 [data-theme="light"] {
-  --background: #f5f5f7;
-  --foreground: #1d1d1f;
-  --secondary-bg: #ffffff;
-  --primary: #1d1d1f;
-  --accent: #7c3aed;
-  --border: #d2d2d7;
-  --text-muted: #6e6e73;
-  --card-bg: #ffffff;
-  --hover-bg: #e8e8ed;
+  color-scheme: light;
+  --color-bg: #f6f6f8;
+  --color-surface: #ffffff;
+  --color-surface-2: #ececf1;
+  --color-border: #d9d9e0;
+  --color-text: #18181b;
+  --color-muted: #52525b;
+  --color-accent: #7c3aed;
+  --color-accent-hover: #6d28d9;
+  --color-accent-text: #6d28d9;
+  --color-focus: #6d28d9;
+  --color-success: #047857;
+  --color-warning: #92400e;
+  --color-danger: #b91c1c;
+  --elevation-card: 0 0 0 1px var(--color-border);
+  --elevation-pop: 0 0 0 1px var(--color-border);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --color-bg: #f6f6f8;
+    --color-surface: #ffffff;
+    --color-surface-2: #ececf1;
+    --color-border: #d9d9e0;
+    --color-text: #18181b;
+    --color-muted: #52525b;
+    --color-accent: #7c3aed;
+    --color-accent-hover: #6d28d9;
+    --color-accent-text: #6d28d9;
+    --color-focus: #6d28d9;
+    --color-success: #047857;
+    --color-warning: #92400e;
+    --color-danger: #b91c1c;
+    --elevation-card: 0 0 0 1px var(--color-border);
+    --elevation-pop: 0 0 0 1px var(--color-border);
+  }
 }
 
+/* Always-dark pages (landing, login, register): the dark palette in either theme,
+   so token utilities and the focus ring stay readable on their black background. */
+.force-dark {
+  color-scheme: dark;
+  --color-bg: #0b0b0f;
+  --color-surface: #15151c;
+  --color-surface-2: #1f1f29;
+  --color-border: #2e2e3a;
+  --color-text: #f4f4f6;
+  --color-muted: #a1a1aa;
+  --color-accent: #7c3aed;
+  --color-accent-hover: #6d28d9;
+  --color-accent-text: #c4b5fd;
+  --color-focus: #c4b5fd;
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+  --elevation-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --elevation-pop: 0 12px 32px rgb(0 0 0 / 0.45);
+  color: var(--color-text);
+}
+
+/* Mobile type sizes (below Tailwind's sm breakpoint) */
+@media (max-width: 39.999rem) {
+  :root {
+    --text-display: 2rem;
+    --text-display--line-height: 2.25rem;
+    --text-h1: 1.625rem;
+    --text-h1--line-height: 2rem;
+  }
+}
+
+/* Legacy names, kept as aliases so the ~650 inline `var(--…)` uses keep working.
+   Retire them as F7/F9/F10 move components onto the token utilities.
+   A var() inside a custom property resolves on the element that declares it, so
+   the aliases are declared again wherever the palette is redefined. */
+:root,
+[data-theme],
+.force-dark {
+  --background: var(--color-bg);
+  --secondary-bg: var(--color-bg);
+  --foreground: var(--color-text);
+  --primary: var(--color-text);
+  --accent: var(--color-accent);
+  --border: var(--color-border);
+  --text-muted: var(--color-muted);
+  --card-bg: var(--color-surface);
+  --hover-bg: var(--color-surface-2);
+  --focus-ring: var(--color-focus);
+}
 html {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: var(--font-body), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-}
-
-h1, h2, h3 {
-  font-family: var(--font-body), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: var(--color-text);
+  background: var(--color-bg);
+  font-family: var(--font-sans);
 }
 
 input, select, textarea {
-  color: var(--foreground);
+  color: var(--color-text);
+}
+
+/* Keyboard focus: one visible ring for every interactive element.
+   :focus-visible so mouse clicks don't show it. Offset keeps it readable on
+   posters and buttons. Unlayered, so it wins over Tailwind utilities. */
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* After "Skip to content", <main> is focused programmatically: no ring on the whole page. */
+main[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
+/* Skip-to-content link: off-screen until focused. */
+.skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 1000;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 700;
+  transform: translateY(-200%);
+}
+.skip-link:focus {
+  transform: none;
+}
+
+/* Motion token: no animation or transitions for users who ask for reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Splash page orb animations */

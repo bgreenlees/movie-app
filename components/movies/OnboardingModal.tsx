@@ -172,7 +172,7 @@ export default function OnboardingModal({ onClose }: OnboardingModalProps) {
                 backgroundColor: canSubmit
                   ? "color-mix(in srgb, var(--accent) 20%, transparent)"
                   : "var(--border)",
-                color: canSubmit ? "var(--accent)" : "var(--text-muted)",
+                color: canSubmit ? "var(--color-accent-text)" : "var(--text-muted)",
               }}
             >
               {count} selected{count < 3 ? ` (pick ${3 - count} more)` : ""}
@@ -217,7 +217,7 @@ export default function OnboardingModal({ onClose }: OnboardingModalProps) {
                       key={movie.id}
                       onClick={() => toggle(movie.id)}
                       disabled={false}
-                      className="relative rounded-lg overflow-hidden group transition-all duration-200 focus:outline-none"
+                      className="relative rounded-lg overflow-hidden group transition-all duration-200"
                       style={{
                         boxShadow: isSelected
                           ? `0 0 0 3px var(--accent), 0 0 24px color-mix(in srgb, var(--accent) 50%, transparent)`
@@ -269,7 +269,7 @@ export default function OnboardingModal({ onClose }: OnboardingModalProps) {
                         {/* Hover overlay */}
                         {!isSelected && (
                           <div
-                            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2"
+                            className="absolute inset-0 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity flex items-end p-2"
                             style={{
                               background: "linear-gradient(to top, rgba(0,0,0,0.75), transparent)",
                             }}

@@ -363,7 +363,7 @@ export default function MovieDetailModal({
                                   </div>
                                 )}
                               </div>
-                              <span className="text-xs" style={{ color: have ? "var(--accent)" : "var(--foreground)", fontWeight: have ? 600 : 400 }}>
+                              <span className="text-xs" style={{ color: have ? "var(--color-accent-text)" : "var(--foreground)", fontWeight: have ? 600 : 400 }}>
                                 {p.provider_name}
                               </span>
                             </div>
@@ -405,7 +405,7 @@ export default function MovieDetailModal({
                                   </div>
                                 )}
                               </div>
-                              <span className="text-xs" style={{ color: have ? "var(--accent)" : "var(--foreground)", fontWeight: have ? 600 : 400 }}>
+                              <span className="text-xs" style={{ color: have ? "var(--color-accent-text)" : "var(--foreground)", fontWeight: have ? 600 : 400 }}>
                                 {p.provider_name}
                               </span>
                             </div>
@@ -480,7 +480,7 @@ export default function MovieDetailModal({
                     More like this
                   </h3>
                   {recsLoading ? (
-                    <div className="flex gap-3 overflow-x-auto pb-2">
+                    <div className="flex gap-3 overflow-x-auto py-1 pb-2">
                       {Array.from({ length: 6 }).map((_, i) => (
                         <div
                           key={i}
@@ -490,7 +490,7 @@ export default function MovieDetailModal({
                       ))}
                     </div>
                   ) : (
-                    <div className="flex gap-3 overflow-x-auto pb-2">
+                    <div className="flex gap-3 overflow-x-auto py-1 pb-2">
                       {recs.map((rec) => {
                         const onList = !!watchlistEntries[rec.id];
                         return (

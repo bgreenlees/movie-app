@@ -8,7 +8,7 @@ export default function MainLayout({
   return (
     <div className="min-h-screen" style={{ backgroundColor: "var(--secondary-bg)" }}>
       <Navbar />
-      <main>{children}</main>
+      <main id="main-content">{children}</main>
     </div>
   );
 }

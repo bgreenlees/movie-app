@@ -21,6 +21,7 @@ You are a **Worker** for What's Up Next. One issue, one worktree, one branch, on
 ## Running the app
 - Use only the port you were given, and stop only your own process, by PID.
 - For signed-in checks, use a throwaway dev-database user and an isolated browser profile. Delete both afterwards, and never print cookie or token values.
+- Sign in with **dev login**, not hand-minted session cookies: add `DEV_LOGIN=1` to `.env.local`, restart the dev server, and use the "Dev login" form on `/login` with a `<task>@example.test` address.
 
 ## Before the PR
 - `npx tsc --noEmit`, `npm run lint` and `npm test` must all pass.

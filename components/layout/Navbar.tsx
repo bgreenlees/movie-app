@@ -52,11 +52,16 @@ export default function Navbar() {
   const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const current = document.documentElement.getAttribute("data-theme") as "light" | "dark";
+    const current = document.documentElement.getAttribute("data-theme");
     // The theme lives on <html> (set by an inline script before hydration), so it
     // can only be read after mount; syncing it here avoids a hydration mismatch.
+    // No saved choice means the OS setting decides (prefers-color-scheme in globals.css).
+    const effective =
+      current === "light" || current === "dark"
+        ? current
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTheme(current || "dark");
+    setTheme(effective);
   }, []);
 
   useEffect(() => {
@@ -273,7 +278,7 @@ export default function Navbar() {
                   className="px-2.5 py-1 rounded-full text-xs transition-colors hover:opacity-80"
                   style={{
                     backgroundColor: "color-mix(in srgb, var(--accent) 12%, var(--card-bg))",
-                    color: "var(--accent)",
+                    color: "var(--color-accent-text)",
                     border: "1px solid var(--accent)",
                   }}
                 >
@@ -339,7 +344,7 @@ export default function Navbar() {
                     onFocus={() => { if (hasSuggestions) setShowSuggestions(true); }}
                     onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                     placeholder="Search titles, people, genres..."
-                    className="w-full px-3 py-1.5 text-sm border rounded-l-md focus:outline-none focus:ring-1 focus:ring-[var(--accent)] bg-[var(--card-bg)]"
+                    className="w-full px-3 py-1.5 text-sm border rounded-l-md bg-[var(--card-bg)]"
                     style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
                   />
                   <button
@@ -458,7 +463,7 @@ export default function Navbar() {
                 onFocus={() => { if (hasSuggestions) setShowSuggestions(true); }}
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                 placeholder="Search titles, people, genres..."
-                className="w-full px-4 py-3 text-base border rounded-l-md focus:outline-none focus:ring-1 focus:ring-[var(--accent)] bg-[var(--card-bg)]"
+                className="w-full px-4 py-3 text-base border rounded-l-md bg-[var(--card-bg)]"
                 style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
               />
               <button
@@ -476,7 +481,7 @@ export default function Navbar() {
         </div>
 
         {/* Mobile nav links */}
-        <div className="md:hidden flex gap-2 mt-2 overflow-x-auto pb-1">
+        <div className="md:hidden flex gap-2 mt-2 overflow-x-auto py-1 pb-1">
           {navLinks.map((link) => (
             <Link
               key={link.href}

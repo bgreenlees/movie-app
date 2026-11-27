@@ -1,0 +1,64 @@
+name: Factory task
+description: One agent-sized piece of work (one issue → one worktree → one PR)
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A task an agent can pick up without asking questions. Keep it to one PR; if it's bigger, it needs a **planner** spec first (see `docs/factory.md`).
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What changes for the user, and why.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: The checklist of what to build. Link the spec or review section it comes from.
+      placeholder: |
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: Checkable outcomes a Verifier can confirm (on a local dev server or the preview).
+    validations:
+      required: true
+  - type: input
+    id: files
+    attributes:
+      label: Files / areas touched
+      description: So parallel workers don't collide (e.g. `lib/pairPool.ts`, `app/api/watch-together/**`).
+  - type: input
+    id: depends
+    attributes:
+      label: Depends on
+      description: Issues or PRs that must merge first (or "none").
+  - type: dropdown
+    id: role
+    attributes:
+      label: Role
+      options: [worker, researcher, planner]
+    validations:
+      required: true
+  - type: dropdown
+    id: model
+    attributes:
+      label: Model
+      description: Sonnet for well-specified/mechanical work; Opus for design decisions, security-sensitive or ambiguous work.
+      options: [sonnet, opus]
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks this needs before merge
+      options:
+        - label: Reviewer (always)
+        - label: Verifier (changes UI or user-visible behaviour)
+        - label: Security review (auth, API, data access, env)

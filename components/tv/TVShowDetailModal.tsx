@@ -355,7 +355,7 @@ export default function TVShowDetailModal({
                   className="mt-4 px-4 py-3 rounded-lg"
                   style={{ backgroundColor: "color-mix(in srgb, var(--accent) 12%, var(--card-bg))", border: "1px solid var(--accent)" }}
                 >
-                  <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--accent)" }}>
+                  <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--color-accent-text)" }}>
                     Next Episode
                   </p>
                   <p className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
@@ -398,7 +398,7 @@ export default function TVShowDetailModal({
                                   <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center text-white" style={{ backgroundColor: "var(--accent)", fontSize: "8px" }}>✓</div>
                                 )}
                               </div>
-                              <span className="text-xs" style={{ color: have ? "var(--accent)" : "var(--foreground)", fontWeight: have ? 600 : 400 }}>{p.provider_name}</span>
+                              <span className="text-xs" style={{ color: have ? "var(--color-accent-text)" : "var(--foreground)", fontWeight: have ? 600 : 400 }}>{p.provider_name}</span>
                             </div>
                           );
                         })}
@@ -422,7 +422,7 @@ export default function TVShowDetailModal({
                               title={p.provider_name}
                             >
                               <Image src={`https://image.tmdb.org/t/p/w92${p.logo_path}`} alt={p.provider_name} width={20} height={20} className="rounded" />
-                              <span className="text-xs" style={{ color: have ? "var(--accent)" : "var(--foreground)", fontWeight: have ? 600 : 400 }}>{p.provider_name}</span>
+                              <span className="text-xs" style={{ color: have ? "var(--color-accent-text)" : "var(--foreground)", fontWeight: have ? 600 : 400 }}>{p.provider_name}</span>
                             </div>
                           );
                         })}
@@ -547,7 +547,7 @@ export default function TVShowDetailModal({
                     More like this
                   </h3>
                   {recsLoading ? (
-                    <div className="flex gap-3 overflow-x-auto pb-2">
+                    <div className="flex gap-3 overflow-x-auto py-1 pb-2">
                       {Array.from({ length: 6 }).map((_, i) => (
                         <div
                           key={i}
@@ -557,7 +557,7 @@ export default function TVShowDetailModal({
                       ))}
                     </div>
                   ) : (
-                    <div className="flex gap-3 overflow-x-auto pb-2">
+                    <div className="flex gap-3 overflow-x-auto py-1 pb-2">
                       {recs.map((rec) => {
                         const onList = !!watchlistEntries[rec.id];
                         return (

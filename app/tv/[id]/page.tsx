@@ -79,7 +79,7 @@ export default async function TVShowPage({ params }: Props) {
   return (
     <div className="min-h-screen" style={{ backgroundColor: "var(--secondary-bg)" }}>
       <PublicHeader isLoggedIn={!!session?.user} />
-      <main className="max-w-3xl mx-auto p-4 sm:p-6">
+      <main id="main-content" className="max-w-3xl mx-auto p-4 sm:p-6">
         <div className="flex gap-5 flex-col sm:flex-row sm:items-start">
           {posterUrl && (
             <div
@@ -141,7 +141,7 @@ export default async function TVShowPage({ params }: Props) {
             className="mt-4 px-4 py-3 rounded-lg"
             style={{ backgroundColor: "color-mix(in srgb, var(--accent) 12%, var(--card-bg))", border: "1px solid var(--accent)" }}
           >
-            <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--accent)" }}>Next Episode</p>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--color-accent-text)" }}>Next Episode</p>
             <p className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
               S{String(nextEp.season_number).padStart(2, "0")}E{String(nextEp.episode_number).padStart(2, "0")} — {nextEp.name}
             </p>
@@ -231,7 +231,7 @@ export default async function TVShowPage({ params }: Props) {
         {recs.length > 0 && (
           <div className="mt-6">
             <h2 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>More like this</h2>
-            <div className="flex gap-3 overflow-x-auto pb-2">
+            <div className="flex gap-3 overflow-x-auto py-1 pb-2">
               {recs.map((rec) => (
                 <Link key={rec.id} href={`/tv/${rec.id}`} className="shrink-0 group" style={{ width: 110 }} title={rec.name}>
                   <div className="relative rounded-md overflow-hidden mb-1.5" style={{ width: 110, aspectRatio: "2/3", backgroundColor: "var(--border)" }}>

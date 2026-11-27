@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { prisma } from "./db";
 import { authConfig } from "./auth.config";
+import { devLoginProviders } from "./devLogin";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
@@ -10,6 +11,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     }),
+    // Empty unless NODE_ENV !== "production" AND DEV_LOGIN === "1". See lib/devLogin.ts.
+    ...devLoginProviders(),
   ],
   callbacks: {
     async jwt({ token, user }) {

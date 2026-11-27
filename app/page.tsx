@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden p-8" style={{ backgroundColor: "#000" }}>
+    <main className="force-dark relative flex min-h-screen flex-col items-center justify-center overflow-hidden p-8 bg-bg">
 
       {/* Animated colour orbs */}
       <div style={{
@@ -49,13 +49,13 @@ export default function Home() {
               </linearGradient>
             </defs>
           </svg>
-          <span className="text-2xl font-bold tracking-tight" style={{ color: "#fff" }}>What&apos;s Up Next</span>
+          <span className="text-2xl font-bold tracking-tight text-text">What&apos;s Up Next</span>
         </div>
 
-        <h1 className="text-5xl font-bold mb-4 tracking-tight" style={{ color: "#fff" }}>
+        <h1 className="text-5xl font-bold mb-4 tracking-tight text-text">
           Never wonder what to watch.
         </h1>
-        <p className="text-lg mb-10" style={{ color: "#a1a1a6" }}>
+        <p className="text-lg mb-10 text-muted">
           Track movies and shows you want to watch, keep tabs on what you&apos;ve seen, and get picks tailored to your taste.
         </p>
 
@@ -63,7 +63,7 @@ export default function Home() {
           <Link
             href="/register"
             className="px-6 py-3 rounded-md font-medium transition-opacity hover:opacity-90"
-            style={{ background: "linear-gradient(135deg, #a855f7, #3b82f6)", color: "#fff" }}
+            style={{ background: "var(--gradient-brand)", color: "#fff" }}
           >
             Get Started
           </Link>
@@ -76,7 +76,7 @@ export default function Home() {
           </Link>
         </div>
 
-        <p className="text-xs mt-10" style={{ color: "#3a3a3c" }}>
+        <p className="text-xs mt-10 text-muted">
           Your watchlist. Your taste. Your picks.
         </p>
       </div>

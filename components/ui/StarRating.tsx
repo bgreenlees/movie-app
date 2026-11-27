@@ -21,9 +21,9 @@ export default function StarRating({ rating, onChange }: StarRatingProps) {
           onClick={() => onChange(star)}
           onMouseEnter={() => setHoverRating(star)}
           onMouseLeave={() => setHoverRating(0)}
-          className="text-3xl transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 rounded"
+          className="text-3xl transition-colors rounded"
           style={{
-            color: star <= displayRating ? "var(--accent)" : "var(--border)",
+            color: star <= displayRating ? "var(--color-accent-text)" : "var(--border)",
 
           }}
           aria-label={`Rate ${star} star${star > 1 ? "s" : ""}`}

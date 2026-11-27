@@ -92,7 +92,7 @@ function ScrollRow({
         {title}
       </h2>
       <div
-        className="flex gap-3 overflow-x-auto pb-3"
+        className="flex gap-3 overflow-x-auto py-1 pb-3"
         style={{ scrollbarWidth: "thin", scrollbarColor: "var(--border) transparent" }}
       >
         {visible.map((item) => {
@@ -300,7 +300,7 @@ export default function NewsPage() {
       {!data?.personalizedStreaming && (
         <p className="text-sm mb-8" style={{ color: "var(--text-muted)" }}>
           Save your streaming services in{" "}
-          <a href="/profile" style={{ color: "var(--accent)" }}>
+          <a href="/profile" style={{ color: "var(--color-accent-text)" }}>
             Profile
           </a>{" "}
           to see a row for each one
