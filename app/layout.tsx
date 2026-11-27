@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Lato } from "next/font/google";
 import { Toaster } from "react-hot-toast";
 import SkipLink from "@/components/ui/SkipLink";
@@ -25,6 +25,9 @@ export const metadata: Metadata = {
   title: "What's Up Next",
   description: "Track movies you want to watch and have watched",
 };
+
+// viewport-fit=cover lets the mobile tab bar use env(safe-area-inset-bottom) on notched phones.
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 export default function RootLayout({
   children,

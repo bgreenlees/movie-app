@@ -1,4 +1,5 @@
 import Navbar from "@/components/layout/Navbar";
+import BottomTabBar from "@/components/layout/BottomTabBar";
 
 export default function MainLayout({
   children,
@@ -8,7 +9,11 @@ export default function MainLayout({
   return (
     <div className="min-h-screen" style={{ backgroundColor: "var(--secondary-bg)" }}>
       <Navbar />
-      <main id="main-content">{children}</main>
+      {/* Bottom padding keeps content clear of the fixed tab bar (below lg). */}
+      <main id="main-content" className="pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-0">
+        {children}
+      </main>
+      <BottomTabBar />
     </div>
   );
 }
