@@ -15,6 +15,7 @@ Next.js 16 (App Router, Turbopack) · TypeScript · NextAuth v5 (Google; plus a 
 - `npx tsc --noEmit` — type-check (run before every commit)
 - `npm run lint` — ESLint 9 flat config (`eslint.config.mjs`, Next core-web-vitals + TypeScript rules); must exit 0
 - `npm test` — run the Vitest suite once (`npx vitest` for watch mode)
+- `npm run e2e` — Playwright smoke tests (dev login, fake TMDB, port 3310; needs the dev `DATABASE_URL` in `.env.local` and a one-off `npx playwright install chromium`). Also a CI job (`e2e`); see `docs/factory.md`.
 - `npm run build` — **runs `prisma migrate deploy` against `DATABASE_URL`; don't run locally**. Vercel doesn't use this script: its project settings override the build command with `npx prisma generate && next build`.
 - Node 24 (`.nvmrc`, `engines` in package.json), the same major as Vercel and CI. Use `fnm use` / `nvm use` in each new worktree.
 - Prisma CLI reads `.env`, not `.env.local`. For `prisma generate` alone a placeholder works: `DATABASE_URL=postgresql://x@localhost/x npx prisma generate`

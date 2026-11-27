@@ -2,8 +2,14 @@ import Link from "next/link";
 import { Logo } from "@/components/brand/Logo";
 import LoginForm from "@/components/auth/LoginForm";
 import { isDevLoginEnabled } from "@/lib/devLogin";
+import { signInErrorMessage } from "@/lib/signInError";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const error = signInErrorMessage((await searchParams).error);
   return (
     <main className="force-dark relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-bg">
 
@@ -65,6 +71,15 @@ export default function LoginPage() {
           borderRadius: "20px",
           padding: "32px",
         }}>
+          {error && (
+            <p
+              role="alert"
+              className="mb-5 rounded-xl px-4 py-3 text-sm text-text"
+              style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.4)" }}
+            >
+              {error}
+            </p>
+          )}
           <LoginForm devLogin={isDevLoginEnabled()} />
 
           <div className="mt-6 text-center">

@@ -11,6 +11,7 @@
 #   --dry-run  print the brief and the launch plan, launch nothing
 #   --in NAME  resume in an EXISTING worktree (e.g. after an interruption) instead of creating one
 #   --force    launch even if MAX_AGENTS (default 4) or MAX_OPUS (default 1) are already working, or usage.sh gate refuses
+#              (the gate reserves this launch's typical cost; see USAGE_COST_* below)
 #
 # Cost controls (see docs/factory.md "Cost controls"): at most MAX_AGENTS (env, default 4)
 # agents run at once, and at most MAX_OPUS (env, default 1) of them on Opus; the default model comes from the role file (Sonnet except planner/researcher);
@@ -46,11 +47,6 @@ ROLE_FILE="$ROOT/.claude/agents/$ROLE.md"
 [ -n "$MODEL" ] || MODEL=sonnet
 ORCA=${ORCA_CLI_COMMAND:-orca}
 
-# --- Cost control: pace against the owner's plan usage (scripts/factory/usage.sh) ---
-if [ "$DRY" -eq 0 ] && [ "$FORCE" -eq 0 ]; then
-  "$ROOT/scripts/factory/usage.sh" gate || die "not launching: see the usage line above (--force overrides)"
-fi
-
 # --- Cost control: cap concurrent agents ---------------------------------
 MAX_AGENTS=${MAX_AGENTS:-4}
 MAX_OPUS=${MAX_OPUS:-1}
@@ -76,6 +72,22 @@ if [ "$DRY" -eq 0 ] && [ "$FORCE" -eq 0 ] && [ "${WORKING:-0}" -ge "$MAX_AGENTS"
 fi
 if [ "$DRY" -eq 0 ] && [ "$FORCE" -eq 0 ] && [ "$MODEL" = opus ] && [ "$OPUS_WORKING" -ge "$MAX_OPUS" ]; then
   die "$OPUS_WORKING Opus agent(s) already working (cap MAX_OPUS=$MAX_OPUS). Use Sonnet, wait, or pass --force."
+fi
+
+# --- Cost control: pace against the owner's plan usage (scripts/factory/usage.sh) ---
+# Budget the rest of the window, not just the current number: this launch's typical cost
+# plus half the typical cost of each agent already working (they've spent part of theirs)
+# must fit under USAGE_LAUNCH_MAX. Typical costs (% of a 5-hour session, from 2026-11-26/27):
+# USAGE_COST_OPUS (default 15) and USAGE_COST_SONNET (default 5).
+COST_OPUS=${USAGE_COST_OPUS:-15}; COST_SONNET=${USAGE_COST_SONNET:-5}
+cost_of() { [ "$1" = opus ] && echo "$COST_OPUS" || echo "$COST_SONNET"; }
+RESERVE=$(cost_of "$MODEL"); RUNNING_HALVES=0
+while IFS= read -r n; do
+  [ -n "$n" ] && [ -f "$BRIEF_DIR/$n.model" ] && RUNNING_HALVES=$((RUNNING_HALVES + $(cost_of "$(cat "$BRIEF_DIR/$n.model")")))
+done <<< "$WORKING_NAMES"
+RESERVE=$((RESERVE + RUNNING_HALVES / 2))
+if [ "$DRY" -eq 0 ] && [ "$FORCE" -eq 0 ]; then
+  "$ROOT/scripts/factory/usage.sh" gate "$RESERVE" || die "not launching: see the usage line above (--force overrides)"
 fi
 
 # Deterministic per-issue port, away from the default 3000; reviewers/verifiers get +1.
@@ -119,7 +131,7 @@ BRIEF="$BRIEF_DIR/$NAME.md"
   if [ -n "$NOTE" ]; then echo; echo "## Coordinator notes"; echo "$NOTE"; fi
 } > "$BRIEF"
 
-echo "dispatch: $NAME  model=$MODEL  port=$PORT  agents-working=${WORKING:-0}/$MAX_AGENTS  opus-working=$OPUS_WORKING/$MAX_OPUS  brief=$BRIEF"
+echo "dispatch: $NAME  model=$MODEL  port=$PORT  agents-working=${WORKING:-0}/$MAX_AGENTS  opus-working=$OPUS_WORKING/$MAX_OPUS  usage-reserve=${RESERVE}%  brief=$BRIEF"
 if [ $DRY -eq 1 ]; then echo "----- brief -----"; cat "$BRIEF"; exit 0; fi
 echo "$MODEL" > "$BRIEF_DIR/$NAME.model"
 

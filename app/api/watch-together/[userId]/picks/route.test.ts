@@ -33,6 +33,7 @@ vi.mock("@/lib/concurrency", () => import("../../../../../lib/concurrency"));
 vi.mock("@/lib/decide", () => import("../../../../../lib/decide"));
 vi.mock("@/lib/traits", () => import("../../../../../lib/traits"));
 vi.mock("@/lib/pairPool", () => import("../../../../../lib/pairPool"));
+vi.mock("@/lib/pairPoolLoader", () => import("../../../../../lib/pairPoolLoader"));
 
 import { GET } from "./route";
 

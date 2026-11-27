@@ -2,7 +2,9 @@
 # Reads the owner's Claude plan usage so the factory can pace itself.
 #
 #   scripts/factory/usage.sh          one line: session % (reset time) · week % (reset time)
-#   scripts/factory/usage.sh gate     exit 0 if a new agent may launch, else 1 with the reason
+#   scripts/factory/usage.sh gate [N] exit 0 if a new agent may launch, else 1 with the reason;
+#                                     N = session % to reserve for it (dispatch.sh passes the
+#                                     launch's typical cost plus half of what's already running)
 #   scripts/factory/usage.sh watch    loop: at USAGE_WIP_AT % of the session, tell every working
 #                                     agent to commit its work in progress (once per window)
 #
@@ -13,19 +15,20 @@
 # tokens and runs at most every USAGE_STALE_MIN minutes; the result is cached in
 # ~/.claude/state/usage.json. If it can't be read, `gate` refuses: ask the owner, then --force.
 #
-# Thresholds (env): USAGE_LAUNCH_MAX (default 70) session % above which nothing new launches;
+# Thresholds (env): USAGE_LAUNCH_MAX (default 95) session % above which nothing new launches;
+# a launch is refused when session % + N would pass USAGE_LAUNCH_MAX;
 # USAGE_WIP_AT (default 85) session % at which running agents are told to commit;
 # USAGE_WEEK_SLACK (default 15) how many points the week may run ahead of an even pace;
 # USAGE_STALE_MIN (default 10) minutes after which the cached numbers are refreshed.
 set -euo pipefail
 
 USAGE_FILE=${USAGE_FILE:-$HOME/.claude/state/usage.json}
-export USAGE_FILE USAGE_LAUNCH_MAX=${USAGE_LAUNCH_MAX:-70} USAGE_WIP_AT=${USAGE_WIP_AT:-85} \
+export USAGE_FILE USAGE_LAUNCH_MAX=${USAGE_LAUNCH_MAX:-95} USAGE_WIP_AT=${USAGE_WIP_AT:-85} \
   USAGE_WEEK_SLACK=${USAGE_WEEK_SLACK:-15} USAGE_STALE_MIN=${USAGE_STALE_MIN:-10}
 
 # Prints "<mode-result>\t<message>"; mode is line | gate | session.
 read_usage() {
-  python3 -I - "$1" <<'PY'
+  USAGE_RESERVE=${2:-0} python3 -I - "$1" <<'PY'
 import json, os, sys, time
 from datetime import datetime, timezone
 mode = sys.argv[1]
@@ -61,8 +64,10 @@ if mode == "session":
 # gate
 if age_min > float(os.environ["USAGE_STALE_MIN"]) or s_pct is None:
     print(f"refuse\tusage data is stale or missing ({line}); ask the owner, then --force"); sys.exit()
-if s_pct >= float(os.environ["USAGE_LAUNCH_MAX"]):
-    print(f"refuse\tsession at {s_pct:.0f}% (limit {os.environ['USAGE_LAUNCH_MAX']}%); wait for the reset at {fmt(s_reset)}"); sys.exit()
+reserve = float(os.environ.get("USAGE_RESERVE") or 0)
+if s_pct + reserve >= float(os.environ["USAGE_LAUNCH_MAX"]):
+    need = f" + {reserve:.0f}% for this launch" if reserve else ""
+    print(f"refuse\tsession at {s_pct:.0f}%{need} would pass the {os.environ['USAGE_LAUNCH_MAX']}% limit; wait for the reset at {fmt(s_reset)}, or launch something cheaper"); sys.exit()
 if w_pct is not None and w_reset is not None:
     elapsed = max(0.0, min(1.0, 1 - (w_reset - now) / (7 * 86400)))
     allowed = min(95.0, elapsed * 100 + float(os.environ["USAGE_WEEK_SLACK"]))
@@ -104,7 +109,8 @@ case $cmd in
   line)
     out=$(read_usage line); echo "Usage: ${out#*	}" ;;
   gate)
-    out=$(read_usage gate); verdict=${out%%	*}; msg=${out#*	}
+    [[ ${2:-0} =~ ^[0-9]+$ ]] || { echo "usage: usage.sh gate [reserve-percent]" >&2; exit 2; }
+    out=$(read_usage gate "${2:-0}"); verdict=${out%%	*}; msg=${out#*	}
     if [ "$verdict" = ok ]; then echo "usage: $msg"; exit 0; fi
     echo "usage: $msg" >&2; exit 1 ;;
   watch)

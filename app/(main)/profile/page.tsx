@@ -175,6 +175,9 @@ export default function ProfilePage() {
       const res = await fetch("/api/user", { method: "DELETE" });
       if (!res.ok) throw new Error();
       await signOut({ redirect: false });
+      // Deliberate full reload (not router.push): the account is gone, so this
+      // drops all client state (query cache, session) instead of keeping it in memory.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = "/login";
     } catch {
       toast.error("Failed to delete account");

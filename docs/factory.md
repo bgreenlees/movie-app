@@ -6,7 +6,7 @@ How work flows from idea to production, and which agent does what. Role definiti
 ```
 idea ──► issue (owner) ──► [planner: spec + task breakdown, for big features]
      ──► worker (own worktree) ──► PR
-     ──► gates: ci check (type-check, lint, test) → reviewer → verifier (UI changes)
+     ──► gates: ci + e2e checks (type-check, lint, test, smoke tests) → reviewer → verifier (new UI only)
      ──► coordinator merges ──► main ──► Vercel production
 ```
 
@@ -56,10 +56,20 @@ Agent time is the factory's main cost, and usage credits can run out mid-task (i
 5. **Coordinator habits:** keep replies short, wait in the background (`wait-pr.sh`), and don't pull large logs or transcripts into the conversation (read just the verdict).
 6. **Interrupted work isn't lost:** resume an agent in its existing worktree with `dispatch.sh <issue> <role> --in <worktree>`.
 7. **Pace against the owner's plan limits automatically.** `scripts/factory/usage.sh` reads the owner's live usage (5-hour session and weekly) from a one-word Haiku call's `rate_limit_event` (a few hundred tokens, cached for 10 minutes in `~/.claude/state/usage.json`).
-   - `dispatch.sh` runs `usage.sh gate` first and refuses a launch when the session is at 70% or more, when the week is more than 15 points ahead of an even pace, or when the numbers can't be read (then ask the owner and use `--force`).
+   - `dispatch.sh` runs `usage.sh gate` first and refuses a launch when the session would pass 95% once this launch's typical cost is added (owner decision 2026-11-27: 70% stalled work with ~20% left; checking only the current number then let three launches at 82% run the session to 100%). The reserve is the new agent's typical cost (Opus worker ~15%, Sonnet ~5%; `USAGE_COST_OPUS` / `USAGE_COST_SONNET`) plus half the cost of each agent already working. So late in a window an Opus launch waits for the reset while cheaper Sonnet work still goes. It also refuses when the week is more than 15 points ahead of an even pace, or when the numbers can't be read (then ask the owner and use `--force`).
    - Run `scripts/factory/usage.sh watch` in the background while agents work: at 85% it tells every working worker to commit its work in progress, once per window.
    - Start every status update with `scripts/factory/usage.sh` (one line), so the owner never has to send a screenshot.
 8. **Check usage:** `agent-usage 1` (per-workspace tokens today) and `/usage` in Claude Code (plan limits).
+
+## Smoke tests and when a Verifier is still needed
+
+`npm run e2e` (Playwright, `e2e/`) and the `e2e` CI job sign in with the dev login and click through the core flows in a real browser: login redirect, Discover, add to My Movies, What to Watch, and Watch Together picks for two connected friends. It takes about 10 seconds locally and runs on every PR, so a broken core flow fails the PR with no agent involved.
+
+- It runs against `next dev` (dev login is off under `next start` by design), a fake TMDB (`e2e/tmdb-stub.mjs`, no TMDB key needed) and a throwaway Postgres in CI. Locally it uses `DATABASE_URL` from `.env.local` (the dev database) and deletes its `e2e-*@example.test` users afterwards. It refuses to run against the production host.
+- **A Verifier is no longer needed to re-check the core flows above.** Verifiers only check what the smoke tests can't: a **new or changed screen** the tests don't cover, visual design and layout (spacing, mobile, dark/light), and anything depending on real TMDB data, real streaming services or Google sign-in.
+- **A PR that adds or changes a core flow must update the smoke tests in the same PR.** A smoke-test failure is a real regression until proven otherwise: fix the app, don't loosen the test.
+- Keep it small: smoke tests check "does it work end to end". Logic edge cases belong in Vitest.
+- Branch protection currently requires only `ci`. The owner should also mark `e2e` as a required check (Settings → Branches), or the gate is advisory.
 
 ## Security layers
 1. **Automated** (GitHub): secret scanning + push protection, Dependabot alerts + security updates, CodeQL, and the `ci` check required by branch protection (enforced for admins).
