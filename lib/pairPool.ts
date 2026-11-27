@@ -116,6 +116,13 @@ export interface PairPoolInput {
   onError?: (what: string, error: unknown) => void;
   /** Titles returned; defaults to PAIR_POOL_SIZE (tests use a smaller pool) */
   poolSize?: number;
+  /**
+   * Also write each title's reason from the partner's point of view, naming
+   * the caller as this. Decide sessions show one shortlist on both phones, so
+   * each person needs their own wording ("On your list" vs "On Sam's list").
+   * Omit it (the picks route does) and `partnerReason` is left out.
+   */
+  partnerView?: { myName: string | null };
 }
 
 // ── Output ───────────────────────────────────────────────────────────────────
@@ -130,6 +137,8 @@ export type PairCandidate = MoodCandidate & {
   /** One privacy-safe line (§5.5): only lists and Loves, never a dislike */
   reason: string;
   onMyList: boolean;
+  /** `reason` as the partner should read it; only with `partnerView` */
+  partnerReason?: string;
   /** Subscription providers, when a details lookup was made */
   providerIds?: number[];
 };
@@ -600,12 +609,25 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
       reason: reasonFor(d, input.partnerName, selection),
       onMyList: d.wantedBy.has("me"),
     };
+    if (input.partnerView) {
+      out.partnerReason = reasonFor(mirrorDraft(d), input.partnerView.myName, selection);
+    }
     if (d.providerIds) out.providerIds = d.providerIds;
     return out;
   });
 
   const partial = tmdbFailures > 0 && pool.length > 0;
   return { pool, services: services.state, coldStart, discoverFailed, partial };
+}
+
+/** The same title seen from the partner's side: "me" and "partner" swap. */
+function mirrorDraft(d: Pick<Draft, "c" | "wantedBy" | "seededBy">) {
+  const swap = (w: Who): Who => (w === "me" ? "partner" : "me");
+  return {
+    c: d.c,
+    wantedBy: new Set([...d.wantedBy].map(swap)),
+    seededBy: { me: d.seededBy.partner, partner: d.seededBy.me },
+  };
 }
 
 /** Rank-only weight for position `i` of `n`, rounded to 3 decimals. */
