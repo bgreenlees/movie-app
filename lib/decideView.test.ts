@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   cardMeta,
   firstUnvotedIndex,
+  nextUnvotedIndex,
   partnerLabel,
   pollInterval,
   screenFor,
@@ -56,6 +57,12 @@ describe("votes", () => {
   it("resumes at the first unvoted card", () => {
     expect(firstUnvotedIndex(cards, { a: 1, c: 0 })).toBe(1);
     expect(firstUnvotedIndex(cards, { a: 1, b: 1, c: 0 })).toBe(3);
+  });
+  it("moves on to the next unvoted card, wrapping back after an undo", () => {
+    expect(nextUnvotedIndex(cards, { a: 1 }, 0)).toBe(1);
+    expect(nextUnvotedIndex(cards, { a: 1, b: 1 }, 0)).toBe(2); // b was already voted, skip it
+    expect(nextUnvotedIndex(cards, { b: 1, c: 1 }, 2)).toBe(0);
+    expect(nextUnvotedIndex(cards, { a: 1, b: 1, c: 1 }, 1)).toBe(3);
   });
 });
 

@@ -73,6 +73,20 @@ export function firstUnvotedIndex(
   return i === -1 ? candidates.length : i;
 }
 
+/**
+ * The card to move to after voting on card `from`: the next unvoted card
+ * after it, else the first unvoted one before it (after an Undo), else the
+ * end of the round (`candidates.length`, the wait screen).
+ */
+export function nextUnvotedIndex(
+  candidates: readonly { id: string }[],
+  myVotes: Readonly<Record<string, Vote>>,
+  from: number,
+): number {
+  for (let i = from + 1; i < candidates.length; i++) if (!isVote(myVotes[candidates[i].id])) return i;
+  return firstUnvotedIndex(candidates, myVotes);
+}
+
 /** Keyboard shortcuts on the vote card (§5.3): ← No, → Yes, ↑ Really want. */
 export function voteForKey(key: string): Vote | null {
   if (key === "ArrowLeft") return 0;
