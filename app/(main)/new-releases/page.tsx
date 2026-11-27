@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import MovieCard from "@/components/movies/MovieCard";
+import PosterCard from "@/components/ui/PosterCard";
+import { isOnList, yearMeta } from "@/lib/posterCard";
 import AddMovieModal from "@/components/movies/AddMovieModal";
 import TrailerModal from "@/components/movies/TrailerModal";
-import TVShowCard from "@/components/tv/TVShowCard";
 import AddTVModal from "@/components/tv/AddTVModal";
 import toast from "react-hot-toast";
 import type { NewsItem, ServiceRow } from "@/app/api/movies/news/route";
@@ -99,40 +99,19 @@ function ScrollRow({
           const selected = { id: item.id, title: item.title };
           const existing =
             item.mediaType === "movie" ? watchlistEntries[item.id] : tvEntries[item.id];
-          const addButton = (
-            <button
-              onClick={() => (item.mediaType === "movie" ? onAddMovie : onAddTV)(selected)}
-              className="w-full px-2 py-1.5 text-white rounded-md transition-all duration-200 text-xs cursor-pointer hover:opacity-90 hover:scale-105"
-              style={{ backgroundColor: "var(--accent)" }}
-            >
-              {existing ? "Update" : "Add"}
-            </button>
-          );
           return (
-            <div key={`${item.mediaType}-${item.id}`} style={{ width: "160px", flexShrink: 0 }}>
-              {item.mediaType === "movie" ? (
-                <MovieCard
-                  id={item.id}
-                  title={item.title}
-                  posterPath={item.posterPath}
-                  releaseDate={item.date}
-                  overview={item.overview}
-                  onPlayTrailer={() => onTrailer(selected)}
-                >
-                  {addButton}
-                </MovieCard>
-              ) : (
-                <TVShowCard
-                  id={item.id}
-                  name={item.title}
-                  posterPath={item.posterPath}
-                  firstAirDate={item.date}
-                  overview={item.overview}
-                  watchingStatus={tvEntries[item.id]?.status}
-                >
-                  {addButton}
-                </TVShowCard>
-              )}
+            <div key={`${item.mediaType}-${item.id}`} className="w-[150px] shrink-0">
+              <PosterCard
+                id={item.id}
+                mediaType={item.mediaType}
+                title={item.title}
+                posterPath={item.posterPath}
+                overview={item.overview}
+                meta={yearMeta(item.date, item.mediaType)}
+                onList={isOnList(existing?.status)}
+                onAdd={() => (item.mediaType === "movie" ? onAddMovie : onAddTV)(selected)}
+                onTrailer={item.mediaType === "movie" ? () => onTrailer(selected) : undefined}
+              />
             </div>
           );
         })}

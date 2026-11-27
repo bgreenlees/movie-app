@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import MovieCard from "@/components/movies/MovieCard";
+import PosterCard from "@/components/ui/PosterCard";
 import AddMovieModal from "@/components/movies/AddMovieModal";
 import TrailerModal from "@/components/movies/TrailerModal";
 import MoodControls, { MediaControl } from "@/components/mood/MoodControls";
-import TVShowCard from "@/components/tv/TVShowCard";
+import { isOnList, yearMeta } from "@/lib/posterCard";
 import AddTVModal from "@/components/tv/AddTVModal";
 import {
   DEFAULT_SELECTION,
@@ -198,60 +198,19 @@ export default function WhatToWatchPage() {
         >
           {picks.map((p) => {
             const selected = { id: p.id, title: p.title };
-            const addButton = (
-              <button
-                onClick={() => (p.mediaType === "movie" ? setSelectedMovie : setSelectedShow)(selected)}
-                className="w-full px-2 py-1.5 text-white rounded-md transition-all duration-200 text-xs cursor-pointer hover:opacity-90 hover:scale-105"
-                style={{ backgroundColor: "var(--accent)" }}
-              >
-                {watchlistEntry(p) ? "Update" : "Add"}
-              </button>
-            );
-            const children = (
-              <>
-                <div className="flex items-start justify-between gap-1 text-xs">
-                  {/* Same badge style as the search dropdown's Movie/TV tags */}
-                  <span
-                    className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0"
-                    style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}
-                  >
-                    {p.mediaType === "movie" ? "Movie" : "TV"}
-                  </span>
-                  {p.onWatchlist && (
-                    // Wraps rather than truncating on narrow (2-column) cards
-                    <span className="text-right leading-tight" style={{ color: "var(--color-accent-text)" }}>
-                      On your watchlist
-                    </span>
-                  )}
-                </div>
-                {addButton}
-              </>
-            );
             return (
-              <div key={candidateKey(p)}>
-                {p.mediaType === "movie" ? (
-                  <MovieCard
-                    id={p.id}
-                    title={p.title}
-                    posterPath={p.posterPath}
-                    releaseDate={p.date}
-                    overview={p.overview}
-                    onPlayTrailer={() => setTrailer({ ...selected, mediaType: "movie" })}
-                  >
-                    {children}
-                  </MovieCard>
-                ) : (
-                  <TVShowCard
-                    id={p.id}
-                    name={p.title}
-                    posterPath={p.posterPath}
-                    firstAirDate={p.date}
-                    overview={p.overview}
-                  >
-                    {children}
-                  </TVShowCard>
-                )}
-              </div>
+              <PosterCard
+                key={candidateKey(p)}
+                id={p.id}
+                mediaType={p.mediaType}
+                title={p.title}
+                posterPath={p.posterPath}
+                overview={p.overview}
+                meta={yearMeta(p.date, p.mediaType)}
+                onList={p.onWatchlist || isOnList(watchlistEntry(p)?.status)}
+                onAdd={() => (p.mediaType === "movie" ? setSelectedMovie : setSelectedShow)(selected)}
+                onTrailer={() => setTrailer({ ...selected, mediaType: p.mediaType })}
+              />
             );
           })}
         </div>

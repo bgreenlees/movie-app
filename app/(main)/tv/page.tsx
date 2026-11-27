@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import TVShowCard, { type TVSeasonBanner } from "@/components/tv/TVShowCard";
+import PosterCard, { POSTER_GRID } from "@/components/ui/PosterCard";
+import { isOnList, seasonMeta, yearMeta, type SeasonBanner as TVSeasonBanner } from "@/lib/posterCard";
 import AddTVModal from "@/components/tv/AddTVModal";
-import ThumbRating from "@/components/ui/ThumbRating";
 import type { TMDBTVShow } from "@/lib/tmdb";
 import toast from "react-hot-toast";
 
@@ -204,40 +204,24 @@ function TVDiscoverInner() {
       )}
 
       {!isLoading && displayShows.length > 0 && (
-        <div
-          ref={gridRef}
-          className="grid gap-4"
-          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}
-        >
+        <div ref={gridRef} className={POSTER_GRID}>
           {displayShows.map((show) => {
             const existingEntry = tvEntries[show.id];
+            const banner = seasonBanners[show.id];
             return (
-              <TVShowCard
+              <PosterCard
                 key={show.id}
                 id={show.id}
-                name={show.name}
+                mediaType="tv"
+                title={show.name}
                 posterPath={show.poster_path}
-                firstAirDate={show.first_air_date}
                 overview={show.overview}
-                rating={show.vote_average}
-                watchingStatus={existingEntry?.status}
-                seasonBanner={seasonBanners[show.id] ?? null}
-                thumbRating={
-                  <ThumbRating
-                    rating={existingEntry?.rating || 0}
-                    onChange={(r) => handleRating(show.id, r)}
-                    showLabels={false}
-                  />
-                }
-              >
-                <button
-                  onClick={() => setSelectedShow({ id: show.id, name: show.name })}
-                  className="w-full px-3 py-1.5 text-white rounded-md transition-all duration-200 text-xs cursor-pointer hover:opacity-90 hover:scale-105"
-                  style={{ backgroundColor: "var(--accent)" }}
-                >
-                  {existingEntry ? "Update" : "Add"}
-                </button>
-              </TVShowCard>
+                meta={banner ? seasonMeta(banner) : yearMeta(show.first_air_date, "tv")}
+                onList={isOnList(existingEntry?.status)}
+                onAdd={() => setSelectedShow({ id: show.id, name: show.name })}
+                rating={existingEntry?.rating || 0}
+                onRate={(r) => handleRating(show.id, r)}
+              />
             );
           })}
         </div>
