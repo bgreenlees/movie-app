@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import PosterCard, { POSTER_GRID } from "@/components/ui/PosterCard";
 import { episodeMeta, seasonProgress, statusChip, yearMeta } from "@/lib/posterCard";
 import TrailerModal from "@/components/movies/TrailerModal";
@@ -102,6 +102,7 @@ async function loadEntries(tab: Tab): Promise<TVEntry[] | null> {
 export default function MyTVPage() {
   const [activeTab, setActiveTab] = useState<Tab>("watching");
   const [entries, setEntries] = useState<TVEntry[]>([]);
+  const requestId = useRef(0); // latest load wins; stale responses are dropped
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [nextEpisodes, setNextEpisodes] = useState<Record<number, NextEpisodeInfo["next_episode_to_air"]>>({});
@@ -120,57 +121,60 @@ export default function MyTVPage() {
     setLoadFailed(false);
   }
 
-  // Refresh after a mutation (called from event handlers); shows the spinner like a tab switch.
-  const fetchEntries = useCallback(async (tab: Tab) => {
-    setIsLoading(true);
+  // Loads a tab and, if it is still the latest request, applies the result and
+  // fetches next-episode info. Used by both the tab-change effect and post-mutation
+  // refreshes, so whichever load wins always fetches the episode data.
+  const runLoad = useCallback(async (tab: Tab, id: number) => {
     const loaded = await loadEntries(tab);
+    if (id !== requestId.current) return loaded ?? []; // superseded by a newer load
     if (loaded) setEntries(loaded);
     setLoadFailed(!loaded);
     setIsLoading(false);
-    return loaded ?? [];
+    if (tab !== "watching" || !loaded || loaded.length === 0) return loaded ?? [];
+    const results = await Promise.allSettled(
+      loaded.map((entry) =>
+        fetch(`/api/tv/${entry.tvShowId}/credits`)
+          .then((r) => r.json())
+          .then((data): NextEpisodeInfo => ({
+            tvShowId: entry.tvShowId,
+            next_episode_to_air: data.next_episode_to_air ?? null,
+            episodeCounts: Object.fromEntries(
+              (Array.isArray(data.seasons) ? data.seasons : []).map(
+                (season: { season_number: number; episode_count: number }) => [season.season_number, season.episode_count]
+              )
+            ),
+          }))
+      )
+    );
+    if (id !== requestId.current) return loaded;
+    const map: Record<number, NextEpisodeInfo["next_episode_to_air"]> = {};
+    const counts: Record<number, NextEpisodeInfo["episodeCounts"]> = {};
+    results.forEach((r) => {
+      if (r.status === "fulfilled") {
+        map[r.value.tvShowId] = r.value.next_episode_to_air;
+        counts[r.value.tvShowId] = r.value.episodeCounts;
+      }
+    });
+    setNextEpisodes(map);
+    setEpisodeCounts(counts);
+    return loaded;
   }, []);
 
+  // Refresh after a mutation (called from event handlers); shows the spinner like a tab switch.
+  const fetchEntries = useCallback(
+    async (tab: Tab) => {
+      const id = ++requestId.current;
+      setIsLoading(true);
+      return runLoad(tab, id);
+    },
+    [runLoad]
+  );
+
   useEffect(() => {
-    // Ignore responses that arrive after the tab changed or the page unmounted.
-    let cancelled = false;
-    loadEntries(activeTab).then((loaded) => {
-      if (cancelled) return;
-      if (loaded) setEntries(loaded);
-      setLoadFailed(!loaded);
-      setIsLoading(false);
-      if (activeTab !== "watching" || !loaded || loaded.length === 0) return;
-      Promise.allSettled(
-        loaded.map((entry) =>
-          fetch(`/api/tv/${entry.tvShowId}/credits`)
-            .then((r) => r.json())
-            .then((data): NextEpisodeInfo => ({
-              tvShowId: entry.tvShowId,
-              next_episode_to_air: data.next_episode_to_air ?? null,
-              episodeCounts: Object.fromEntries(
-                (Array.isArray(data.seasons) ? data.seasons : []).map(
-                  (season: { season_number: number; episode_count: number }) => [season.season_number, season.episode_count]
-                )
-              ),
-            }))
-        )
-      ).then((results) => {
-        if (cancelled) return;
-        const map: Record<number, NextEpisodeInfo["next_episode_to_air"]> = {};
-        const counts: Record<number, NextEpisodeInfo["episodeCounts"]> = {};
-        results.forEach((r) => {
-          if (r.status === "fulfilled") {
-            map[r.value.tvShowId] = r.value.next_episode_to_air;
-            counts[r.value.tvShowId] = r.value.episodeCounts;
-          }
-        });
-        setNextEpisodes(map);
-        setEpisodeCounts(counts);
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTab]);
+    // Starting a load bumps requestId, which invalidates any load still in flight
+    // (a stale tab, or a refresh the new load replaces).
+    runLoad(activeTab, ++requestId.current);
+  }, [activeTab, runLoad]);
 
   const displayEntries =
     activeTab === "watching"

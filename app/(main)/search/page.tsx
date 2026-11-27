@@ -194,7 +194,7 @@ function DiscoverPageInner() {
   // Reset state when the load inputs change, during render rather than in the
   // effect (https://react.dev/learn/you-might-not-need-an-effect). Every mode
   // starts a fetch, so isLoading is true until the effect's request settles.
-  const loadKey = [urlQuery, mediaType, personId, genreId, genreMedia, country].join("|");
+  const loadKey = JSON.stringify([urlQuery, mediaType, personId, genreId, genreMedia, country]);
   const [prevLoadKey, setPrevLoadKey] = useState<string | null>(null);
   if (prevLoadKey !== loadKey) {
     setPrevLoadKey(loadKey);
