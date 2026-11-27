@@ -45,6 +45,18 @@ The coordinator is the long-lived session on `main`. It's also the most expensiv
 
 **New work:** use the "Factory task" issue template (Goal, Scope, Done when, files touched, depends on, role, model, checks). Anything bigger than one PR gets a **planner** spec first.
 
+## Cost controls
+
+Agent time is the factory's main cost, and usage credits can run out mid-task (it happened on 2026-11-26 and killed two workers). These rules keep it in check:
+
+1. **At most 4 agents at once.** `dispatch.sh` refuses a launch when `MAX_AGENTS` (default 4) are already working; queue the rest in the Factory state issue and launch as slots free. `--force` only for something urgent.
+2. **Sonnet by default.** Workers, reviewers and verifiers default to Sonnet. Use `--model opus` only for: security-sensitive code (auth, API authorization, data access), design-heavy UI built from a spec, planners and researchers.
+3. **Right-size the checks.** A PR under ~150 changed lines that isn't security-sensitive gets **one** check: a Verifier if it changes the UI, otherwise a Reviewer. Bigger or security-sensitive PRs get both. Docs-only PRs get the coordinator's own read.
+4. **Fresh coordinator sessions.** The coordinator re-reads its whole conversation every turn, so it is the single biggest cost. Start a new session at least daily, and immediately after any long batch; resume from the Factory state issue (#102).
+5. **Coordinator habits:** keep replies short, wait in the background (`wait-pr.sh`), and don't pull large logs or transcripts into the conversation (read just the verdict).
+6. **Interrupted work isn't lost:** resume an agent in its existing worktree with `dispatch.sh <issue> <role> --in <worktree>`.
+7. **Check usage:** `agent-usage 1` (per-workspace tokens today) and `/usage` in Claude Code (plan limits).
+
 ## Security layers
 1. **Automated** (GitHub): secret scanning + push protection, Dependabot alerts + security updates, CodeQL, and the `ci` check required by branch protection (enforced for admins).
 2. **Every PR**: the Reviewer's security checklist, plus `/security-review` when a PR touches auth, API routes, Prisma or env handling.

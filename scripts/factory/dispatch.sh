@@ -9,6 +9,12 @@
 #   --model  overrides the role file's default model
 #   --note   extra instructions appended to the brief
 #   --dry-run  print the brief and the launch plan, launch nothing
+#   --in NAME  resume in an EXISTING worktree (e.g. after an interruption) instead of creating one
+#   --force    launch even if MAX_AGENTS are already working (default cap: 4)
+#
+# Cost controls (see docs/factory.md "Cost controls"): at most MAX_AGENTS (env, default 4)
+# agents run at once; the default model comes from the role file (Sonnet except planner/researcher);
+# pass --model opus only for security-sensitive or design-heavy work.
 #
 # Why a script: every launch gets the same brief, port, safety rules and naming,
 # so the coordinator doesn't hand-assemble them (and repeat mistakes).
@@ -18,13 +24,15 @@ die() { echo "dispatch: $*" >&2; exit 1; }
 [ $# -ge 2 ] || die "usage: dispatch.sh <issue> <role> [--model M] [--pr N] [--note TEXT] [--dry-run]"
 
 ISSUE=$1; ROLE=$2; shift 2
-MODEL=""; PR=""; NOTE=""; DRY=0
+MODEL=""; PR=""; NOTE=""; DRY=0; IN=""; FORCE=0
 while [ $# -gt 0 ]; do
   case $1 in
     --model) MODEL=$2; shift 2 ;;
     --pr) PR=$2; shift 2 ;;
     --note) NOTE=$2; shift 2 ;;
     --dry-run) DRY=1; shift ;;
+    --in) IN=$2; shift 2 ;;
+    --force) FORCE=1; shift ;;
     *) die "unknown option: $1" ;;
   esac
 done
@@ -38,11 +46,25 @@ ROLE_FILE="$ROOT/.claude/agents/$ROLE.md"
 [ -n "$MODEL" ] || MODEL=sonnet
 ORCA=${ORCA_CLI_COMMAND:-orca}
 
+# --- Cost control: cap concurrent agents ---------------------------------
+MAX_AGENTS=${MAX_AGENTS:-4}
+WORKING=$("$ORCA" agent list --json 2>/dev/null | python3 -c '
+import json, sys
+try: agents = json.load(sys.stdin)["result"]["agents"]
+except Exception: print(0); sys.exit()
+def name(a):
+    w = a.get("workspace"); p = w.get("path", "") if isinstance(w, dict) else str(w)
+    return p.rstrip("/").split("/")[-1]
+print(sum(1 for a in agents if a.get("state") == "working" and name(a) not in ("movie-app", "main")))')
+if [ "$DRY" -eq 0 ] && [ "$FORCE" -eq 0 ] && [ "${WORKING:-0}" -ge "$MAX_AGENTS" ]; then
+  die "$WORKING agents already working (cap MAX_AGENTS=$MAX_AGENTS). Wait for one to finish, or pass --force."
+fi
+
 # Deterministic per-issue port, away from the default 3000; reviewers/verifiers get +1.
 PORT=$((3200 + ISSUE % 700))
 case $ROLE in reviewer|verifier) PORT=$((PORT + 1)) ;; esac
 
-NAME="$ROLE-$ISSUE${PR:+-pr$PR}"
+NAME=${IN:-"$ROLE-$ISSUE${PR:+-pr$PR}"}
 TITLE=$(gh issue view "$ISSUE" --json title -q .title) || die "can't read issue #$ISSUE"
 OPEN_PRS=$(gh pr list --state open --json number,title -q '.[]|"- #\(.number) \(.title)"' | head -15)
 
@@ -80,10 +102,16 @@ BRIEF="$BRIEF_DIR/$NAME.md"
   if [ -n "$NOTE" ]; then echo; echo "## Coordinator notes"; echo "$NOTE"; fi
 } > "$BRIEF"
 
-echo "dispatch: $NAME  model=$MODEL  port=$PORT  brief=$BRIEF"
+echo "dispatch: $NAME  model=$MODEL  port=$PORT  agents-working=${WORKING:-0}/$MAX_AGENTS  brief=$BRIEF"
 if [ $DRY -eq 1 ]; then echo "----- brief -----"; cat "$BRIEF"; exit 0; fi
 
-if [ -n "$PR" ]; then
+if [ -n "$IN" ]; then
+  WT=$(git worktree list --porcelain | awk '/^worktree /{print $2}' | grep -E "/$IN\$" | head -1)
+  [ -n "$WT" ] || die "no existing worktree named $IN"
+  printf '\n## Resuming\nA previous agent in this worktree was interrupted. Inspect `git status` / `git log` and any uncommitted work first, and continue from it rather than starting over.\n' >> "$BRIEF"
+  "$ORCA" agent launch --agent claude --model "$MODEL" --worktree "path:$WT" --prompt "$(cat "$BRIEF")" --json \
+    | python3 -c 'import json,sys; r=json.load(sys.stdin)["result"]; print("dispatch: resumed in", sys.argv[1], (r.get("outcome") or {}).get("kind", "?"))' "$WT"
+elif [ -n "$PR" ]; then
   # Create the worktree without an agent, check out the PR head, then launch the agent.
   OUT=$("$ORCA" worktree create --name "$NAME" --no-parent --json)
   WT=$(printf '%s' "$OUT" | python3 -c 'import json,sys; d=json.load(sys.stdin)["result"]; w=d.get("worktree",d); print(w["path"])')

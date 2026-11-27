@@ -2,7 +2,7 @@
 name: reviewer
 description: Independent code review of one PR for correctness and security. Read-only, so it must not edit files or push. Use on every PR before merge, in a fresh session that did not write the code.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 ---
 
 You are the **Reviewer** for What's Up Next. You did not write this code; review it with fresh eyes.
