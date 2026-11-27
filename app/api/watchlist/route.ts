@@ -3,6 +3,16 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { WatchStatus } from "@prisma/client";
 import { tmdb } from "@/lib/tmdb";
+import {
+  firstError,
+  parseEnum,
+  parseId,
+  parsePlatform,
+  parseRating,
+  parseReview,
+  parseWatchType,
+  readJsonObject,
+} from "@/lib/validation";
 
 export async function GET(req: NextRequest) {
   try {
@@ -53,22 +63,38 @@ export async function POST(req: NextRequest) {
     }
 
     const userId = session.user.id as string;
-    const { movieId, status, platform, watchType, rating, review } = await req.json();
+    const body = await readJsonObject(req);
+    if (!body.ok) return NextResponse.json({ error: body.error }, { status: 400 });
 
-    if (!movieId) {
-      return NextResponse.json(
-        { error: "Movie ID is required" },
-        { status: 400 }
+    const movieIdResult = parseId(body.value.movieId, "movieId");
+    const statusResult =
+      body.value.status === undefined || body.value.status === null
+        ? ({ ok: true, value: "WANT_TO_WATCH" } as const)
+        : parseEnum(body.value.status, Object.values(WatchStatus), "status");
+    const platformResult = parsePlatform(body.value.platform);
+    const watchTypeResult = parseWatchType(body.value.watchType);
+    const ratingResult = parseRating(body.value.rating);
+    const reviewResult = parseReview(body.value.review);
+    if (
+      !movieIdResult.ok ||
+      !statusResult.ok ||
+      !platformResult.ok ||
+      !watchTypeResult.ok ||
+      !ratingResult.ok ||
+      !reviewResult.ok
+    ) {
+      const error = firstError(
+        movieIdResult,
+        statusResult,
+        platformResult,
+        watchTypeResult,
+        ratingResult,
+        reviewResult
       );
+      return NextResponse.json({ error }, { status: 400 });
     }
-
-    // Validate rating if provided
-    if (rating !== undefined && rating !== null && (rating < 1 || rating > 5)) {
-      return NextResponse.json(
-        { error: "Rating must be between 1 and 5" },
-        { status: 400 }
-      );
-    }
+    const movieId = movieIdResult.value;
+    const status = statusResult.value;
 
     // Check if movie already exists in user's watchlist
     const existingEntry = await prisma.watchlistEntry.findUnique({
@@ -109,11 +135,11 @@ export async function POST(req: NextRequest) {
       data: {
         userId,
         movieId: movieId,
-        status: status || "WANT_TO_WATCH",
-        platform: platform || null,
-        watchType: watchType || null,
-        rating: rating || null,
-        review: review || null,
+        status,
+        platform: platformResult.value,
+        watchType: watchTypeResult.value,
+        rating: ratingResult.value,
+        review: reviewResult.value,
         watchedAt: status === "WATCHED" ? new Date() : null,
       },
       include: {
