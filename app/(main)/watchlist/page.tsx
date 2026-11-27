@@ -78,49 +78,6 @@ export default function MyMoviesPage() {
     };
   }, [activeTab]);
 
-  const handleRating = async (entryId: string, rating: number) => {
-    setEntries((prev) =>
-      prev.map((e) => (e.id === entryId ? { ...e, rating: rating || null } : e))
-    );
-    try {
-      const response = await fetch(`/api/watchlist/${entryId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating: rating || null }),
-      });
-      if (!response.ok) throw new Error();
-    } catch {
-      toast.error("Failed to save rating");
-      fetchEntries(activeTab);
-    }
-  };
-
-  const handleNotInterested = async (entryId: string) => {
-    setEntries((prev) => prev.filter((e) => e.id !== entryId));
-    try {
-      const response = await fetch(`/api/watchlist/${entryId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "NOT_INTERESTED" }),
-      });
-      if (!response.ok) throw new Error();
-    } catch {
-      toast.error("Failed to update");
-      fetchEntries(activeTab);
-    }
-  };
-
-  const handleRemove = async (entryId: string) => {
-    try {
-      const response = await fetch(`/api/watchlist/${entryId}`, { method: "DELETE" });
-      if (!response.ok) throw new Error();
-      toast.success("Removed");
-      fetchEntries(activeTab);
-    } catch {
-      toast.error("Failed to remove movie");
-    }
-  };
-
   const emptyMessage =
     activeTab === "want"
       ? "Your watchlist is empty. Search for movies to add!"
@@ -173,11 +130,7 @@ export default function MyMoviesPage() {
               statusChip={statusChip(entry.status, entry.rating)}
               onList
               onAdd={() => setSelectedEntry(entry)}
-              rating={entry.rating || 0}
-              onRate={(r) => handleRating(entry.id, r)}
-              onNotInterested={() => handleNotInterested(entry.id)}
               onTrailer={() => setTrailerMovie({ id: entry.movie.id, title: entry.movie.title })}
-              onRemove={() => handleRemove(entry.id)}
             />
           ))}
         </div>

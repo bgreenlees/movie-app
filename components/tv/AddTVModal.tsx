@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Modal from "@/components/ui/Modal";
+import ListSheetExtras from "@/components/ui/ListSheetExtras";
 import ThumbRating from "@/components/ui/ThumbRating";
 import toast from "react-hot-toast";
 import { canonicalProviderId } from "@/lib/providers";
@@ -91,18 +92,6 @@ export default function AddTVModal({
     setIsSubmitting(true);
 
     try {
-      if (formData.status === "REMOVE" && existingEntry) {
-        const res = await fetch(`/api/tv/watchlist/${existingEntry.id}`, { method: "DELETE" });
-        if (!res.ok) {
-          toast.error("Failed to remove show");
-          return;
-        }
-        toast.success("Removed from lists!");
-        onSuccess?.();
-        onClose();
-        return;
-      }
-
       const body = {
         tvShowId,
         status: formData.status,
@@ -140,14 +129,61 @@ export default function AddTVModal({
     }
   };
 
-  const isRemove = formData.status === "REMOVE";
+  async function removeEntry() {
+    if (!existingEntry) return;
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`/api/tv/watchlist/${existingEntry.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        toast.error("Failed to remove show");
+        return;
+      }
+      toast.success("Removed from lists!");
+      onSuccess?.();
+      onClose();
+    } catch {
+      toast.error("An error occurred. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  // Toggles "Not for me": marks it, or deletes the mark if it is already set.
+  async function toggleNotForMe() {
+    setIsSubmitting(true);
+    try {
+      const marked = existingEntry?.status === "NOT_INTERESTED";
+      const res = marked
+        ? await fetch(`/api/tv/watchlist/${existingEntry!.id}`, { method: "DELETE" })
+        : existingEntry
+        ? await fetch(`/api/tv/watchlist/${existingEntry.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "NOT_INTERESTED" }),
+          })
+        : await fetch("/api/tv/watchlist", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tvShowId, status: "NOT_INTERESTED" }),
+          });
+      if (!res.ok) {
+        toast.error("Failed to update");
+        return;
+      }
+      onSuccess?.();
+      onClose();
+    } catch {
+      toast.error("An error occurred. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
   const isWatching = formData.status === "WATCHING";
 
   const statusOptions = [
     { value: "WANT_TO_WATCH", label: "Want to Watch" },
     { value: "WATCHING", label: "Watching" },
     { value: "WATCHED", label: "Finished" },
-    ...(existingEntry ? [{ value: "REMOVE", label: "Remove" }] : []),
   ];
 
   return (
@@ -163,7 +199,6 @@ export default function AddTVModal({
           <div className="flex flex-wrap gap-2">
             {statusOptions.map(({ value, label }) => {
               const active = formData.status === value;
-              const isRed = value === "REMOVE";
               return (
                 <button
                   key={value}
@@ -171,7 +206,7 @@ export default function AddTVModal({
                   onClick={() => setFormData({ ...formData, status: value })}
                   className="px-4 py-1.5 rounded-full text-sm font-medium transition-all"
                   style={{
-                    backgroundColor: active ? (isRed ? "#ef4444" : "var(--accent)") : "var(--border)",
+                    backgroundColor: active ? "var(--accent)" : "var(--border)",
                     color: active ? "white" : "var(--foreground)",
                   }}
                 >
@@ -218,7 +253,7 @@ export default function AddTVModal({
         )}
 
         {/* Streaming availability */}
-        {!isRemove && (providers.flatrate.length > 0 || providers.rent.length > 0) && (
+        {(providers.flatrate.length > 0 || providers.rent.length > 0) && (
           <div>
             {providers.flatrate.length > 0 && (
               <div className="mb-2">
@@ -246,7 +281,7 @@ export default function AddTVModal({
         )}
 
         {/* Rating + Review */}
-        {!isRemove && (
+        {(
           <>
             <div className="flex items-center gap-3 pt-1">
               <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Details</span>
@@ -302,12 +337,18 @@ export default function AddTVModal({
           </button>
           <button type="submit" disabled={isSubmitting}
             className="px-6 py-2 text-white rounded-md transition-colors disabled:opacity-50"
-            style={{ backgroundColor: isRemove ? "#ef4444" : "var(--accent)" }}
+            style={{ backgroundColor: "var(--accent)" }}
           >
-            {isSubmitting ? "Saving..." : isRemove ? "Remove" : existingEntry ? "Update" : "Save"}
+            {isSubmitting ? "Saving..." : existingEntry ? "Update" : "Save"}
           </button>
         </div>
       </form>
+      <ListSheetExtras
+        onNotForMe={toggleNotForMe}
+        notForMe={existingEntry?.status === "NOT_INTERESTED"}
+        onRemove={existingEntry ? removeEntry : undefined}
+        disabled={isSubmitting}
+      />
     </Modal>
   );
 }

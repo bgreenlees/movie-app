@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Modal from "@/components/ui/Modal";
+import ListSheetExtras from "@/components/ui/ListSheetExtras";
 import ThumbRating from "@/components/ui/ThumbRating";
 import toast from "react-hot-toast";
 import { canonicalProviderId } from "@/lib/providers";
@@ -89,25 +90,6 @@ export default function AddMovieModal({
     setIsSubmitting(true);
 
     try {
-      // Remove from lists
-      if (formData.status === "REMOVE" && existingEntry) {
-        const response = await fetch(`/api/watchlist/${existingEntry.id}`, {
-          method: "DELETE",
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-          toast.error(data.error || "Failed to remove movie");
-          setIsSubmitting(false);
-          return;
-        }
-
-        toast.success("Removed from lists!");
-        if (onSuccess) onSuccess();
-        onClose();
-        return;
-      }
-
       // Update existing entry
       if (existingEntry) {
         const response = await fetch(`/api/watchlist/${existingEntry.id}`, {
@@ -172,7 +154,55 @@ export default function AddMovieModal({
     onClose();
   };
 
-  const isRemove = formData.status === "REMOVE";
+  async function removeEntry() {
+    if (!existingEntry) return;
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`/api/watchlist/${existingEntry.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        toast.error("Failed to remove movie");
+        return;
+      }
+      toast.success("Removed from lists!");
+      onSuccess?.();
+      onClose();
+    } catch {
+      toast.error("An error occurred. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  // Toggles "Not for me": marks it, or deletes the mark if it is already set.
+  async function toggleNotForMe() {
+    setIsSubmitting(true);
+    try {
+      const marked = existingEntry?.status === "NOT_INTERESTED";
+      const res = marked
+        ? await fetch(`/api/watchlist/${existingEntry!.id}`, { method: "DELETE" })
+        : existingEntry
+        ? await fetch(`/api/watchlist/${existingEntry.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "NOT_INTERESTED" }),
+          })
+        : await fetch("/api/watchlist", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ movieId, status: "NOT_INTERESTED" }),
+          });
+      if (!res.ok) {
+        toast.error("Failed to update");
+        return;
+      }
+      onSuccess?.();
+      onClose();
+    } catch {
+      toast.error("An error occurred. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <Modal
@@ -188,10 +218,8 @@ export default function AddMovieModal({
             {[
               { value: "WANT_TO_WATCH", label: "Want to Watch" },
               { value: "WATCHED", label: "Watched" },
-              ...(existingEntry ? [{ value: "REMOVE", label: "Remove" }] : []),
             ].map(({ value, label }) => {
               const active = formData.status === value;
-              const isRed = value === "REMOVE";
               return (
                 <button
                   key={value}
@@ -199,7 +227,7 @@ export default function AddMovieModal({
                   onClick={() => setFormData({ ...formData, status: value })}
                   className="px-4 py-1.5 rounded-full text-sm font-medium transition-all"
                   style={{
-                    backgroundColor: active ? (isRed ? "#ef4444" : "var(--accent)") : "var(--border)",
+                    backgroundColor: active ? "var(--accent)" : "var(--border)",
                     color: active ? "white" : "var(--foreground)",
                   }}
                 >
@@ -211,7 +239,7 @@ export default function AddMovieModal({
         </div>
 
         {/* Streaming availability */}
-        {!isRemove && (providers.flatrate.length > 0 || providers.rent.length > 0) && (
+        {(providers.flatrate.length > 0 || providers.rent.length > 0) && (
           <div>
             {providers.flatrate.length > 0 && (
               <div className="mb-2">
@@ -304,8 +332,8 @@ export default function AddMovieModal({
           </div>
         )}
 
-        {/* Rest of fields — hidden when removing */}
-        {!isRemove && (
+        {/* Rest of fields */}
+        {(
           <>
             {/* Watch details header */}
             <div className="flex items-center gap-3 pt-1">
@@ -429,18 +457,22 @@ export default function AddMovieModal({
             type="submit"
             disabled={isSubmitting}
             className="px-6 py-2 text-white rounded-md transition-colors disabled:opacity-50"
-            style={{ backgroundColor: isRemove ? "#ef4444" : "var(--accent)" }}
+            style={{ backgroundColor: "var(--accent)" }}
           >
             {isSubmitting
               ? "Saving..."
-              : isRemove
-              ? "Remove"
               : existingEntry
               ? "Update"
               : "Save"}
           </button>
         </div>
       </form>
+      <ListSheetExtras
+        onNotForMe={toggleNotForMe}
+        notForMe={existingEntry?.status === "NOT_INTERESTED"}
+        onRemove={existingEntry ? removeEntry : undefined}
+        disabled={isSubmitting}
+      />
     </Modal>
   );
 }

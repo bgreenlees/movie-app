@@ -29,7 +29,7 @@ export default function DetailRating({ title, rating, onRate }: DetailRatingProp
   }
 
   return (
-    <div role="group" aria-label={`Your rating for ${title}`} className="inline-flex h-11 items-center gap-1 rounded-control border border-border bg-surface-2 px-1">
+    <div role="group" aria-label={`Your rating for ${title}`} className="inline-flex h-12 items-center gap-1 rounded-control border border-border bg-surface-2 px-1">
       {OPTIONS.map((o) => {
         const selected = current === o.value;
         return (
@@ -40,7 +40,7 @@ export default function DetailRating({ title, rating, onRate }: DetailRatingProp
             aria-label={o.label}
             title={o.label}
             onClick={() => pick(o.value)}
-            className={`flex h-9 min-w-11 cursor-pointer items-center justify-center rounded-chip px-2 text-[18px] leading-none transition-colors duration-150 hover:bg-surface ${
+            className={`flex h-11 min-w-11 cursor-pointer items-center justify-center rounded-chip px-2 text-[18px] leading-none transition-colors duration-150 hover:bg-surface ${
               selected ? "bg-text text-bg hover:bg-text" : "text-text"
             }`}
           >

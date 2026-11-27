@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import PosterCard, { POSTER_GRID } from "@/components/ui/PosterCard";
 import { episodeMeta, seasonProgress, statusChip, yearMeta } from "@/lib/posterCard";
+import TrailerModal from "@/components/movies/TrailerModal";
 import AddTVModal from "@/components/tv/AddTVModal";
 import toast from "react-hot-toast";
 
@@ -88,6 +89,7 @@ export default function MyTVPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [nextEpisodes, setNextEpisodes] = useState<Record<number, NextEpisodeInfo["next_episode_to_air"]>>({});
   const [episodeCounts, setEpisodeCounts] = useState<Record<number, NextEpisodeInfo["episodeCounts"]>>({});
+  const [trailer, setTrailer] = useState<{ id: number; title: string } | null>(null);
   const [selectedShow, setSelectedShow] = useState<TVEntry | null>(null);
 
   // Reset per-tab state while rendering, when the tab changes
@@ -149,31 +151,6 @@ export default function MyTVPage() {
       cancelled = true;
     };
   }, [activeTab]);
-
-  const handleRating = async (entry: TVEntry, rating: number) => {
-    setEntries((prev) => prev.map((e) => e.id === entry.id ? { ...e, rating: rating || null } : e));
-    try {
-      const res = await fetch(`/api/tv/watchlist/${entry.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating: rating || null }),
-      });
-      if (!res.ok) throw new Error();
-    } catch {
-      toast.error("Failed to save rating");
-      fetchEntries(activeTab);
-    }
-  };
-
-  const handleRemove = async (entry: TVEntry) => {
-    try {
-      await fetch(`/api/tv/watchlist/${entry.id}`, { method: "DELETE" });
-      setEntries((prev) => prev.filter((e) => e.id !== entry.id));
-      toast.success("Removed");
-    } catch {
-      toast.error("Failed to remove");
-    }
-  };
 
   const displayEntries =
     activeTab === "watching"
@@ -310,9 +287,7 @@ export default function MyTVPage() {
                   statusChip={statusChip(entry.status, entry.rating)}
                   onList
                   onAdd={() => setSelectedShow(entry)}
-                  rating={entry.rating || 0}
-                  onRate={(r) => handleRating(entry, r)}
-                  onRemove={() => handleRemove(entry)}
+                  onTrailer={() => setTrailer({ id: entry.tvShowId, title: entry.tvShow.name })}
                 >
                   {next && (
                     <p
@@ -331,6 +306,13 @@ export default function MyTVPage() {
           </div>
         </>
       )}
+
+      <TrailerModal
+        movieId={trailer?.id ?? null}
+        movieTitle={trailer?.title ?? ""}
+        mediaType="tv"
+        onClose={() => setTrailer(null)}
+      />
 
       {selectedShow && (
         <AddTVModal
