@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireSession } from "@/lib/apiGuard";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { tmdb } from "@/lib/tmdb";
@@ -53,6 +54,8 @@ function fromTV(res: PromiseSettledResult<{ results: TMDBTVShow[] }>): NewsItem[
 }
 
 export async function GET() {
+  const denied = await requireSession();
+  if (denied) return denied;
   const session = await auth();
 
   // Get user's saved streaming services (if logged in)

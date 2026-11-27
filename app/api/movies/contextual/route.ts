@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireSession } from "@/lib/apiGuard";
 import { tmdb } from "@/lib/tmdb";
 
 const TIME_SLOTS = [
@@ -9,6 +10,8 @@ const TIME_SLOTS = [
 ];
 
 export async function GET() {
+  const denied = await requireSession();
+  if (denied) return denied;
   const hour = new Date().getUTCHours();
   const slot = TIME_SLOTS.find((s) => s.hours.includes(hour)) ?? TIME_SLOTS[3];
 

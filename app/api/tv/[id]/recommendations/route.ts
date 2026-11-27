@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tmdb, type TMDBTVShow } from "@/lib/tmdb";
+import { requireSession } from "@/lib/apiGuard";
 
 const MIN_RECS = 6;
 const MAX_RETURN = 12;
@@ -8,6 +9,9 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   try {
     const { id } = await params;
     const tvId = parseInt(id);

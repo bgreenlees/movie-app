@@ -17,6 +17,7 @@ export function createRateLimiter({
 }) {
   if (!Number.isInteger(limit) || limit < 1) throw new Error("limit must be a positive integer");
   const hits = new Map<string, number[]>();
+  let lastSweep = now();
 
   return function check(key: string): boolean {
     const t = now();
@@ -27,8 +28,9 @@ export function createRateLimiter({
     }
     recent.push(t);
     hits.set(key, recent);
-    // Drop idle keys now and then so the map can't grow without bound.
-    if (hits.size > 10_000) {
+    // Once per window, drop idle keys so the map can't grow without bound.
+    if (t - lastSweep >= windowMs) {
+      lastSweep = t;
       for (const [k, v] of hits) if (v.every((at) => t - at >= windowMs)) hits.delete(k);
     }
     return true;

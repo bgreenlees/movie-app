@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tmdb } from "@/lib/tmdb";
+import { requireSession } from "@/lib/apiGuard";
 
 const DIRECTOR_JOBS = new Set(["Director"]);
 
@@ -7,6 +8,9 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   try {
     const { id } = await params;
     const personId = parseInt(id);

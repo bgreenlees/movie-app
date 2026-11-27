@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireSession } from "@/lib/apiGuard";
 import { tmdb } from "@/lib/tmdb";
 
 // Genre id → name map, used by the results filter bar to label genre chips.
 export async function GET(req: NextRequest) {
+  const denied = await requireSession();
+  if (denied) return denied;
   try {
     const media = req.nextUrl.searchParams.get("media") === "tv" ? "tv" : "movie";
     const genres = media === "tv" ? await tmdb.getTVGenres() : await tmdb.getMovieGenres();

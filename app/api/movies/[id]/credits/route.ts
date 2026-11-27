@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireSession } from "@/lib/apiGuard";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   try {
     const { id } = await params;
     const movieId = parseInt(id);
