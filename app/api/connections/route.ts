@@ -3,7 +3,8 @@ import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { createRateLimiter } from "@/lib/rateLimit";
-import { createInvite, isValidEmail, MAX_EMAIL_LENGTH, normalizeEmail } from "@/lib/invites";
+import { createInvite } from "@/lib/invites";
+import { isValidEmail, MAX_EMAIL_LENGTH, normalizeEmail } from "../../../lib/emailAddress";
 
 /** Most PENDING outgoing requests one user may have at once. */
 export const MAX_PENDING_OUTGOING = 20;

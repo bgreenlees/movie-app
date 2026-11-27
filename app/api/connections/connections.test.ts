@@ -39,10 +39,7 @@ vi.mock("@/lib/rateLimit", () => ({
   },
 }));
 // Invite creation has its own tests (lib/invites.test.ts); here we only check the route calls it.
-vi.mock("@/lib/invites", async () => ({
-  ...(await vi.importActual<typeof import("../../../lib/invites")>("../../../lib/invites")),
-  createInvite: m.createInvite,
-}));
+vi.mock("@/lib/invites", () => ({ createInvite: m.createInvite }));
 vi.mock("@/lib/db", () => {
   const userConnection = {
     count: vi.fn(async ({ where }: { where: Where }) => {

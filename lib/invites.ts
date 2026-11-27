@@ -1,17 +1,10 @@
 import { Resend } from "resend";
 import { prisma } from "./db";
+import { normalizeEmail } from "./emailAddress";
 
 export const SITE_URL = "https://whatsupnext.site";
-export const MAX_EMAIL_LENGTH = 254;
 /** Don't email the same address from the same inviter more often than this. */
 export const RESEND_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
-
-/** Trimmed + lowercased: the form invites are stored and matched in. */
-export const normalizeEmail = (email: string) => email.trim().toLowerCase();
-
-// Deliberately simple: one "@", no spaces, a dot in the domain. The real check is delivery.
-export const isValidEmail = (email: string) =>
-  email.length <= MAX_EMAIL_LENGTH && /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(email);
 
 export function escapeHtml(s: string): string {
   return s

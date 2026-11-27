@@ -45,7 +45,8 @@ vi.mock("./db", () => {
   };
 });
 
-import { buildInviteEmail, convertInvites, createInvite, isValidEmail, normalizeEmail, RESEND_COOLDOWN_MS } from "./invites";
+import { buildInviteEmail, convertInvites, createInvite, RESEND_COOLDOWN_MS } from "./invites";
+import { isValidEmail, normalizeEmail } from "./emailAddress";
 
 beforeEach(() => {
   m.send.mockReset().mockResolvedValue({ error: null });
