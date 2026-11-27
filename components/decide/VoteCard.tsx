@@ -58,13 +58,13 @@ export default function VoteCard({
   const hint = voteForSwipe(drag.dx, drag.dy);
 
   return (
-    <section aria-labelledby="vote-title" className="mx-auto flex w-full max-w-sm flex-col gap-4">
+    <section aria-labelledby="vote-title" className="mx-auto flex w-full max-w-sm flex-col gap-3">
       <p className="text-center text-meta text-muted" aria-live="polite">
         {position} of {total}
       </p>
 
       <div
-        className="relative mx-auto aspect-[2/3] w-full max-w-[min(20rem,calc((100dvh-22rem)*2/3))] min-w-[12rem] touch-none select-none rounded-card bg-surface-2 shadow-card transition-transform duration-150 motion-reduce:transition-none"
+        className="relative mx-auto aspect-[2/3] w-full max-w-[min(20rem,calc((100dvh-31rem)*2/3))] min-w-[10rem] touch-none select-none rounded-card bg-surface-2 shadow-card transition-transform duration-150 motion-reduce:transition-none"
         style={{
           transform: drag.dx || drag.dy ? `translate(${drag.dx}px, ${drag.dy}px) rotate(${drag.dx / 20}deg)` : undefined,
           transitionDuration: drag.dx || drag.dy ? "0ms" : undefined,

@@ -237,25 +237,29 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
   const active = screen === "vote" || screen === "wait";
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6 sm:py-10">
+    <div className="mx-auto max-w-2xl px-4 py-2 sm:py-8">
       {data && (
-        <header className="mb-6 flex items-center justify-between gap-3">
-          <Link href={partnerHref} className="text-meta text-muted hover:text-text">
-            ← {partner}
-          </Link>
-          <p className="text-meta text-muted">
+        <header className="mb-4 sm:mb-6">
+          <div className="flex items-center justify-between gap-3">
+            <Link href={partnerHref} className="flex min-h-11 items-center text-meta text-muted hover:text-text">
+              ← Back
+            </Link>
+            {active && (
+              <button
+                type="button"
+                onClick={endVote}
+                className="min-h-11 cursor-pointer text-meta text-muted hover:text-text"
+              >
+                End vote
+              </button>
+            )}
+          </div>
+          <p className="text-center text-meta text-muted">
             Deciding with {partner}
             {data.maxRound > 1 && (screen === "vote" || screen === "wait" || screen === "no-match")
               ? ` · Round ${data.round} of ${data.maxRound}`
               : ""}
           </p>
-          {active ? (
-            <button type="button" onClick={endVote} className="cursor-pointer text-meta text-muted hover:text-text">
-              End vote
-            </button>
-          ) : (
-            <span aria-hidden="true" className="w-12" />
-          )}
         </header>
       )}
 
