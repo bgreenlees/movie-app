@@ -235,7 +235,7 @@ export default function AddTVModal({
                           <Image src={`https://image.tmdb.org/t/p/w92${p.logo_path}`} alt={p.provider_name} width={20} height={20} className="rounded" />
                           {have && <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center text-white" style={{ backgroundColor: "var(--accent)", fontSize: "8px" }}>✓</div>}
                         </div>
-                        <span className="text-xs" style={{ color: have ? "var(--accent)" : "var(--foreground)", fontWeight: have ? 600 : 400 }}>{p.provider_name}</span>
+                        <span className="text-xs" style={{ color: have ? "var(--color-accent-text)" : "var(--foreground)", fontWeight: have ? 600 : 400 }}>{p.provider_name}</span>
                       </div>
                     );
                   })}

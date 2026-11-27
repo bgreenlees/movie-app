@@ -149,7 +149,7 @@ export default function WhatToWatchPage() {
       {selection.onMyServices && data && !data.hasServices && (
         <p className="text-sm mb-3" style={{ color: "var(--text-muted)" }}>
           Save your streaming services in{" "}
-          <Link href="/profile" style={{ color: "var(--accent)" }}>
+          <Link href="/profile" style={{ color: "var(--color-accent-text)" }}>
             Profile
           </Link>{" "}
           to filter by them — showing everything for now.
@@ -179,7 +179,7 @@ export default function WhatToWatchPage() {
           <button
             onClick={retry}
             className="px-4 py-1.5 text-sm rounded-md cursor-pointer transition-opacity hover:opacity-80"
-            style={{ color: "var(--accent)", border: "1px solid var(--accent)" }}
+            style={{ color: "var(--color-accent-text)", border: "1px solid var(--accent)" }}
           >
             Retry
           </button>
@@ -219,7 +219,7 @@ export default function WhatToWatchPage() {
                   </span>
                   {p.onWatchlist && (
                     // Wraps rather than truncating on narrow (2-column) cards
-                    <span className="text-right leading-tight" style={{ color: "var(--accent)" }}>
+                    <span className="text-right leading-tight" style={{ color: "var(--color-accent-text)" }}>
                       On your watchlist
                     </span>
                   )}

@@ -141,7 +141,7 @@ export default async function TVShowPage({ params }: Props) {
             className="mt-4 px-4 py-3 rounded-lg"
             style={{ backgroundColor: "color-mix(in srgb, var(--accent) 12%, var(--card-bg))", border: "1px solid var(--accent)" }}
           >
-            <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--accent)" }}>Next Episode</p>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--color-accent-text)" }}>Next Episode</p>
             <p className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
               S{String(nextEp.season_number).padStart(2, "0")}E{String(nextEp.episode_number).padStart(2, "0")} — {nextEp.name}
             </p>

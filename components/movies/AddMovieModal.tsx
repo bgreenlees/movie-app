@@ -248,7 +248,7 @@ export default function AddMovieModal({
                             </div>
                           )}
                         </div>
-                        <span className="text-xs" style={{ color: have ? "var(--accent)" : "var(--foreground)", fontWeight: have ? 600 : 400 }}>
+                        <span className="text-xs" style={{ color: have ? "var(--color-accent-text)" : "var(--foreground)", fontWeight: have ? 600 : 400 }}>
                           {p.provider_name}
                         </span>
                       </div>
@@ -292,7 +292,7 @@ export default function AddMovieModal({
                             </div>
                           )}
                         </div>
-                        <span className="text-xs" style={{ color: have ? "var(--accent)" : "var(--foreground)", fontWeight: have ? 600 : 400 }}>
+                        <span className="text-xs" style={{ color: have ? "var(--color-accent-text)" : "var(--foreground)", fontWeight: have ? 600 : 400 }}>
                           {p.provider_name}
                         </span>
                       </div>

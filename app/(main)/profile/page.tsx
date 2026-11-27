@@ -376,7 +376,7 @@ export default function ProfilePage() {
       </div>
       {/* Danger Zone */}
       <div>
-        <h2 className="text-2xl font-bold mb-6" style={{ color: "#ef4444" }}>
+        <h2 className="text-2xl font-bold mb-6 text-danger">
           Danger Zone
         </h2>
         <div
@@ -396,7 +396,7 @@ export default function ProfilePage() {
               <button
                 onClick={() => setConfirmDelete(true)}
                 className="shrink-0 px-4 py-2 text-sm rounded-md border transition-all hover:opacity-80"
-                style={{ color: "#ef4444", borderColor: "#ef4444" }}
+                style={{ color: "var(--color-danger)", borderColor: "var(--color-danger)" }}
               >
                 Delete Account
               </button>
@@ -405,7 +405,7 @@ export default function ProfilePage() {
 
           {confirmDelete && (
             <div className="mt-4 pt-4 border-t flex items-center gap-3" style={{ borderColor: "#ef444466" }}>
-              <p className="text-sm flex-1" style={{ color: "#ef4444" }}>
+              <p className="text-sm flex-1 text-danger">
                 Are you sure? This is permanent and immediate.
               </p>
               <button

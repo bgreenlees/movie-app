@@ -25,7 +25,7 @@ export default function LoginForm({ devLogin = false }: { devLogin?: boolean }) 
         style={{
           background: "rgba(255,255,255,0.07)",
           border: "1px solid rgba(255,255,255,0.12)",
-          color: "#f5f5f7",
+          color: "var(--color-text)",
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.background = "rgba(168,85,247,0.15)";

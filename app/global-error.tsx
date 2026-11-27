@@ -20,7 +20,7 @@ export default function GlobalError({
     <html lang="en">
       <body>
         <main className="min-h-screen flex flex-col items-center justify-center text-center px-6">
-          <p className="text-sm font-bold tracking-widest mb-3" style={{ color: "var(--accent)" }}>
+          <p className="text-sm font-bold tracking-widest mb-3" style={{ color: "var(--color-accent-text)" }}>
             Something went wrong
           </p>
           <h1 className="text-3xl sm:text-4xl font-bold mb-3" style={{ color: "var(--primary)" }}>

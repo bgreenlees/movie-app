@@ -300,7 +300,7 @@ export default function NewsPage() {
       {!data?.personalizedStreaming && (
         <p className="text-sm mb-8" style={{ color: "var(--text-muted)" }}>
           Save your streaming services in{" "}
-          <a href="/profile" style={{ color: "var(--accent)" }}>
+          <a href="/profile" style={{ color: "var(--color-accent-text)" }}>
             Profile
           </a>{" "}
           to see a row for each one

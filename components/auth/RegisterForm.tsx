@@ -7,7 +7,7 @@ import LoginForm from "./LoginForm";
 // wrapper gives its button a visible keyboard focus ring.
 export default function RegisterForm() {
   return (
-    <div className="[&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-offset-2 [&_button:focus-visible]:outline-[#a855f7]">
+    <div className="[&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-offset-2 [&_button:focus-visible]:outline-focus">
       <LoginForm />
     </div>
   );

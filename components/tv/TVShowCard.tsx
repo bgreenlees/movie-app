@@ -94,7 +94,7 @@ export default function TVShowCard({
               {formatBannerDate(seasonBanner.premiereDate)}
               {" – "}
               {seasonBanner.status === "Returning Series" || seasonBanner.status === "In Production"
-                ? <span style={{ color: "var(--accent)" }}>now</span>
+                ? <span style={{ color: "var(--color-accent-text)" }}>now</span>
                 : formatBannerDate(seasonBanner.lastAirDate)
               }
             </p>
