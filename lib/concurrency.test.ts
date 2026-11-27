@@ -32,4 +32,28 @@ describe("createLimiter", () => {
   it("rejects a non-positive limit", () => {
     expect(() => createLimiter(0)).toThrow();
   });
+
+  it("skips tasks that haven't started once the signal aborts, and rejects them", async () => {
+    const controller = new AbortController();
+    const limit = createLimiter(1, controller.signal);
+    const started: number[] = [];
+    const task = (i: number) => async () => {
+      started.push(i);
+      if (i === 0) controller.abort(); // abort while the first task runs
+      await new Promise((r) => setTimeout(r, 2));
+      return i;
+    };
+    const results = await Promise.allSettled([0, 1, 2].map((i) => limit(task(i))));
+    expect(started).toEqual([0]);
+    expect(results.map((r) => r.status)).toEqual(["fulfilled", "rejected", "rejected"]);
+  });
+
+  it("rejects new tasks immediately when the signal is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const limit = createLimiter(2, controller.signal);
+    let ran = false;
+    await expect(limit(async () => { ran = true; })).rejects.toThrow(/abort/i);
+    expect(ran).toBe(false);
+  });
 });
