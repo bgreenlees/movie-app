@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import toast from "react-hot-toast";
+import { MAX_FEEDBACK_LENGTH } from "@/lib/feedback";
 
 interface FeedbackModalProps {
   onClose: () => void;
@@ -21,7 +22,16 @@ export default function FeedbackModal({ onClose }: FeedbackModalProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        // 400 (too long) and 429 (too many) carry a message worth showing.
+        toast.error(
+          (res.status === 400 || res.status === 429) && typeof data?.error === "string"
+            ? data.error
+            : "Failed to send — please try again.",
+        );
+        return;
+      }
       toast.success("Thanks! Your suggestion has been sent.");
       onClose();
     } catch {
@@ -55,6 +65,7 @@ export default function FeedbackModal({ onClose }: FeedbackModalProps) {
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Your idea..."
             rows={4}
+            maxLength={MAX_FEEDBACK_LENGTH}
             autoFocus
             className="w-full px-3 py-2 text-sm rounded-lg resize-none"
             style={{
