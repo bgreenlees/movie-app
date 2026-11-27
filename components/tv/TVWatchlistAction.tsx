@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { heroPrimaryButton, heroSecondaryButton } from "@/components/detail/buttonStyles";
 import { CheckIcon, PlusIcon } from "@/components/detail/icons";
+import DetailRating from "@/components/detail/DetailRating";
+import { buildRateRequest } from "@/lib/detailRating";
 import AddTVModal from "./AddTVModal";
 
 interface ExistingTVEntry {
@@ -52,6 +54,22 @@ export default function TVWatchlistAction({ tvShowId, tvShowName, isLoggedIn }: 
     );
   }
 
+  // Same calls the poster cards make: update the entry, or add it as Watched.
+  async function handleRate(rating: number) {
+    const req = buildRateRequest("tv", tvShowId, existingEntry?.id ?? null, rating);
+    if (!req) return;
+    const previous = existingEntry;
+    if (previous) setExistingEntry({ ...previous, rating: rating || null });
+    try {
+      const res = await fetch(req.url, { method: req.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(req.body) });
+      if (!res.ok) throw new Error("rate failed");
+      if (!previous) fetchEntry();
+    } catch (err) {
+      setExistingEntry(previous);
+      throw err;
+    }
+  }
+
   return (
     <>
       <button
@@ -70,6 +88,7 @@ export default function TVWatchlistAction({ tvShowId, tvShowName, isLoggedIn }: 
           </>
         )}
       </button>
+      <DetailRating title={tvShowName} rating={existingEntry?.rating} onRate={handleRate} />
       <AddTVModal
         isOpen={open}
         onClose={() => setOpen(false)}
