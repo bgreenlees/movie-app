@@ -19,7 +19,10 @@ const neutralOk = () => NextResponse.json({ ok: true });
  * email invites (#135) hook in here. Whatever it does, the caller still
  * returns the neutral response.
  */
-async function handleNoAccount(_email: string, _requesterId: string): Promise<void> {}
+async function handleNoAccount(email: string, requesterId: string): Promise<void> {
+  void email;
+  void requesterId;
+}
 
 // GET — fetch accepted connections + pending incoming requests
 export async function GET() {
