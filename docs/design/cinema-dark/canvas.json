@@ -1,0 +1,25 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-11-26T10:00:00Z"},
+  "title": "What's Up Next — Cinema Dark",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {"x": 0, "y": 0, "w": 1440, "h": 1240, "title": "Discover — desktop", "expand": "fill"},
+    "Detail.dc.html": {"x": 1520, "y": 0, "w": 1440, "h": 1240, "title": "Movie detail — desktop", "expand": "fill"},
+    "MobileDiscover.dc.html": {"x": 0, "y": 1560, "w": 390, "h": 844, "title": "Discover — mobile"},
+    "MobileMyTV.dc.html": {"x": 470, "y": 1560, "w": 390, "h": 844, "title": "My TV + mark-watched sheet — mobile"},
+    "Logos.dc.html": {"x": 1520, "y": 1560, "w": 1440, "h": 1160, "title": "Logo concepts"},
+    "OverlapExplore.dc.html": {"x": 1520, "y": 3200, "w": 1440, "h": 1000, "title": "The Overlap — explorations"},
+    "OverlapSystem.dc.html": {"x": 3040, "y": 3200, "w": 1440, "h": 1560, "title": "The Overlap — logo system"}
+  },
+  "order": ["Main.dc.html", "Detail.dc.html", "MobileDiscover.dc.html", "MobileMyTV.dc.html", "Logos.dc.html", "OverlapExplore.dc.html", "OverlapSystem.dc.html"],
+  "notes": {
+    "desktopTitle": {"x": 0, "y": -300, "text": "Desktop", "kind": "title1", "maxW": 2960},
+    "mobileTitle": {"x": 0, "y": 1260, "text": "Mobile", "kind": "title1", "maxW": 860},
+    "logoTitle": {"x": 1520, "y": 1260, "text": "Logo & app icon", "kind": "title1", "maxW": 1440},
+    "overlapTitle": {"x": 1520, "y": 2900, "text": "The Overlap — refinement", "kind": "title1", "maxW": 2960},
+    "why": {"x": 940, "y": 1560, "w": 420, "text": "Cinema dark, from docs/reviews/design.md\n\n• Art first: one '+' action per poster, title + meta caption under it, ratings moved to the ⋯ menu\n• Tokens: bg #0b0b0f, surface #15151c, muted text #a1a1aa (passes contrast), accent #7c3aed\n• Type: Playfair Display for display titles, Lato for everything else\n• Mobile: bottom tab bar, 3-column grids, bottom sheets\n• Posters are placeholders, not real artwork", "color": "purple"}
+  },
+  "designSystems": []
+}
