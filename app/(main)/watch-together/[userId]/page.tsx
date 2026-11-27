@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, use } from "react";
-import Link from "next/link";
 import AddMovieModal from "@/components/movies/AddMovieModal";
 import TrailerModal from "@/components/movies/TrailerModal";
 import AddTVModal from "@/components/tv/AddTVModal";
 import PairCard, { PAIR_GRID, type PairCardTitle } from "@/components/watch-together/PairCard";
 import TonightForYouBoth from "@/components/watch-together/TonightForYouBoth";
 import Skeleton from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
 import ErrorState from "@/components/ui/ErrorState";
 import type { ShelfItem } from "@/lib/watchTogetherShelves";
 
@@ -154,16 +154,13 @@ function WatchTogether({ userId }: { userId: string }) {
 
   if (status === "notFound" || picksNotFound) {
     return (
-      <div className="max-w-xl mx-auto px-4 py-20 text-center">
-        <h1 className="text-2xl font-bold mb-2" style={{ color: "var(--primary)" }}>
-          Not connected
-        </h1>
-        <p className="mb-6" style={{ color: "var(--text-muted)" }}>
-          You can only watch together with friends who&apos;ve accepted your request.
-        </p>
-        <Link href="/profile" className="underline" style={{ color: "var(--accent)" }}>
-          Go to Friends in Profile
-        </Link>
+      <div className="max-w-xl mx-auto px-4 py-20">
+        <EmptyState
+          icon="🔒"
+          title="Not connected"
+          body="You can only watch together with friends who've accepted your request."
+          action={{ label: "Go to Friends in Profile", href: "/profile" }}
+        />
       </div>
     );
   }
@@ -249,9 +246,11 @@ function WatchTogether({ userId }: { userId: string }) {
       )}
 
       {shelvesEmpty && (
-        <p className="text-sm text-center py-8" style={{ color: "var(--text-muted)" }}>
-          Rate some movies and shows, and ask {nameForCopy} to do the same, to fill in more shelves here.
-        </p>
+        <EmptyState
+          icon="🍿"
+          title="No shelves yet"
+          body={`Rate some movies and shows, and ask ${nameForCopy} to do the same, to fill in more shelves here.`}
+        />
       )}
 
       <TrailerModal
