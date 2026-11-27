@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The Overlap — explorations</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&amp;family=Playfair+Display:wght@700&amp;display=swap" rel="stylesheet">
+<style>body{margin:0;background:#0b0b0f}</style>
+</helmet>
+<div style="width: 1440px; height: 1000px; box-sizing: border-box; padding: 44px 48px; background: #0b0b0f; color: #f4f4f6; font-family: Lato, system-ui, sans-serif; display: flex; flex-direction: column; gap: 28px;">
+  <div style="display: flex; align-items: baseline; gap: 16px;">
+    <h1 style="margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 36px; line-height: 44px;">The Overlap — explorations</h1>
+    <p style="margin: 0; font-size: 15px; color: #a1a1aa;">Three questions, answered one at a time. The marked option feeds the logo system.</p>
+  </div>
+
+  <sc-for list="{{rows}}" as="row" hint-placeholder-count="3">
+    <section style="display: flex; gap: 24px; align-items: stretch;">
+      <div style="width: 220px; flex: none; display: flex; flex-direction: column; gap: 6px; padding-top: 8px;">
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px;">{{row.title}}</h2>
+        <p style="margin: 0; font-size: 14px; line-height: 20px; color: #a1a1aa;">{{row.sub}}</p>
+      </div>
+      <div style="flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;">
+        <sc-for list="{{row.items}}" as="v" hint-placeholder-count="4">
+          <figure style="{{v.box}}">
+            <svg width="120" height="120" viewBox="0 0 64 64" role="img" aria-label="{{v.label}}">
+              <sc-for list="{{v.paths}}" as="p" hint-placeholder-count="3"><path d="{{p.d}}" fill="{{p.fill}}" fill-rule="evenodd"></path></sc-for>
+            </svg>
+            <figcaption style="display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center;">
+              <span style="font-weight: 700; font-size: 15px;">{{v.label}}</span>
+              <span style="font-size: 13px; line-height: 18px; color: #a1a1aa;">{{v.note}}</span>
+              <sc-if value="{{v.pick}}" hint-placeholder-val="{{false}}">
+                <span style="margin-top: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #0b0b0f; background: #c4b5fd; padding: 3px 8px; border-radius: 6px;">Recommended</span>
+              </sc-if>
+            </figcaption>
+          </figure>
+        </sc-for>
+      </div>
+    </section>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const R = 16, CY = 32;
+    const circle = (cx) => 'M' + (cx - R) + ' ' + CY + 'a' + R + ' ' + R + ' 0 1 0 ' + (2 * R) + ' 0a' + R + ' ' + R + ' 0 1 0 ' + (-2 * R) + ' 0Z';
+    const lens = (d) => { const h = Math.sqrt(R * R - (d / 2) * (d / 2)).toFixed(2); return 'M32 ' + (CY - h).toFixed(2) + 'A' + R + ' ' + R + ' 0 0 1 32 ' + (CY + +h).toFixed(2) + 'A' + R + ' ' + R + ' 0 0 1 32 ' + (CY - h).toFixed(2) + 'Z'; };
+    const play = 'M29 27.5L36.5 32L29 36.5Z';
+    const mark = (d, a, b, mid, mode) => {
+      const L = circle(32 - d / 2), Rr = circle(32 + d / 2);
+      if (mode === 'knock') return [{ d: L + Rr, fill: a }];
+      const out = [{ d: L, fill: a }, { d: Rr, fill: b }];
+      if (mode === 'play') out.push({ d: lens(d) + play, fill: mid });
+      else out.push({ d: lens(d), fill: mid });
+      return out;
+    };
+    const P = '#7c3aed', BLUE = '#60a5fa', CORAL = '#fb7185', TEAL = '#2dd4bf', VIO = '#8b5cf6', LAV = '#c4b5fd', SNOW = '#f4f4f6', SPARK = '#fbbf24';
+    const box = (pick) => 'margin: 0; border-radius: 16px; background: #15151c; padding: 20px 12px 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; ' + (pick ? 'border: 2px solid #c4b5fd;' : 'border: 1px solid #2e2e3a;');
+    const v = (label, note, paths, pick) => ({ label, note, paths, pick: !!pick, box: box(pick) });
+    return {
+      rows: [
+        { title: 'How much overlap?', sub: 'The distance between the two circles.', items: [
+          v('Close', 'Centres 10 apart. Reads as one blob at 16px.', mark(10, P, CORAL, SNOW)),
+          v('Vesica', 'Centres one radius apart: each circle passes through the other\'s centre. The classic "two become one" shape.', mark(16, P, CORAL, SNOW), true),
+          v('Apart', 'Centres 22 apart. Thin sliver; the shared part gets lost.', mark(22, P, CORAL, SNOW)),
+          v('Barely', 'Centres 28 apart. Two people, almost nothing in common.', mark(28, P, CORAL, SNOW))
+        ]},
+        { title: 'The middle', sub: 'How the shared part is drawn.', items: [
+          v('Bright lens', 'The overlap glows: what you both like. Clean, no clichés.', mark(16, P, CORAL, SNOW), true),
+          v('Play cut-out', 'Adds a play symbol. More literal, more generic.', mark(16, P, CORAL, SNOW, 'play')),
+          v('Knockout', 'One colour, overlap cut away. The single-colour version for stamps and favicons.', mark(16, LAV, LAV, null, 'knock')),
+          v('Spark', 'A third colour in the middle. Lively, but three colours is busier.', mark(16, P, CORAL, SPARK))
+        ]},
+        { title: 'Two people, two colours', sub: 'Colours must differ in lightness too, so the pair reads for everyone.', items: [
+          v('Violet + coral', 'Warm and cool; clearly two different people. Violet ties to the app accent.', mark(16, P, CORAL, SNOW), true),
+          v('Violet + blue', 'The current brand gradient, split. Calm, but both cool and close in lightness.', mark(16, P, BLUE, SNOW)),
+          v('Violet + teal', 'Fresh, high contrast. Teal is new to the palette.', mark(16, VIO, TEAL, SNOW)),
+          v('Mono lavender', 'Single colour with a white lens. Quiet and premium.', mark(16, LAV, LAV, '#0b0b0f'))
+        ]}
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The Overlap — logo system</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&amp;family=Playfair+Display:wght@700&amp;display=swap" rel="stylesheet">
+<style>body{margin:0;background:#0b0b0f}</style>
+</helmet>
+<div style="width: 1440px; height: 1560px; box-sizing: border-box; padding: 48px; background: #0b0b0f; color: #f4f4f6; font-family: Lato, system-ui, sans-serif; display: flex; flex-direction: column; gap: 40px;">
+
+  <section style="display: flex; gap: 48px; align-items: center;">
+    <svg width="300" height="300" viewBox="0 0 64 64" role="img" aria-label="The Overlap mark">
+      <path d="{{m.you}}" fill="#7c3aed"></path><path d="{{m.them}}" fill="#fb7185"></path><path d="{{m.both}}" fill="#fbbf24"></path>
+    </svg>
+    <div style="display: flex; flex-direction: column; gap: 14px; max-width: 760px;">
+      <p style="margin: 0; font-size: 12px; line-height: 16px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700; color: #a1a1aa;">What's Up Next · logo</p>
+      <h1 style="margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 56px; line-height: 60px;">The Overlap</h1>
+      <p style="margin: 0; font-size: 20px; line-height: 30px; color: #d4d4d8;">You, them, and the part in the middle: what you'd both enjoy. The app exists to find that middle, so the logo is the middle.</p>
+    </div>
+  </section>
+
+  <section style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px;">
+    <div style="background: #15151c; border: 1px solid #2e2e3a; border-radius: 20px; padding: 24px; display: flex; gap: 24px; align-items: center;">
+      <svg width="240" height="240" viewBox="0 0 64 64" role="img" aria-label="Construction: two circles of radius r with centres 0.8r apart">
+        <path d="{{m.you}}" fill="none" stroke="#7c3aed" stroke-width="0.5" stroke-dasharray="1.5 1.5"></path>
+        <path d="{{m.them}}" fill="none" stroke="#fb7185" stroke-width="0.5" stroke-dasharray="1.5 1.5"></path>
+        <path d="{{m.both}}" fill="#fbbf24" fill-opacity="0.3" stroke="#fbbf24" stroke-width="0.6"></path>
+        <path d="{{m.dLine}}" stroke="#a1a1aa" stroke-width="0.5"></path>
+        <path d="{{m.rLine}}" stroke="#a1a1aa" stroke-width="0.4" stroke-dasharray="1 1"></path>
+        <circle cx="{{m.cxL}}" cy="32" r="1.1" fill="#7c3aed"></circle>
+        <circle cx="{{m.cxR}}" cy="32" r="1.1" fill="#fb7185"></circle>
+      </svg>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px;">Construction</h2>
+        <p style="margin: 0; font-size: 15px; line-height: 22px; color: #d4d4d8;">Two circles of equal radius <b>r</b>, centres <b>0.8r</b> apart: a little closer than a vesica, so the shared middle is generous without the two becoming one. The lens is drawn from the two arcs, not a separate shape.</p>
+        <p style="margin: 0; font-size: 15px; line-height: 22px; color: #a1a1aa;">Overall: 2.8r × 2r. Clear space: ½r on every side. Minimum size: 16 px (favicon).</p>
+        <div style="display: flex; gap: 14px; align-items: flex-end; margin-top: 4px;">
+          <sc-for list="{{overlaps}}" as="o" hint-placeholder-count="3">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+              <div style="{{o.box}}"><svg width="56" height="56" viewBox="0 0 64 64" aria-hidden="true"><path d="{{o.you}}" fill="#7c3aed"></path><path d="{{o.them}}" fill="#fb7185"></path><path d="{{o.both}}" fill="#fbbf24"></path></svg></div>
+              <span style="font-size: 12px; color: #a1a1aa;">{{o.label}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <div style="background: #15151c; border: 1px solid #2e2e3a; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+      <h2 style="margin: 0; font-size: 20px; line-height: 28px;">Colour</h2>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+        <sc-for list="{{swatches}}" as="s" hint-placeholder-count="3">
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="{{s.chip}}"></div>
+            <span style="font-weight: 700; font-size: 15px;">{{s.name}}</span>
+            <span style="font-size: 13px; line-height: 18px; color: #a1a1aa;">{{s.hex}}</span>
+            <span style="font-size: 13px; line-height: 18px; color: #a1a1aa;">{{s.note}}</span>
+          </div>
+        </sc-for>
+      </div>
+      <p style="margin: 0; font-size: 14px; line-height: 20px; color: #a1a1aa;">Violet is the app's accent; coral is warm and lighter, so the two read as two people even in greyscale. The amber spark is the lightest of the three: the shared middle always reads as the bright point. Flat colour only: no gradients, shadows or outlines.</p>
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 16px;">
+    <h2 style="margin: 0; font-size: 20px; line-height: 28px;">Lockups</h2>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;">
+      <div style="height: 150px; border-radius: 16px; background: #0b0b0f; border: 1px solid #2e2e3a; display: flex; align-items: center; justify-content: center; gap: 12px;">
+        <svg width="54" height="54" viewBox="0 0 64 64" aria-hidden="true"><path d="{{m.you}}" fill="#7c3aed"></path><path d="{{m.them}}" fill="#fb7185"></path><path d="{{m.both}}" fill="#fbbf24"></path></svg>
+        <span style="font-weight: 900; font-size: 24px; letter-spacing: -0.015em;">What's Up Next</span>
+      </div>
+      <div style="height: 150px; border-radius: 16px; background: #ffffff; display: flex; align-items: center; justify-content: center; gap: 12px;">
+        <svg width="54" height="54" viewBox="0 0 64 64" aria-hidden="true"><path d="{{m.you}}" fill="#7c3aed"></path><path d="{{m.them}}" fill="#fb7185"></path><path d="{{m.both}}" fill="#fbbf24"></path></svg>
+        <span style="font-weight: 900; font-size: 24px; letter-spacing: -0.015em; color: #18181b;">What's Up Next</span>
+      </div>
+      <div style="height: 150px; border-radius: 16px; background: #0b0b0f; border: 1px solid #2e2e3a; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
+        <svg width="70" height="70" viewBox="0 0 64 64" aria-hidden="true"><path d="{{m.you}}" fill="#7c3aed"></path><path d="{{m.them}}" fill="#fb7185"></path><path d="{{m.both}}" fill="#fbbf24"></path></svg>
+        <span style="font-weight: 900; font-size: 20px; letter-spacing: -0.015em;">What's Up Next</span>
+      </div>
+      <div style="height: 150px; border-radius: 16px; background: #ffffff; display: flex; align-items: center; justify-content: center; gap: 28px;">
+        <svg width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Single-colour mark"><path d="{{m.knock}}" fill="#18181b" fill-rule="evenodd"></path></svg>
+        <span style="font-size: 13px; line-height: 18px; color: #52525b; max-width: 120px;">Single colour: the overlap is cut away. For stamps, print and monochrome UI.</span>
+      </div>
+    </div>
+  </section>
+
+  <section style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px;">
+    <div style="background: #15151c; border: 1px solid #2e2e3a; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+      <h2 style="margin: 0; font-size: 20px; line-height: 28px;">Sizes</h2>
+      <div style="display: flex; align-items: flex-end; gap: 28px;">
+        <sc-for list="{{sizes}}" as="z" hint-placeholder-count="6">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+            <svg width="{{z.px}}" height="{{z.px}}" viewBox="0 0 64 64" aria-hidden="true"><path d="{{m.you}}" fill="#7c3aed"></path><path d="{{m.them}}" fill="#fb7185"></path><path d="{{m.both}}" fill="#fbbf24"></path></svg>
+            <span style="font-size: 12px; color: #a1a1aa;">{{z.label}}</span>
+          </div>
+        </sc-for>
+      </div>
+      <p style="margin: 0; font-size: 14px; line-height: 20px; color: #a1a1aa;">At 16 px the three colours still separate: violet, coral and an amber spark between them. No detail to lose.</p>
+    </div>
+
+    <div style="background: #15151c; border: 1px solid #2e2e3a; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+      <h2 style="margin: 0; font-size: 20px; line-height: 28px;">Don't</h2>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
+        <sc-for list="{{donts}}" as="x" hint-placeholder-count="4">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;">
+            <div style="{{x.box}}">
+              <svg width="56" height="56" viewBox="0 0 64 64" aria-hidden="true" style="{{x.svgStyle}}"><path d="{{m.you}}" fill="{{x.a}}"></path><path d="{{m.them}}" fill="{{x.b}}"></path><path d="{{m.both}}" fill="{{x.c}}"></path></svg>
+            </div>
+            <span style="font-size: 13px; line-height: 18px; color: #a1a1aa;">{{x.label}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 16px;">
+    <h2 style="margin: 0; font-size: 20px; line-height: 28px;">In use</h2>
+    <div style="display: grid; grid-template-columns: 1.3fr 1.7fr 1fr; gap: 16px; align-items: stretch;">
+      <div style="border-radius: 16px; background: #1f1f29; padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; gap: 8px;">
+          <div style="height: 36px; padding: 0 14px; border-radius: 10px 10px 0 0; background: #0b0b0f; display: flex; align-items: center; gap: 8px; font-size: 13px;">
+            <svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><path d="{{m.you}}" fill="#7c3aed"></path><path d="{{m.them}}" fill="#fb7185"></path><path d="{{m.both}}" fill="#fbbf24"></path></svg>
+            What's Up Next
+          </div>
+          <div style="height: 36px; padding: 0 14px; display: flex; align-items: center; font-size: 13px; color: #a1a1aa;">Other tab</div>
+        </div>
+        <div style="flex: 1; border-radius: 0 10px 10px 10px; background: #0b0b0f; min-height: 80px; display: flex; align-items: center; padding: 0 14px; font-size: 13px; color: #a1a1aa;">Browser tab: the favicon is the mark alone</div>
+      </div>
+      <div style="border-radius: 16px; background: #0b0b0f; border: 1px solid #2e2e3a; display: flex; flex-direction: column;">
+        <div style="height: 64px; padding: 0 20px; display: flex; align-items: center; gap: 24px; border-bottom: 1px solid #2e2e3a;">
+          <span style="display: flex; align-items: center; gap: 10px;">
+            <svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><path d="{{m.you}}" fill="#7c3aed"></path><path d="{{m.them}}" fill="#fb7185"></path><path d="{{m.both}}" fill="#fbbf24"></path></svg>
+            <span style="font-weight: 900; font-size: 18px; letter-spacing: -0.015em;">What's Up Next</span>
+          </span>
+          <span style="font-size: 14px; color: #c4b5fd; font-weight: 700; border-bottom: 2px solid #c4b5fd; padding: 20px 0 18px;">Discover</span>
+          <span style="font-size: 14px; color: #a1a1aa;">My Movies</span>
+          <span style="font-size: 14px; color: #a1a1aa;">Watch Together</span>
+        </div>
+        <div style="flex: 1; padding: 14px 20px; font-size: 13px; color: #a1a1aa; display: flex; align-items: center;">Navbar: mark + wordmark, no container</div>
+      </div>
+      <div style="border-radius: 16px; background: #1f1f29; padding: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;">
+        <div role="img" aria-label="iOS home-screen icon" style="width: 96px; height: 96px; border-radius: 22px; background: #0b0b0f; display: flex; align-items: center; justify-content: center;">
+          <svg width="74" height="74" viewBox="0 0 64 64" aria-hidden="true"><path d="{{m.you}}" fill="#7c3aed"></path><path d="{{m.them}}" fill="#fb7185"></path><path d="{{m.both}}" fill="#fbbf24"></path></svg>
+        </div>
+        <span style="font-size: 13px; line-height: 18px; color: #a1a1aa; text-align: center;">Home-screen icon: only because iOS requires a square. Flat dark ground, no gradient.</span>
+      </div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1560}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const R = 16, CY = 32;
+    const circle = (cx) => 'M' + (cx - R).toFixed(2) + ' ' + CY + 'a' + R + ' ' + R + ' 0 1 0 ' + (2 * R) + ' 0a' + R + ' ' + R + ' 0 1 0 ' + (-2 * R) + ' 0Z';
+    const geo = (d) => {
+      const h = Math.sqrt(R * R - (d / 2) * (d / 2));
+      const lens = 'M32 ' + (CY - h).toFixed(2) + 'A16 16 0 0 1 32 ' + (CY + h).toFixed(2) + 'A16 16 0 0 1 32 ' + (CY - h).toFixed(2) + 'Z';
+      return { you: circle(32 - d / 2), them: circle(32 + d / 2), both: lens, cxL: 32 - d / 2, cxR: 32 + d / 2 };
+    };
+    const D = 0.8 * R;
+    const g = geo(D);
+    const chip = (bg, border) => 'height: 64px; border-radius: 12px; background: ' + bg + ';' + (border ? ' border: 1px solid #2e2e3a;' : '');
+    const dbox = 'width: 80px; height: 80px; border-radius: 14px; background: #0b0b0f; border: 1px solid #2e2e3a; display: flex; align-items: center; justify-content: center; position: relative;';
+    const obox = (on) => 'width: 72px; height: 72px; border-radius: 12px; background: #0b0b0f; display: flex; align-items: center; justify-content: center; ' + (on ? 'border: 2px solid #c4b5fd;' : 'border: 1px solid #2e2e3a;');
+    const ov = (k, label, on) => Object.assign({ label, box: obox(on) }, geo(k * R));
+    return {
+      m: { you: g.you, them: g.them, both: g.both, knock: g.you + g.them, cxL: g.cxL, cxR: g.cxR,
+        dLine: 'M' + g.cxL + ' 32H' + g.cxR, rLine: 'M' + g.cxL + ' 32L' + g.cxL + ' 16' },
+      overlaps: [ov(1, '1.0r · before'), ov(0.8, '0.8r · chosen', true), ov(0.65, '0.65r · more')],
+      swatches: [
+        { name: 'You', hex: '#7C3AED', note: 'Violet; the app accent', chip: chip('#7c3aed') },
+        { name: 'Them', hex: '#FB7185', note: 'Coral; warm, lighter', chip: chip('#fb7185') },
+        { name: 'Spark', hex: '#FBBF24', note: 'Amber; what you both like', chip: chip('#fbbf24') }
+      ],
+      sizes: [128, 64, 48, 32, 24, 16].map((px) => ({ px, label: px + ' px' })),
+      donts: [
+        { label: 'No gradients', a: '#a855f7', b: '#3b82f6', c: '#fbbf24', box: dbox + ' background: linear-gradient(135deg,#a855f7,#3b82f6);', svgStyle: '' },
+        { label: 'No tile or box', a: '#7c3aed', b: '#fb7185', c: '#fbbf24', box: dbox + ' background: #7c3aed; border-radius: 22px;', svgStyle: '' },
+        { label: 'Don\'t rotate', a: '#7c3aed', b: '#fb7185', c: '#fbbf24', box: dbox, svgStyle: 'transform: rotate(-30deg);' },
+        { label: 'All three colours, or fully mono', a: '#7c3aed', b: '#7c3aed', c: '#fbbf24', box: dbox, svgStyle: '' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

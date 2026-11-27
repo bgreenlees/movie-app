@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Logo concepts, round 2</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&amp;family=Playfair+Display:ital,wght@0,700;1,700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0b0b0f}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1160px; box-sizing: border-box; padding: 44px 48px; background: #0b0b0f; color: #f4f4f6; font-family: Lato, system-ui, sans-serif; display: flex; flex-direction: column; gap: 24px;">
+  <div style="display: flex; align-items: baseline; gap: 16px;">
+    <h1 style="margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 36px; line-height: 44px;">Logo concepts, round 2</h1>
+    <p style="margin: 0; font-size: 15px; color: #a1a1aa;">Flat, standalone marks · two flat colours max · shown bare on dark and light, at favicon size, and as a navbar lockup</p>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; flex: 1;">
+    <sc-for list="{{concepts}}" as="c" hint-placeholder-count="6">
+      <article style="background: #15151c; border: 1px solid #2e2e3a; border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0;">
+        <div style="display: flex; align-items: baseline; gap: 10px;">
+          <span style="font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 0.06em; color: #a1a1aa;">{{c.num}}</span>
+          <h2 style="margin: 0; font-size: 19px; line-height: 26px;">{{c.name}}</h2>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;">
+          <div role="img" aria-label="{{c.name}} mark on dark" style="height: 120px; border-radius: 12px; background: #0b0b0f; border: 1px solid #2e2e3a; display: flex; align-items: center; justify-content: center;">
+            <svg width="92" height="92" viewBox="0 0 64 64" aria-hidden="true"><sc-for list="{{c.dark}}" as="p" hint-placeholder-count="2"><path d="{{p.d}}" fill="{{p.fill}}" stroke="{{p.stroke}}" stroke-width="{{p.sw}}" stroke-linecap="round" stroke-linejoin="round" fill-rule="evenodd"></path></sc-for></svg>
+          </div>
+          <div role="img" aria-label="{{c.name}} mark on light" style="height: 120px; border-radius: 12px; background: #ffffff; display: flex; align-items: center; justify-content: center;">
+            <svg width="92" height="92" viewBox="0 0 64 64" aria-hidden="true"><sc-for list="{{c.light}}" as="p" hint-placeholder-count="2"><path d="{{p.d}}" fill="{{p.fill}}" stroke="{{p.stroke}}" stroke-width="{{p.sw}}" stroke-linecap="round" stroke-linejoin="round" fill-rule="evenodd"></path></sc-for></svg>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="height: 36px; padding: 0 10px; border-radius: 8px; background: #0b0b0f; border: 1px solid #2e2e3a; display: flex; align-items: center; gap: 10px;">
+            <svg width="32" height="32" viewBox="0 0 64 64" aria-hidden="true"><sc-for list="{{c.dark}}" as="p" hint-placeholder-count="2"><path d="{{p.d}}" fill="{{p.fill}}" stroke="{{p.stroke}}" stroke-width="{{p.sw}}" stroke-linecap="round" stroke-linejoin="round" fill-rule="evenodd"></path></sc-for></svg>
+            <svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><sc-for list="{{c.dark}}" as="p" hint-placeholder-count="2"><path d="{{p.d}}" fill="{{p.fill}}" stroke="{{p.stroke}}" stroke-width="{{p.sw}}" stroke-linecap="round" stroke-linejoin="round" fill-rule="evenodd"></path></sc-for></svg>
+          </span>
+          <span style="height: 36px; padding: 0 10px; border-radius: 8px; background: #ffffff; display: flex; align-items: center; gap: 10px;">
+            <svg width="32" height="32" viewBox="0 0 64 64" aria-hidden="true"><sc-for list="{{c.light}}" as="p" hint-placeholder-count="2"><path d="{{p.d}}" fill="{{p.fill}}" stroke="{{p.stroke}}" stroke-width="{{p.sw}}" stroke-linecap="round" stroke-linejoin="round" fill-rule="evenodd"></path></sc-for></svg>
+            <svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><sc-for list="{{c.light}}" as="p" hint-placeholder-count="2"><path d="{{p.d}}" fill="{{p.fill}}" stroke="{{p.stroke}}" stroke-width="{{p.sw}}" stroke-linecap="round" stroke-linejoin="round" fill-rule="evenodd"></path></sc-for></svg>
+          </span>
+          <span style="font-size: 12px; color: #a1a1aa;">favicon 32 · 16</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="height: 48px; border-radius: 12px; background: #0b0b0f; border: 1px solid #2e2e3a; padding: 0 14px; display: flex; align-items: center; gap: 10px; overflow: hidden;">
+            <svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><sc-for list="{{c.dark}}" as="p" hint-placeholder-count="2"><path d="{{p.d}}" fill="{{p.fill}}" stroke="{{p.stroke}}" stroke-width="{{p.sw}}" stroke-linecap="round" stroke-linejoin="round" fill-rule="evenodd"></path></sc-for></svg>
+            <span style="{{c.wordDark}}">{{c.word}}</span>
+          </div>
+          <div style="height: 48px; border-radius: 12px; background: #ffffff; padding: 0 14px; display: flex; align-items: center; gap: 10px; overflow: hidden;">
+            <svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><sc-for list="{{c.light}}" as="p" hint-placeholder-count="2"><path d="{{p.d}}" fill="{{p.fill}}" stroke="{{p.stroke}}" stroke-width="{{p.sw}}" stroke-linecap="round" stroke-linejoin="round" fill-rule="evenodd"></path></sc-for></svg>
+            <span style="{{c.wordLight}}">{{c.word}}</span>
+          </div>
+        </div>
+
+        <p style="margin: 0; font-size: 14px; line-height: 20px; color: #a1a1aa;">{{c.why}}</p>
+      </article>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1160}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const rr = (x, y, w, h, r) => 'M' + (x + r) + ' ' + y + 'H' + (x + w - r) + 'A' + r + ' ' + r + ' 0 0 1 ' + (x + w) + ' ' + (y + r) + 'V' + (y + h - r) + 'A' + r + ' ' + r + ' 0 0 1 ' + (x + w - r) + ' ' + (y + h) + 'H' + (x + r) + 'A' + r + ' ' + r + ' 0 0 1 ' + x + ' ' + (y + h - r) + 'V' + (y + r) + 'A' + r + ' ' + r + ' 0 0 1 ' + (x + r) + ' ' + y + 'Z';
+    const P = '#7c3aed', BD = '#60a5fa', BL = '#2563eb', LAV = '#c4b5fd', INK = '#18181b', SNOW = '#f4f4f6';
+    const f = (d, fill) => ({ d, fill, stroke: 'none', sw: 0 });
+    const s = (d, stroke, sw) => ({ d, fill: 'none', stroke, sw });
+    const word = (font, weight, size, extra) => ({
+      dark: 'font-family: ' + font + '; font-weight: ' + weight + '; font-size: ' + size + 'px; color: #f4f4f6; white-space: nowrap; ' + (extra || ''),
+      light: 'font-family: ' + font + '; font-weight: ' + weight + '; font-size: ' + size + 'px; color: #18181b; white-space: nowrap; ' + (extra || '')
+    });
+    const C = (num, name, why, w, wordText, dark, light) => ({ num, name, why, word: wordText, wordDark: w.dark, wordLight: w.light, dark, light });
+    const lato = 'Lato, system-ui, sans-serif', serif = "'Playfair Display', Georgia, serif";
+
+    const circL = 'M8 32a16 16 0 1 0 32 0a16 16 0 1 0 -32 0Z';
+    const circR = 'M24 32a16 16 0 1 0 32 0a16 16 0 1 0 -32 0Z';
+    const lens = 'M32 18.14A16 16 0 0 1 32 45.86A16 16 0 0 1 32 18.14Z' + 'M29 27.5L36.5 32L29 36.5Z';
+
+    const qCurve = 'M21.5 22.5a10.5 10.5 0 1 1 15 9.5c-2.8 1.3-4.5 3.6-4.5 6.8v2.2';
+    const qDot = 'M27 47.5L38.5 53.25L27 59Z';
+
+    const cushL = rr(9, 13, 22, 21, 6), cushR = rr(33, 13, 22, 21, 6);
+    const couch = rr(5, 30, 54, 16, 6) + rr(9.5, 44, 5, 8, 1.5).replace('M', 'M') ;
+    const legs = rr(9.5, 44, 5, 8, 1.5) + rr(49.5, 44, 5, 8, 1.5);
+
+    const slate = rr(10, 31, 44, 25, 4);
+    const stick = 'M10 27L49 12.5L51.5 18.5L12.5 33Z';
+    const stripes = 'M19.75 23.4L26.4 20.9L28.9 26.9L22.25 29.4Z' + 'M33.4 18.3L40 15.8L42.5 21.8L35.9 24.3Z';
+
+    const tixL = 'M10 18H31L28 22L31 26L28 30L31 34L28 38L31 42L28 46H10A3 3 0 0 1 7 43V21A3 3 0 0 1 10 18Z';
+    const tixR = 'M37 14L34 18L37 22L34 26L37 30L34 34L37 38L34 42H54A3 3 0 0 0 57 39V17A3 3 0 0 0 54 14Z';
+
+    const curl = 'M15 50C15 31 25 21 42 21';
+    const head = 'M39 10.5L55 21L39 31.5Z';
+
+    return {
+      concepts: [
+        C('01', 'The Overlap', 'You and them as two circles; the mark is the overlap: what you would both enjoy. The whole point of the app in one shape, and it scales down cleanly.',
+          word(lato, 900, 19, 'letter-spacing: -0.01em;'), "What's Up Next",
+          [f(circL, P), f(circR, BD), f(lens, SNOW)],
+          [f(circL, P), f(circR, BL), f(lens, INK)]),
+        C('02', 'Question', '"What\'s up next?" as a question mark whose dot is a play triangle. Witty, readable as type, and it pairs naturally with a serif wordmark ending in "?".',
+          word(serif, 700, 20), "What's Up Next?",
+          [s(qCurve, LAV, 7), f(qDot, BD)],
+          [s(qCurve, P, 7), f(qDot, BL)]),
+        C('03', 'Couch for two', 'Two cushions, two colours, one sofa: settling in together. Warm and human rather than technical; instantly not another streaming logo.',
+          word(lato, 700, 19, 'letter-spacing: -0.01em; text-transform: lowercase;'), "whats up next",
+          [f(cushL, P), f(cushR, BD), f(rr(5, 30, 54, 16, 6) + legs, SNOW)],
+          [f(cushL, P), f(cushR, BL), f(rr(5, 30, 54, 16, 6) + legs, INK)]),
+        C('04', 'Clapper up', 'A clapperboard with its clapper raised: the moment before the film starts, and literally "up". Film-native without using a play button.',
+          word(lato, 900, 15, 'letter-spacing: 0.1em; text-transform: uppercase;'), "What's Up Next",
+          [f(slate, SNOW), f(stick, P), f(stripes, BD)],
+          [f(slate, INK), f(stick, P), f(stripes, BL)]),
+        C('05', 'Split ticket', 'One ticket torn in two to share: two people, one show. The offset halves read as a pair even at favicon size.',
+          word(lato, 700, 19), "What's Up Next",
+          [f(tixL, P), f(tixR, BD)],
+          [f(tixL, P), f(tixR, BL)]),
+        C('06', 'Up & forward', 'A single stroke that rises and turns forward: "up" and "next" in one gesture. Abstract and ownable; lets an italic serif wordmark carry the personality.',
+          word(serif, 700, 21, 'font-style: italic;'), "what's up next",
+          [s(curl, LAV, 7.5), f(head, LAV)],
+          [s(curl, P, 7.5), f(head, P)])
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

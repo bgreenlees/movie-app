@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Discover — desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&amp;family=Playfair+Display:wght@700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0b0b0f}
+a{color:#c4b5fd;text-decoration:none}a:hover{color:#ddd6fe}
+.row::-webkit-scrollbar{display:none}
+</style>
+</helmet>
+<div style="min-height: 1240px; background: #0b0b0f; color: #f4f4f6; font-family: Lato, system-ui, sans-serif; font-size: 16px; line-height: 24px;">
+
+  <header style="position: sticky; top: 0; z-index: 2; background: rgba(11,11,15,0.92); border-bottom: 1px solid #2e2e3a;">
+    <div style="max-width: 1376px; margin: 0 auto; padding: 0 32px; height: 64px; display: flex; align-items: center; gap: 32px;">
+      <a href="#" style="display: flex; align-items: center; gap: 10px; color: #f4f4f6;">
+        <span style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg,#a855f7,#3b82f6); display: flex; align-items: center; justify-content: center;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="7 4 20 12 7 20 7 4"></polygon></svg>
+        </span>
+        <span style="font-weight: 700; font-size: 18px;">What's Up Next</span>
+      </a>
+      <nav aria-label="Main" style="display: flex; gap: 24px; flex-wrap: wrap; font-size: 15px;">
+        <a href="#" aria-current="page" style="color: #c4b5fd; font-weight: 700; padding: 20px 0 18px; border-bottom: 2px solid #c4b5fd;">Discover</a>
+        <a href="#" style="color: #a1a1aa; padding: 20px 0;">New Releases</a>
+        <a href="#" style="color: #a1a1aa; padding: 20px 0;">What to Watch</a>
+        <a href="#" style="color: #a1a1aa; padding: 20px 0;">My Movies</a>
+        <a href="#" style="color: #a1a1aa; padding: 20px 0;">My TV</a>
+      </nav>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+        <button aria-label="Search" style="width: 40px; height: 40px; border-radius: 10px; border: 0; background: #15151c; color: #f4f4f6; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        </button>
+        <button aria-label="Account" style="width: 36px; height: 36px; border-radius: 999px; border: 0; background: #1f1f29; color: #c4b5fd; font-weight: 700; font-size: 14px; cursor: pointer;">B</button>
+      </div>
+    </div>
+  </header>
+
+  <main style="max-width: 1376px; margin: 0 auto; padding: 40px 32px 64px; display: flex; flex-direction: column; gap: 48px;">
+
+    <section aria-label="What to watch tonight" style="background: #15151c; border: 1px solid #2e2e3a; border-radius: 20px; padding: 24px 28px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap;">
+      <div style="flex: 1 1 280px;">
+        <p style="margin: 0; font-size: 12px; line-height: 16px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700; color: #a1a1aa;">Tonight</p>
+        <h1 style="margin: 4px 0 0; font-family: 'Playfair Display', Georgia, serif; font-size: 32px; line-height: 40px;">What are you in the mood for?</h1>
+      </div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <sc-for list="{{moods}}" as="m" hint-placeholder-count="5">
+          <button style="{{m.style}}">{{m.label}}</button>
+        </sc-for>
+      </div>
+      <a href="#" style="height: 44px; padding: 0 20px; border-radius: 10px; background: #7c3aed; color: #fff; font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px;">Show me 5 picks</a>
+    </section>
+
+    <sc-for list="{{shelves}}" as="shelf" hint-placeholder-count="3">
+      <section style="display: flex; flex-direction: column; gap: 16px;">
+        <div style="display: flex; align-items: baseline; gap: 16px;">
+          <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 700;">{{shelf.title}}</h2>
+          <span style="font-size: 13px; color: #a1a1aa;">{{shelf.sub}}</span>
+          <a href="#" style="margin-left: auto; font-size: 14px; font-weight: 700;">See all</a>
+        </div>
+        <div class="row" style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 16px;">
+          <sc-for list="{{shelf.items}}" as="item" hint-placeholder-count="7">
+            <article style="display: flex; flex-direction: column; gap: 10px; min-width: 0;">
+              <div style="{{item.posterStyle}}">
+                <sc-if value="{{item.hasStatus}}" hint-placeholder-val="{{false}}">
+                  <span style="position: absolute; top: 8px; left: 8px; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 8px; border-radius: 6px; background: rgba(11,11,15,0.85); color: #c4b5fd;">{{item.status}}</span>
+                </sc-if>
+                <span aria-hidden="true" style="position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.7), transparent 45%); border-radius: 12px;"></span>
+                <button aria-label="{{item.actionLabel}}" style="{{item.actionStyle}}">
+                  <sc-if value="{{item.added}}" hint-placeholder-val="{{false}}">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  </sc-if>
+                  <sc-if value="{{item.notAdded}}" hint-placeholder-val="{{true}}">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  </sc-if>
+                </button>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                <h3 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{item.title}}</h3>
+                <p style="margin: 0; font-size: 13px; line-height: 18px; color: #a1a1aa;">{{item.meta}}</p>
+                <sc-if value="{{item.hasProgress}}" hint-placeholder-val="{{false}}">
+                  <div role="img" aria-label="{{item.progressLabel}}" style="margin-top: 6px; height: 3px; border-radius: 999px; background: #2e2e3a; overflow: hidden;">
+                    <div style="{{item.progressStyle}}"></div>
+                  </div>
+                </sc-if>
+              </div>
+            </article>
+          </sc-for>
+        </div>
+      </section>
+    </sc-for>
+
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1240}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const poster = (a, b) => 'position: relative; aspect-ratio: 2 / 3; border-radius: 12px; background: linear-gradient(160deg,' + a + ',' + b + '); box-shadow: 0 1px 2px rgba(0,0,0,0.3);';
+    const mk = (title, meta, a, b, opts) => {
+      const o = opts || {};
+      const added = !!o.status;
+      return {
+        title, meta,
+        posterStyle: poster(a, b),
+        hasStatus: !!o.status, status: o.status || '',
+        added, notAdded: !added,
+        actionLabel: added ? 'On your list: ' + title : 'Add ' + title + ' to a list',
+        actionStyle: 'position: absolute; right: 8px; bottom: 8px; width: 36px; height: 36px; border-radius: 999px; border: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; ' + (added ? 'background: #f4f4f6; color: #0b0b0f;' : 'background: #7c3aed; color: #fff;'),
+        hasProgress: o.progress != null,
+        progressLabel: o.progress != null ? Math.round(o.progress * 100) + '% watched' : '',
+        progressStyle: 'height: 100%; width: ' + Math.round((o.progress || 0) * 100) + '%; background: #7c3aed; border-radius: 999px;'
+      };
+    };
+    const moodChip = (label, on) => ({
+      label,
+      style: 'height: 44px; padding: 0 16px; border-radius: 999px; font: 700 14px/1 Lato, system-ui, sans-serif; cursor: pointer; ' + (on ? 'background: #f4f4f6; color: #0b0b0f; border: 1px solid #f4f4f6;' : 'background: #1f1f29; color: #f4f4f6; border: 1px solid #2e2e3a;')
+    });
+    return {
+      moods: [moodChip('Light', true), moodChip('Heavy'), moodChip('Intense'), moodChip('~30 min', true), moodChip('On my services')],
+      shelves: [
+        { title: 'Continue watching', sub: 'TV in progress', items: [
+          mk('The Bear', 'S3 · E2', '#3b2f2f', '#1a1414', { status: 'Watching', progress: 0.3 }),
+          mk('Severance', 'S2 · E7', '#1e3a4a', '#0d1b24', { status: 'Watching', progress: 0.7 }),
+          mk('Slow Horses', 'S4 · E1', '#2f3b2a', '#141a12', { status: 'Watching', progress: 0.1 }),
+          mk('Shogun', 'S1 · E9', '#4a2a1e', '#1f110c', { status: 'Watching', progress: 0.9 }),
+          mk('Andor', 'S2 · E3', '#2a2a3d', '#121219', { status: 'Watching', progress: 0.25 }),
+          mk('Abbott Elementary', 'S4 · E10', '#3d3a24', '#1a1810', { status: 'Watching', progress: 0.45 }),
+          mk('Only Murders', 'S4 · E4', '#3a1f33', '#180d15', { status: 'Watching', progress: 0.4 })
+        ]},
+        { title: 'New on your services', sub: 'Netflix · Max · Disney+', items: [
+          mk('Dune: Part Two', '2024 · Movie', '#5a3d1e', '#22170b'),
+          mk('Poor Things', '2023 · Movie', '#2b3d4f', '#101820', { status: 'Want' }),
+          mk('The Holdovers', '2023 · Movie', '#3d2f24', '#18120d'),
+          mk('Past Lives', '2023 · Movie', '#24384a', '#0e161d'),
+          mk('Anatomy of a Fall', '2023 · Movie', '#3a3a3a', '#141414'),
+          mk('Shrinking', '2025 · TV', '#2a4a3a', '#0f1d16'),
+          mk('Hacks', '2025 · TV', '#4a2440', '#1d0e19', { status: 'Want' })
+        ]},
+        { title: 'Because you loved Severance', sub: 'Smart, slow-burn TV', items: [
+          mk('Mr. Robot', '2015 · TV', '#3a1e1e', '#170b0b'),
+          mk('Station Eleven', '2021 · TV', '#1e3340', '#0b141a'),
+          mk('Black Mirror', '2011 · TV', '#262633', '#0f0f14', { status: 'Seen ★' }),
+          mk('Dark', '2017 · TV', '#1f2a24', '#0b100d'),
+          mk('Fallout', '2024 · TV', '#4a3f1e', '#1c180b'),
+          mk('Silo', '2023 · TV', '#2e2e24', '#12120e'),
+          mk('Foundation', '2021 · TV', '#1e2440', '#0b0e19')
+        ]}
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

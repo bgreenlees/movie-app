@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>My TV with mark-watched sheet — mobile</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&amp;family=Playfair+Display:wght@700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0b0b0f}
+a{color:#c4b5fd;text-decoration:none}a:hover{color:#ddd6fe}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; position: relative; overflow: hidden; background: #0b0b0f; color: #f4f4f6; font-family: Lato, system-ui, sans-serif; font-size: 16px; line-height: 24px; display: flex; flex-direction: column;">
+
+  <header style="height: 56px; flex: none; padding: 0 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #2e2e3a;">
+    <span style="width: 26px; height: 26px; border-radius: 8px; background: linear-gradient(135deg,#a855f7,#3b82f6);"></span>
+    <span style="font-weight: 700; font-size: 17px;">What's Up Next</span>
+  </header>
+
+  <main style="flex: 1; overflow: hidden; padding: 20px 16px 0; display: flex; flex-direction: column; gap: 16px;">
+    <h1 style="margin: 0; font-size: 26px; line-height: 32px;">My TV</h1>
+    <div role="tablist" aria-label="TV lists" style="height: 44px; padding: 4px; box-sizing: border-box; border-radius: 12px; background: #1f1f29; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px;">
+      <button role="tab" aria-selected="true" style="border: 0; border-radius: 9px; background: #15151c; color: #f4f4f6; font: 700 14px/1 Lato, system-ui, sans-serif; box-shadow: 0 1px 2px rgba(0,0,0,0.3);">Watching · 6</button>
+      <button role="tab" aria-selected="false" style="border: 0; border-radius: 9px; background: transparent; color: #a1a1aa; font: 700 14px/1 Lato, system-ui, sans-serif;">Up next</button>
+      <button role="tab" aria-selected="false" style="border: 0; border-radius: 9px; background: transparent; color: #a1a1aa; font: 700 14px/1 Lato, system-ui, sans-serif;">Done</button>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+      <sc-for list="{{shows}}" as="s" hint-placeholder-count="6">
+        <article style="display: flex; flex-direction: column; gap: 6px; min-width: 0;">
+          <div style="{{s.posterStyle}}"></div>
+          <h2 style="margin: 0; font-size: 14px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{s.title}}</h2>
+          <p style="margin: 0; font-size: 12px; line-height: 16px; color: #a1a1aa;">{{s.meta}}</p>
+          <div role="img" aria-label="{{s.progressLabel}}" style="height: 3px; border-radius: 999px; background: #2e2e3a; overflow: hidden;"><div style="{{s.progressStyle}}"></div></div>
+        </article>
+      </sc-for>
+    </div>
+  </main>
+
+  <span aria-hidden="true" style="position: absolute; inset: 0; background: rgba(0,0,0,0.6);"></span>
+
+  <section role="dialog" aria-modal="true" aria-label="The Bear, season 3" style="position: absolute; left: 0; right: 0; bottom: 0; background: #15151c; border-radius: 20px 20px 0 0; border-top: 1px solid #2e2e3a; box-shadow: 0 -12px 32px rgba(0,0,0,0.45); padding: 10px 20px 28px; display: flex; flex-direction: column; gap: 18px;">
+    <span aria-hidden="true" style="align-self: center; width: 40px; height: 4px; border-radius: 999px; background: #3f3f4a;"></span>
+    <div style="display: flex; gap: 14px; align-items: center;">
+      <div role="img" aria-label="Poster placeholder" style="width: 56px; height: 84px; border-radius: 10px; background: linear-gradient(160deg,#3b2f2f,#1a1414); flex: none;"></div>
+      <div style="flex: 1; min-width: 0;">
+        <h2 style="margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 24px; line-height: 30px;">The Bear</h2>
+        <p style="margin: 0; font-size: 13px; line-height: 18px; color: #a1a1aa;">Season 3 · Watched 1 of 10 · On Disney+</p>
+      </div>
+      <button aria-label="Close" style="width: 44px; height: 44px; border-radius: 999px; border: 0; background: #1f1f29; color: #f4f4f6; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>
+      </button>
+    </div>
+
+    <button style="height: 52px; border-radius: 12px; border: 0; background: #7c3aed; color: #fff; font: 700 17px/1 Lato, system-ui, sans-serif; display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+      Mark E2 watched
+    </button>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <span style="font-size: 12px; line-height: 16px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700; color: #a1a1aa;">Season</span>
+        <div style="height: 44px; border-radius: 10px; background: #1f1f29; display: flex; align-items: center;">
+          <button aria-label="Previous season" style="width: 44px; height: 44px; border: 0; background: transparent; color: #f4f4f6; font-size: 20px; cursor: pointer;">−</button>
+          <span style="flex: 1; text-align: center; font-weight: 700;">3</span>
+          <button aria-label="Next season" style="width: 44px; height: 44px; border: 0; background: transparent; color: #f4f4f6; font-size: 20px; cursor: pointer;">+</button>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <span style="font-size: 12px; line-height: 16px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700; color: #a1a1aa;">Episode</span>
+        <div style="height: 44px; border-radius: 10px; background: #1f1f29; display: flex; align-items: center;">
+          <button aria-label="Previous episode" style="width: 44px; height: 44px; border: 0; background: transparent; color: #f4f4f6; font-size: 20px; cursor: pointer;">−</button>
+          <span style="flex: 1; text-align: center; font-weight: 700;">2</span>
+          <button aria-label="Next episode" style="width: 44px; height: 44px; border: 0; background: transparent; color: #f4f4f6; font-size: 20px; cursor: pointer;">+</button>
+        </div>
+      </div>
+    </div>
+
+    <button style="height: 44px; border: 0; background: transparent; color: #f87171; font: 700 15px/1 Lato, system-ui, sans-serif; cursor: pointer;">Remove from list</button>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const s = (title, meta, a, pct) => ({
+      title, meta,
+      posterStyle: 'aspect-ratio: 2 / 3; border-radius: 12px; background: linear-gradient(160deg,' + a + ',#0f0f14);',
+      progressLabel: pct + '% watched',
+      progressStyle: 'height: 100%; width: ' + pct + '%; background: #7c3aed;'
+    });
+    return {
+      shows: [
+        s('The Bear', 'S3 · E1', '#3b2f2f', 10),
+        s('Severance', 'S2 · E7', '#1e3a4a', 70),
+        s('Slow Horses', 'S4 · E1', '#2f3b2a', 15),
+        s('Shogun', 'S1 · E9', '#4a2a1e', 90),
+        s('Andor', 'S2 · E3', '#2a2a3d', 25),
+        s('Hacks', 'S4 · E5', '#4a2440', 50)
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
