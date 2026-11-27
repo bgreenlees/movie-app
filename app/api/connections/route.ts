@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+
+/** Most PENDING outgoing requests one user may have at once. */
+export const MAX_PENDING_OUTGOING = 20;
+
+/**
+ * The single response for every "request accepted for processing" outcome:
+ * unknown email, new request, already pending, already friends, or declined.
+ * Identical status and body, so the endpoint can't be used to find out
+ * whether an email has an account (or whether someone declined you).
+ */
+const neutralOk = () => NextResponse.json({ ok: true });
+
+/**
+ * Called when no account has this email. Deliberately does nothing yet:
+ * email invites (#135) hook in here. Whatever it does, the caller still
+ * returns the neutral response.
+ */
+async function handleNoAccount(_email: string, _requesterId: string): Promise<void> {}
 
 // GET — fetch accepted connections + pending incoming requests
 export async function GET() {
@@ -41,14 +60,44 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = session.user.id as string;
 
-  const { email } = await req.json();
-  if (!email) return NextResponse.json({ error: "Email required" }, { status: 400 });
+  const body = await req.json().catch(() => null);
+  const raw = body && typeof body === "object" ? (body as { email?: unknown }).email : undefined;
+  const email = typeof raw === "string" ? raw.trim() : "";
+  if (!email || email.length > 320) {
+    return NextResponse.json({ error: "Email required" }, { status: 400 });
+  }
 
-  const target = await prisma.user.findUnique({ where: { email } });
-  if (!target) return NextResponse.json({ error: "No user found with that email" }, { status: 404 });
-  if (target.id === userId) return NextResponse.json({ error: "You can't connect with yourself" }, { status: 400 });
+  // Your own address isn't secret to you, so this can be a clear error.
+  const ownEmail = session.user.email?.trim().toLowerCase();
+  if (ownEmail && email.toLowerCase() === ownEmail) {
+    return NextResponse.json({ error: "You can't connect with yourself" }, { status: 400 });
+  }
 
-  // Check for existing connection either direction
+  // Checked before the lookup, so it applies the same way to every email.
+  const pendingOutgoing = await prisma.userConnection.count({
+    where: { requesterId: userId, status: "PENDING" },
+  });
+  if (pendingOutgoing >= MAX_PENDING_OUTGOING) {
+    return NextResponse.json(
+      {
+        error: `You have ${MAX_PENDING_OUTGOING} requests waiting for an answer. Try again once some have been accepted.`,
+      },
+      { status: 429 },
+    );
+  }
+
+  const target = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  if (!target) {
+    await handleNoAccount(email, userId);
+    return neutralOk();
+  }
+  if (target.id === userId) {
+    return NextResponse.json({ error: "You can't connect with yourself" }, { status: 400 });
+  }
+
+  // Any existing row, in either direction and in any status (PENDING,
+  // ACCEPTED, DECLINED), means no new request. A DECLINED row is never
+  // reset here, so the person who declined isn't asked again.
   const existing = await prisma.userConnection.findFirst({
     where: {
       OR: [
@@ -56,12 +105,28 @@ export async function POST(req: NextRequest) {
         { requesterId: target.id, addresseeId: userId },
       ],
     },
+    select: { id: true, status: true, addresseeId: true },
   });
-  if (existing) return NextResponse.json({ error: "Connection already exists" }, { status: 409 });
+  if (existing) {
+    // The one exception: the person who declined now asks the other way
+    // round. That's their choice to make, so lift the decline and send it.
+    if (existing.status === "DECLINED" && existing.addresseeId === userId) {
+      await prisma.$transaction([
+        prisma.userConnection.delete({ where: { id: existing.id } }),
+        prisma.userConnection.create({ data: { requesterId: userId, addresseeId: target.id } }),
+      ]);
+    }
+    return neutralOk();
+  }
 
-  const connection = await prisma.userConnection.create({
-    data: { requesterId: userId, addresseeId: target.id },
-  });
+  try {
+    await prisma.userConnection.create({
+      data: { requesterId: userId, addresseeId: target.id },
+    });
+  } catch (err) {
+    // A concurrent identical request won the race: same outcome.
+    if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002")) throw err;
+  }
 
-  return NextResponse.json({ connection });
+  return neutralOk();
 }
