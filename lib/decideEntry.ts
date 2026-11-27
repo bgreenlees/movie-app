@@ -53,3 +53,14 @@ export function bannerCopy(session: ActiveSession, partnerName: string | null | 
 }
 
 export const decideHref = (sessionId: string) => `/decide/${encodeURIComponent(sessionId)}`;
+
+/**
+ * Where Tab/Shift+Tab should move focus inside a dialog with `count` focusable items.
+ * `current` is the focused item's index, or -1 if focus is outside the list (e.g. on the panel).
+ * Wraps at both ends; returns -1 when there is nothing to focus.
+ */
+export function nextTabIndex(count: number, current: number, backwards: boolean): number {
+  if (count <= 0) return -1;
+  if (current < 0) return backwards ? count - 1 : 0;
+  return (current + (backwards ? count - 1 : 1)) % count;
+}

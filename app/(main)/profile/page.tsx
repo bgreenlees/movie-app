@@ -7,7 +7,7 @@ import { signOut } from "next-auth/react";
 import toast from "react-hot-toast";
 import type { TMDBWatchProvider } from "@/lib/tmdb";
 import { SkeletonBlock } from "@/components/ui/Skeleton";
-import { JoinBanner } from "@/components/decide/DecideEntry";
+import { DecideEntry } from "@/components/decide/DecideEntry";
 import { CONSENT_LINE } from "@/lib/decideEntry";
 import EmptyState from "@/components/ui/EmptyState";
 import ErrorState from "@/components/ui/ErrorState";
@@ -415,7 +415,7 @@ export default function ProfilePage() {
                     </button>
                   </div>
                   </div>
-                  <JoinBanner partnerId={friend.id} partnerName={friend.name} compact />
+                  <DecideEntry partnerId={friend.id} partnerName={friend.name ?? ""} compact />
                 </div>
               ))}
             </div>

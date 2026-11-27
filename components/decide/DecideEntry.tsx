@@ -5,88 +5,109 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import MoodControls from "@/components/mood/MoodControls";
 import { DEFAULT_SELECTION, type MoodSelection } from "@/lib/moodPicker";
-import { partnerLabel } from "@/lib/decideView";
+import { loginHrefFor, partnerLabel } from "@/lib/decideView";
 import {
   BANNER_POLL_MS,
   bannerCopy,
   decideHref,
+  nextTabIndex,
   parseActiveSession,
   startDecideRequest,
   startErrorMessage,
   type ActiveSession,
 } from "@/lib/decideEntry";
 
+type ActiveState = { status: "loading" } | { status: "ready"; session: ActiveSession | null } | { status: "signedOut" };
+
 /**
  * The open vote with this friend, if any (`GET /api/decide?partnerId=`). Polled
  * while the tab is visible; a failed poll keeps the last answer (no banner flicker).
+ * A 401 (session expired) stops the polling and clears the answer.
  */
-function useActiveSession(partnerId: string): ActiveSession | null {
-  const [state, setState] = useState<{ partnerId: string; session: ActiveSession | null } | null>(null);
+function useActiveSession(partnerId: string): ActiveState {
+  const [state, setState] = useState<{ partnerId: string; value: ActiveState } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
-    const check = async () => {
+    const timer = setInterval(check, BANNER_POLL_MS);
+    const stop = () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", check);
+    };
+    const set = (value: ActiveState) => setState({ partnerId, value });
+    async function check() {
       if (document.visibilityState === "hidden") return;
       try {
         const res = await fetch(`/api/decide?partnerId=${encodeURIComponent(partnerId)}`, { signal: controller.signal });
         if (cancelled) return;
+        if (res.status === 401) {
+          stop();
+          return set({ status: "signedOut" });
+        }
         // 404 = not connected (any more): nothing to join
-        if (res.status === 404) return setState({ partnerId, session: null });
+        if (res.status === 404) return set({ status: "ready", session: null });
         if (!res.ok) return;
-        setState({ partnerId, session: parseActiveSession(await res.json()) });
+        set({ status: "ready", session: parseActiveSession(await res.json()) });
       } catch {
         // keep the last answer
       }
-    };
+    }
     check();
-    const timer = setInterval(check, BANNER_POLL_MS);
     document.addEventListener("visibilitychange", check);
     return () => {
       cancelled = true;
       controller.abort();
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", check);
+      stop();
     };
   }, [partnerId]);
 
-  return state?.partnerId === partnerId ? state.session : null;
+  return state?.partnerId === partnerId ? state.value : { status: "loading" };
 }
 
-/** "Sam started a vote — Join" (or "Resume" for the starter). Renders nothing when there's no open vote. */
-export function JoinBanner({
+/**
+ * The page's entry to a Watch Together vote. If a vote is open it shows "Sam started a vote — Join"
+ * (or "Resume" for the starter) and no start button, because starting would replace the friend's
+ * vote. Otherwise it shows "Decide together". Shows nothing until the check and the friend's name
+ * have loaded (`partnerName === null` means "name not loaded yet"; pass "" for a friend with no name).
+ */
+export function DecideEntry({
   partnerId,
   partnerName,
   compact = false,
 }: {
   partnerId: string;
   partnerName: string | null | undefined;
-  /** Smaller, for a row in the Friends list */
+  /** Smaller, for a row in the Friends list: banner only, no start button */
   compact?: boolean;
 }) {
-  const session = useActiveSession(partnerId);
-  if (!session) return null;
-  const { text, action } = bannerCopy(session, partnerName);
-  return (
-    <div
-      role="status"
-      className={`flex items-center justify-between gap-3 rounded-lg border ${compact ? "px-3 py-2 mt-2 text-xs" : "px-4 py-3 mb-6 text-sm"}`}
-      style={{ borderColor: "var(--accent)", backgroundColor: "var(--card-bg)", color: "var(--foreground)" }}
-    >
-      <span>{text}</span>
-      <Link
-        href={decideHref(session.id)}
-        className="shrink-0 inline-flex items-center justify-center min-h-11 sm:min-h-9 px-4 rounded-md text-white font-medium hover:opacity-90"
-        style={{ backgroundColor: "var(--accent)" }}
+  const active = useActiveSession(partnerId);
+  if (active.status === "loading" || partnerName === null) return null;
+  if (active.status === "ready" && active.session) {
+    const { text, action } = bannerCopy(active.session, partnerName);
+    return (
+      <div
+        role="status"
+        className={`flex items-center justify-between gap-3 rounded-lg border ${compact ? "px-3 py-2 mt-2 text-xs" : "px-4 py-3 text-sm basis-full"}`}
+        style={{ borderColor: "var(--accent)", backgroundColor: "var(--card-bg)", color: "var(--foreground)" }}
       >
-        {action}
-      </Link>
-    </div>
-  );
+        <span>{text}</span>
+        <Link
+          href={decideHref(active.session.id)}
+          className="shrink-0 inline-flex items-center justify-center min-h-11 sm:min-h-9 px-4 rounded-md text-white font-medium hover:opacity-90"
+          style={{ backgroundColor: "var(--accent)" }}
+        >
+          {action}
+        </Link>
+      </div>
+    );
+  }
+  if (compact) return null;
+  return <DecideTogetherButton partnerId={partnerId} partnerName={partnerName} />;
 }
 
 /** The page's one primary button. Opens a bottom sheet with the mood controls; Start creates the vote and opens it. */
-export function DecideTogetherButton({ partnerId, partnerName }: { partnerId: string; partnerName: string | null }) {
+function DecideTogetherButton({ partnerId, partnerName }: { partnerId: string; partnerName: string | undefined }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   return (
@@ -113,7 +134,7 @@ export function DecideTogetherButton({ partnerId, partnerName }: { partnerId: st
   );
 }
 
-function StartSheet({ partnerId, partnerName, onClose }: { partnerId: string; partnerName: string | null; onClose: () => void }) {
+function StartSheet({ partnerId, partnerName, onClose }: { partnerId: string; partnerName: string | undefined; onClose: () => void }) {
   const router = useRouter();
   const [mood, setMood] = useState<MoodSelection>(DEFAULT_SELECTION);
   const [starting, setStarting] = useState(false);
@@ -121,19 +142,37 @@ function StartSheet({ partnerId, partnerName, onClose }: { partnerId: string; pa
   const panelRef = useRef<HTMLDivElement>(null);
   const name = partnerLabel(partnerName);
 
+  // onClose and `starting` change on every render; read them through refs so the effect runs once
+  const onCloseRef = useRef(onClose);
+  const startingRef = useRef(starting);
   useEffect(() => {
+    onCloseRef.current = onClose;
+    startingRef.current = starting;
+  });
+
+  useEffect(() => {
+    const panel = panelRef.current;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !starting) onClose();
+      if (e.key === "Escape" && !startingRef.current) return onCloseRef.current();
+      if (e.key !== "Tab" || !panel) return;
+      // Keep Tab inside the dialog (aria-modal doesn't do this by itself)
+      const items = Array.from(
+        panel.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])'),
+      ).filter((el) => !(el as HTMLButtonElement).disabled);
+      const current = items.indexOf(document.activeElement as HTMLElement);
+      e.preventDefault();
+      const next = nextTabIndex(items.length, current, e.shiftKey);
+      (next === -1 ? panel : items[next]).focus();
     };
     document.addEventListener("keydown", onKey);
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    panelRef.current?.focus();
+    panel?.focus();
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = previous;
     };
-  }, [onClose, starting]);
+  }, []);
 
   const start = async () => {
     setStarting(true);
@@ -144,6 +183,11 @@ function StartSheet({ partnerId, partnerName, onClose }: { partnerId: string; pa
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(startDecideRequest(partnerId, mood)),
       });
+      if (res.status === 401) {
+        // Session expired: sign in again and come back to this page
+        router.push(loginHrefFor(window.location.pathname + window.location.search));
+        return;
+      }
       if (!res.ok) {
         setError(startErrorMessage(res.status));
         setStarting(false);

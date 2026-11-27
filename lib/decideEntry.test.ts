@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SELECTION } from "./moodPicker";
-import { bannerCopy, decideHref, parseActiveSession, startDecideRequest, startErrorMessage } from "./decideEntry";
+import { bannerCopy, decideHref, nextTabIndex, parseActiveSession, startDecideRequest, startErrorMessage } from "./decideEntry";
 
 describe("startDecideRequest", () => {
   it("sends the partner and exactly four moods", () => {
@@ -36,4 +36,20 @@ describe("bannerCopy", () => {
 
 describe("decideHref", () => {
   it("links to the vote screen", () => expect(decideHref("abc")).toBe("/decide/abc"));
+});
+
+describe("nextTabIndex", () => {
+  it("wraps forwards and backwards", () => {
+    expect(nextTabIndex(3, 2, false)).toBe(0);
+    expect(nextTabIndex(3, 0, true)).toBe(2);
+    expect(nextTabIndex(3, 0, false)).toBe(1);
+    expect(nextTabIndex(3, 2, true)).toBe(1);
+  });
+  it("enters the list when focus is outside it", () => {
+    expect(nextTabIndex(3, -1, false)).toBe(0);
+    expect(nextTabIndex(3, -1, true)).toBe(2);
+  });
+  it("returns -1 when nothing is focusable", () => {
+    expect(nextTabIndex(0, -1, false)).toBe(-1);
+  });
 });

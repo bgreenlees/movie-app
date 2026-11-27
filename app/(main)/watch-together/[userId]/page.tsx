@@ -5,7 +5,7 @@ import AddMovieModal from "@/components/movies/AddMovieModal";
 import TrailerModal from "@/components/movies/TrailerModal";
 import AddTVModal from "@/components/tv/AddTVModal";
 import PairCard, { PAIR_GRID, type PairCardTitle } from "@/components/watch-together/PairCard";
-import { DecideTogetherButton, JoinBanner } from "@/components/decide/DecideEntry";
+import { DecideEntry } from "@/components/decide/DecideEntry";
 import TonightForYouBoth from "@/components/watch-together/TonightForYouBoth";
 import Skeleton from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
@@ -187,9 +187,8 @@ function WatchTogether({ userId }: { userId: string }) {
         <p className="text-base" style={{ color: "var(--text-muted)" }}>
           with <span style={{ color: "var(--foreground)" }}>{friendName ?? "…"}</span>
         </p>
-        <DecideTogetherButton partnerId={userId} partnerName={friendName} />
+        <DecideEntry partnerId={userId} partnerName={friendName} />
       </div>
-      <JoinBanner partnerId={userId} partnerName={friendName} />
 
       <TonightForYouBoth
         partnerId={userId}
