@@ -21,7 +21,12 @@ import ErrorState from "@/components/ui/ErrorState";
 import { SkeletonBlock } from "@/components/ui/Skeleton";
 import MainNotFound from "@/app/(main)/not-found";
 import VoteCard from "./VoteCard";
-import { EndedScreen, NoMatchScreen, RevealScreen, WaitScreen } from "./DecideScreens";
+import {
+  EndedScreen,
+  NoMatchScreen,
+  RevealScreen,
+  WaitScreen,
+} from "./DecideScreens";
 
 type Load =
   | { kind: "loading" }
@@ -43,7 +48,11 @@ async function readError(res: Response): Promise<string | null> {
 
 function CardSkeleton() {
   return (
-    <div role="status" aria-busy="true" className="mx-auto flex w-full max-w-sm flex-col items-center gap-4">
+    <div
+      role="status"
+      aria-busy="true"
+      className="mx-auto flex w-full max-w-sm flex-col items-center gap-4"
+    >
       <span className="sr-only">Loading the vote…</span>
       <SkeletonBlock className="aspect-[2/3] w-full max-w-[20rem]" />
       <SkeletonBlock className="h-6 w-2/3 !rounded-chip" />
@@ -81,51 +90,70 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
   const api = `/api/decide/${encodeURIComponent(sessionId)}`;
 
   const inFlight = useRef(false);
+  const pending = useRef(false);
   const abort = useRef<AbortController | null>(null);
 
   const goToLogin = useCallback(() => {
-    window.location.assign(loginHrefFor(`/decide/${encodeURIComponent(sessionId)}`));
+    window.location.assign(
+      loginHrefFor(`/decide/${encodeURIComponent(sessionId)}`),
+    );
   }, [sessionId]);
 
   const refresh = useCallback(async () => {
-    if (inFlight.current) return; // never overlap polls
+    if (inFlight.current) {
+      // Never overlap polls, but don't drop this request: run once more after
+      pending.current = true;
+      return;
+    }
     inFlight.current = true;
-    const controller = new AbortController();
-    abort.current = controller;
     try {
-      const res = await fetch(api, { cache: "no-store", signal: controller.signal });
-      if (res.status === 401) {
-        goToLogin();
-        return;
-      }
-      if (res.status === 404) {
-        setLoad({ kind: "not-found" });
-        return;
-      }
-      if (!res.ok) throw new Error(String(res.status));
-      const data = (await res.json()) as DecideSessionView;
-      setFailures(0);
-      if (roundSeen.current !== data.round) {
-        // First load or a new round: start at the first card I haven't voted on
-        roundSeen.current = data.round;
-        setLocalVotes({});
-        setActionError(null);
-        setIndex(firstUnvotedIndex(data.candidates, data.myVotes));
-      }
-      setLoad({ kind: "ready", data });
-    } catch {
-      if (controller.signal.aborted) return; // unmounted
-      // Polling errors are silent (§5.3); after a few, "Reconnecting…" shows.
-      setFailures((n) => n + 1);
-      setLoad((prev) => (prev.kind === "loading" ? { kind: "error" } : prev));
+      do {
+        pending.current = false;
+        const controller = new AbortController();
+        abort.current = controller;
+        await fetchOnce(controller);
+        if (controller.signal.aborted) break; // unmounted
+      } while (pending.current);
     } finally {
       inFlight.current = false;
+    }
+
+    async function fetchOnce(controller: AbortController) {
+      try {
+        const res = await fetch(api, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (res.status === 401) {
+          goToLogin();
+          return;
+        }
+        if (res.status === 404) {
+          setLoad({ kind: "not-found" });
+          return;
+        }
+        if (!res.ok) throw new Error(String(res.status));
+        const data = (await res.json()) as DecideSessionView;
+        setFailures(0);
+        if (roundSeen.current !== data.round) {
+          // First load or a new round: start at the first card I haven't voted on
+          roundSeen.current = data.round;
+          setLocalVotes({});
+          setActionError(null);
+          setIndex(firstUnvotedIndex(data.candidates, data.myVotes));
+        }
+        setLoad({ kind: "ready", data });
+      } catch {
+        if (controller.signal.aborted) return; // unmounted
+        // Polling errors are silent (§5.3); after a few, "Reconnecting…" shows.
+        setFailures((n) => n + 1);
+        setLoad((prev) => (prev.kind === "loading" ? { kind: "error" } : prev));
+      }
     }
   }, [api, goToLogin]);
 
   useEffect(() => {
     // Initial load; the poll below keeps it fresh.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
     return () => abort.current?.abort();
   }, [refresh]);
@@ -170,7 +198,8 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
     }, ms);
-    const onVisible = () => document.visibilityState === "visible" && void refresh();
+    const onVisible = () =>
+      document.visibilityState === "visible" && void refresh();
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       clearInterval(timer);
@@ -186,7 +215,7 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
       setSaving(true);
       try {
         for (let attempt = 1; attempt <= VOTE_ATTEMPTS; attempt++) {
-          let res: Response;
+          let res: Response | null;
           try {
             res = await fetch(`${api}/votes`, {
               method: "PUT",
@@ -194,10 +223,12 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
               body: JSON.stringify({ candidateId: current.id, vote }),
             });
           } catch {
-            res = new Response(null, { status: 0 });
+            res = null; // network failure: no response, but retryable
           }
-          if (res.ok) {
-            const body = (await res.json().catch(() => ({}))) as { status?: string };
+          if (res?.ok) {
+            const body = (await res.json().catch(() => ({}))) as {
+              status?: string;
+            };
             const next = { ...myVotes, [current.id]: vote };
             setLocalVotes((v) => ({ ...v, [current.id]: vote }));
             setIndex(nextUnvotedIndex(candidates, next, index));
@@ -205,21 +236,21 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
             if (body.status && body.status !== "OPEN") void refresh(); // the round just resolved
             return;
           }
-          if (res.status === 401) {
+          if (res && res.status === 401) {
             goToLogin();
             return;
           }
-          if (res.status === 404) {
+          if (res && res.status === 404) {
             setLoad({ kind: "not-found" });
             return;
           }
-          if (res.status === 409 || res.status === 400) {
+          if (res && (res.status === 409 || res.status === 400)) {
             // The vote ended or the round moved on: show what's there now
             setToast((await readError(res)) ?? "Couldn't save that vote");
             void refresh();
             return;
           }
-          if (!isRetryableStatus(res.status)) {
+          if (res && !isRetryableStatus(res.status)) {
             // Any other 4xx will fail the same way again
             setToast((await readError(res)) ?? "Couldn't save that vote");
             return;
@@ -229,7 +260,9 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
             await sleep(1000 * attempt);
           }
         }
-        setToast("Couldn't save your vote. Check your connection and try again.");
+        setToast(
+          "Couldn't save your vote. Check your connection and try again.",
+        );
       } finally {
         setSaving(false);
       }
@@ -243,7 +276,12 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
     function onKey(e: KeyboardEvent) {
       if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.repeat) return;
       const target = e.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, [contenteditable], [role=dialog]")) return;
+      if (
+        target?.closest(
+          "input, textarea, select, [contenteditable], [role=dialog]",
+        )
+      )
+        return;
       const vote = voteForKey(e.key);
       if (vote === null) return;
       e.preventDefault();
@@ -257,11 +295,19 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
     setBusy(kind);
     setActionError(null);
     try {
-      const res = await fetch(`${api}/${kind === "next" ? "next-round" : "pick"}`, { method: "POST" });
+      const res = await fetch(
+        `${api}/${kind === "next" ? "next-round" : "pick"}`,
+        { method: "POST" },
+      );
       if (res.status === 401) return goToLogin();
       if (res.status === 404) return setLoad({ kind: "not-found" });
       // 409 often means the partner got there first; the refresh then shows their choice
-      if (!res.ok) setActionError(res.status === 409 ? ((await readError(res)) ?? "Couldn't do that.") : "Couldn't do that. Try again.");
+      if (!res.ok)
+        setActionError(
+          res.status === 409
+            ? ((await readError(res)) ?? "Couldn't do that.")
+            : "Couldn't do that. Try again.",
+        );
       await refresh();
     } catch {
       setActionError("Couldn't do that. Check your connection and try again.");
@@ -286,7 +332,9 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
   if (load.kind === "not-found") return <MainNotFound />;
 
   const partner = partnerLabel(data?.partner.name);
-  const partnerHref = data ? `/watch-together/${encodeURIComponent(data.partner.id)}` : "/profile";
+  const partnerHref = data
+    ? `/watch-together/${encodeURIComponent(data.partner.id)}`
+    : "/profile";
   const reconnecting = failures >= RECONNECT_AFTER_FAILURES;
   const active = screen === "vote" || screen === "wait";
 
@@ -295,7 +343,10 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
       {data && (
         <header className="mb-4 sm:mb-6">
           <div className="flex items-center justify-between gap-3">
-            <Link href={partnerHref} className="flex min-h-11 items-center text-meta text-muted hover:text-text">
+            <Link
+              href={partnerHref}
+              className="flex min-h-11 items-center text-meta text-muted hover:text-text"
+            >
               ← Back
             </Link>
             {active && (
@@ -310,7 +361,8 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
           </div>
           <p className="text-center text-meta text-muted">
             Deciding with {partner}
-            {data.maxRound > 1 && (screen === "vote" || screen === "wait" || screen === "no-match")
+            {data.maxRound > 1 &&
+            (screen === "vote" || screen === "wait" || screen === "no-match")
               ? ` · Round ${data.round} of ${data.maxRound}`
               : ""}
           </p>
@@ -360,7 +412,11 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
         />
       )}
       {data && screen === "reveal" && data.result && (
-        <RevealScreen result={data.result} partner={partner} doneHref={partnerHref} />
+        <RevealScreen
+          result={data.result}
+          partner={partner}
+          doneHref={partnerHref}
+        />
       )}
       {data && screen === "no-match" && (
         <NoMatchScreen
