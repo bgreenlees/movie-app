@@ -8,6 +8,8 @@ import { canonicalProviderId } from "@/lib/providers";
 import AddMovieModal from "./AddMovieModal";
 import ShareButton from "@/components/ui/ShareButton";
 import TrailerButton from "@/components/ui/TrailerButton";
+import { SkeletonBlock } from "@/components/ui/Skeleton";
+import ErrorState from "@/components/ui/ErrorState";
 
 interface CastMember {
   id: number;
@@ -49,6 +51,12 @@ interface MovieDetailModalProps {
 }
 
 const EMPTY_PROVIDERS: { flatrate: TMDBWatchProvider[]; rent: TMDBWatchProvider[] } = { flatrate: [], rent: [] };
+/** Parses a JSON response, throwing on a non-2xx status so callers can show an error. */
+function okJson(r: Response) {
+  if (!r.ok) throw new Error(`Request failed: ${r.status}`);
+  return r.json();
+}
+
 const EMPTY_RECS: TMDBMovie[] = [];
 
 export default function MovieDetailModal({
@@ -70,6 +78,7 @@ export default function MovieDetailModal({
   const [detailData, setDetailData] = useState<{
     id: number;
     details: MovieDetails | null;
+    failed: boolean;
     providers: { flatrate: TMDBWatchProvider[]; rent: TMDBWatchProvider[] };
   } | null>(null);
   const [userServices, setUserServices] = useState<Set<number>>(new Set());
@@ -78,6 +87,8 @@ export default function MovieDetailModal({
   const currentDetail = detailData && detailData.id === currentId ? detailData : null;
   const details = currentDetail?.details ?? null;
   const providers = currentDetail?.providers ?? EMPTY_PROVIDERS;
+  const detailsFailed = currentDetail?.failed ?? false;
+  const [retryCount, setRetryCount] = useState(0);
   const isLoading = currentId !== null && currentDetail === null;
   const currentRecs = recsData && recsData.id === currentId ? recsData : null;
   const recs = currentRecs?.recs ?? EMPTY_RECS;
@@ -127,21 +138,22 @@ export default function MovieDetailModal({
     let cancelled = false;
 
     Promise.all([
-      fetch(`/api/movies/${currentId}/credits`).then((r) => r.json()),
-      fetch(`/api/movies/${currentId}/providers`).then((r) => r.json()),
-      fetch("/api/user/streaming").then((r) => r.json()),
+      fetch(`/api/movies/${currentId}/credits`).then(okJson),
+      fetch(`/api/movies/${currentId}/providers`).then(okJson),
+      fetch("/api/user/streaming").then(okJson),
     ])
       .then(([creditsData, providerData, userData]) => {
         if (cancelled) return;
         setDetailData({
           id,
           details: creditsData,
+          failed: false,
           providers: { flatrate: providerData.flatrate || [], rent: providerData.rent || [] },
         });
         setUserServices(new Set(userData.streamingServices || []));
       })
       .catch(() => {
-        if (!cancelled) setDetailData({ id, details: null, providers: EMPTY_PROVIDERS });
+        if (!cancelled) setDetailData({ id, details: null, failed: true, providers: EMPTY_PROVIDERS });
       });
 
     fetch(`/api/movies/${currentId}/recommendations`)
@@ -156,7 +168,7 @@ export default function MovieDetailModal({
     return () => {
       cancelled = true;
     };
-  }, [currentId]);
+  }, [currentId, retryCount]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -251,12 +263,28 @@ export default function MovieDetailModal({
         {/* Body */}
         <div className="p-5">
           {isLoading && (
-            <div className="flex items-center justify-center py-16">
-              <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading...</p>
+            <div role="status" aria-busy="true" className="flex gap-4 py-4">
+              <span className="sr-only">Loading details…</span>
+              <SkeletonBlock className="aspect-[2/3] w-28 shrink-0" />
+              <div className="flex flex-1 flex-col gap-3">
+                <SkeletonBlock className="h-6 w-2/3" />
+                <SkeletonBlock className="h-4 w-1/3" />
+                <SkeletonBlock className="h-20 w-full" />
+              </div>
             </div>
           )}
 
-          {!isLoading && (
+          {!isLoading && detailsFailed && (
+            <ErrorState
+              title="Couldn't load details"
+              onRetry={() => {
+                setDetailData(null);
+                setRetryCount((n) => n + 1);
+              }}
+            />
+          )}
+
+          {!isLoading && !detailsFailed && (
             <>
               {/* Actions */}
               <div className="flex items-center gap-2 mb-4">

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { NewsArticle } from "@/app/api/news/route";
+import EmptyState from "@/components/ui/EmptyState";
+import ErrorState from "@/components/ui/ErrorState";
 
 function relativeTime(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -104,6 +106,7 @@ export default function NewsPage() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     fetch("/api/news")
@@ -111,10 +114,13 @@ export default function NewsPage() {
         if (!r.ok) throw new Error();
         return r.json();
       })
-      .then((data) => setArticles(data.articles ?? []))
+      .then((data) => {
+        setArticles(data.articles ?? []);
+        setError(false);
+      })
       .catch(() => setError(true))
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [attempt]);
 
   return (
     <div className="max-w-7xl mx-auto p-6">
@@ -125,11 +131,21 @@ export default function NewsPage() {
         Latest from Decider, Variety, Cord Cutters News, What&apos;s on Netflix, and more
       </p>
 
-      {error && (
-        <p style={{ color: "var(--text-muted)" }}>Failed to load news. Try refreshing.</p>
+      {error && !isLoading && (
+        <ErrorState
+          title="Couldn't load the news"
+          onRetry={() => {
+            setIsLoading(true);
+            setAttempt((n) => n + 1);
+          }}
+        />
       )}
 
-      <div className="grid gap-5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+      {!error && !isLoading && articles.length === 0 && (
+        <EmptyState icon="📰" title="No news right now" body="Check back in a little while." />
+      )}
+
+      <div hidden={error || (!isLoading && articles.length === 0)} className="grid gap-5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
         {isLoading
           ? Array.from({ length: 12 }).map((_, i) => <SkeletonCard key={i} />)
           : articles.map((article) => (
