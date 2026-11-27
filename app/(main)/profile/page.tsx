@@ -141,7 +141,7 @@ export default function ProfilePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to send request");
       // Deliberately the same message whether or not the email has an account.
-      toast.success("If they're on What's Up Next, they'll see your request");
+      toast.success("Request sent. If they're not on What's Up Next yet, we've emailed them an invite.");
       setFriendEmail("");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to send request");

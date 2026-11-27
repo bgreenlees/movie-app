@@ -23,8 +23,27 @@ model User {
   receivedConnections UserConnection[] @relation("ConnectionAddressees")
   decideSessionsStarted DecideSession[]
   decideVotes           DecideVote[]
+  connectionInvites     ConnectionInvite[]
 
   @@map("users")
+}
+
+/// An email invite to someone who has no account yet. `email` is stored trimmed
+/// and lowercased. On that person's first sign-in it becomes a PENDING
+/// UserConnection from the inviter, and `acceptedAt` is set.
+model ConnectionInvite {
+  id         String    @id @default(cuid())
+  inviterId  String    @map("inviter_id")
+  email      String
+  createdAt  DateTime  @default(now()) @map("created_at")
+  sentAt     DateTime? @map("sent_at")
+  acceptedAt DateTime? @map("accepted_at")
+
+  inviter User @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@unique([inviterId, email])
+  @@index([email])
+  @@map("connection_invites")
 }
 
 model UserConnection {

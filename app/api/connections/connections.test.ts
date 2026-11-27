@@ -14,6 +14,11 @@ type Where = {
 
 const m = vi.hoisted(() => ({
   auth: vi.fn(),
+  recordInvite: vi.fn<(...args: unknown[]) => Promise<{ previousSentAt: Date | null } | null>>(async () => ({ previousSentAt: null })),
+  deliverInvite: vi.fn<(...args: unknown[]) => Promise<void>>(async () => {}),
+  allow: vi.fn((key: string) => key !== ""),
+  limiterOpts: undefined as unknown,
+  openInvites: 0,
   users: [] as { id: string; email: string; name: string }[],
   rows: [] as Row[],
   nextId: 1,
@@ -29,7 +34,22 @@ function matches(row: Row, where: Where): boolean {
 }
 
 vi.mock("@/lib/auth", () => ({ auth: m.auth }));
+vi.mock("@/lib/rateLimit", () => ({
+  createRateLimiter: (opts: unknown) => {
+    m.limiterOpts = opts;
+    return (key: string) => m.allow(key);
+  },
+}));
+// Invite creation has its own tests (lib/invites.test.ts); here we only check the route calls it.
+vi.mock("@/lib/invites", () => ({ recordInvite: m.recordInvite, deliverInvite: m.deliverInvite }));
+// after() only works inside a real request, so run its callback straight away, un-awaited,
+// the way Vercel runs it once the response has gone out.
+vi.mock("next/server", async (orig) => ({
+  ...(await orig<typeof import("next/server")>()),
+  after: (fn: () => unknown) => void fn(),
+}));
 vi.mock("@/lib/db", () => {
+  const connectionInvite = { count: vi.fn(async () => m.openInvites) };
   const userConnection = {
     count: vi.fn(async ({ where }: { where: Where }) => {
       const n = m.rows.filter((r) => matches(r, where)).length;
@@ -71,6 +91,7 @@ vi.mock("@/lib/db", () => {
         m.users.filter((u) => u.email.toLowerCase() === value).slice(0, 1),
       ),
       userConnection,
+      connectionInvite,
       // Interactive transactions only. $executeRaw stands in for the advisory
       // lock: the first call per tx takes a mutex that is released when the
       // transaction ends, so parallel sends by one user run one at a time.
@@ -78,6 +99,7 @@ vi.mock("@/lib/db", () => {
         let release: (() => void) | undefined;
         const tx = {
           userConnection,
+          connectionInvite,
           $executeRaw: async () => {
             const prev = m.lock;
             let done!: () => void;
@@ -127,6 +149,72 @@ beforeEach(() => {
   m.lock = Promise.resolve();
   m.countDelay = false;
   as(ME);
+  m.allow.mockReset().mockReturnValue(true);
+  m.recordInvite.mockClear();
+  m.openInvites = 0;
+  m.deliverInvite.mockClear();
+});
+
+describe("POST /api/connections: invites (#135)", () => {
+  it("counts unaccepted invites toward the pending cap, so known and unknown emails both get the same 429", async () => {
+    for (let i = 0; i < MAX_PENDING_OUTGOING - 1; i++) {
+      m.rows.push({ id: `p${i}`, requesterId: ME.id, addresseeId: `x${i}`, status: "PENDING" });
+    }
+    m.openInvites = 1;
+    const unknown = await send("nobody@example.test");
+    const known = await send(PAL.email);
+    expect(unknown.status).toBe(429);
+    expect(known.status).toBe(429);
+    expect(await known.json()).toEqual(await unknown.json());
+    expect(m.recordInvite).not.toHaveBeenCalled();
+  });
+  it("answers the neutral 200 even if recording the invite fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    m.recordInvite.mockRejectedValueOnce(new Error("db down"));
+    const res = await send("nobody@example.test");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(m.deliverInvite).not.toHaveBeenCalled();
+  });
+  it("invites an unknown email, normalised, with the neutral response", async () => {
+    const res = await send("  New.Person@Example.TEST ");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(m.recordInvite).toHaveBeenCalledWith("new.person@example.test", "me", expect.any(Date));
+    expect(m.deliverInvite).toHaveBeenCalledWith("new.person@example.test", "me", "", { previousSentAt: null });
+  });
+  it("answers without waiting for the email to be sent (no timing oracle)", async () => {
+    m.deliverInvite.mockReturnValueOnce(new Promise(() => {})); // never resolves
+    const res = await send("new.person@example.test");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(m.deliverInvite).toHaveBeenCalledOnce();
+  });
+  it("sends nothing when the invite was already emailed recently", async () => {
+    m.recordInvite.mockResolvedValueOnce(null);
+    expect((await send("new.person@example.test")).status).toBe(200);
+    expect(m.deliverInvite).not.toHaveBeenCalled();
+  });
+  it("doesn't invite an email that has an account", async () => {
+    await send(PAL.email);
+    expect(m.recordInvite).not.toHaveBeenCalled();
+  });
+  it("rejects malformed or over-long emails with 400 and no invite", async () => {
+    for (const bad of ["not-an-email", "a@b", "a".repeat(250) + "@b.de"]) {
+      expect((await send(bad)).status).toBe(400);
+    }
+    expect(m.recordInvite).not.toHaveBeenCalled();
+  });
+  it("limits to 10 a day, and answers 429 the same for known and unknown emails", async () => {
+    expect(m.limiterOpts).toEqual({ limit: 10, windowMs: 24 * 60 * 60 * 1000 });
+    m.allow.mockReturnValue(false);
+    const unknown = await send("nobody@example.test");
+    const known = await send(PAL.email);
+    expect(unknown.status).toBe(429);
+    expect(known.status).toBe(429);
+    expect(await known.json()).toEqual(await unknown.json());
+    expect(m.recordInvite).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /api/connections: no email oracle (F7)", () => {

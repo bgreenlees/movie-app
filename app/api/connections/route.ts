@@ -1,7 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { createRateLimiter } from "@/lib/rateLimit";
+import { deliverInvite, recordInvite } from "@/lib/invites";
+import { isValidEmail, MAX_EMAIL_LENGTH, normalizeEmail } from "../../../lib/emailAddress";
 
 /** Most PENDING outgoing requests one user may have at once. */
 export const MAX_PENDING_OUTGOING = 20;
@@ -14,15 +17,8 @@ export const MAX_PENDING_OUTGOING = 20;
  */
 const neutralOk = () => NextResponse.json({ ok: true });
 
-/**
- * Called when no account has this email. Deliberately does nothing yet:
- * email invites (#135) hook in here. Whatever it does, the caller still
- * returns the neutral response.
- */
-async function handleNoAccount(email: string, requesterId: string): Promise<void> {
-  void email;
-  void requesterId;
-}
+/** 10 invites per user per day. Per server instance; see lib/rateLimit.ts. */
+const allowInvite = createRateLimiter({ limit: 10, windowMs: 24 * 60 * 60 * 1000 });
 
 // GET — fetch accepted connections + pending incoming requests
 export async function GET() {
@@ -66,8 +62,10 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const raw = body && typeof body === "object" ? (body as { email?: unknown }).email : undefined;
   const email = typeof raw === "string" ? raw.trim() : "";
-  if (!email || email.length > 320) {
-    return NextResponse.json({ error: "Email required" }, { status: 400 });
+  if (!email) return NextResponse.json({ error: "Email required" }, { status: 400 });
+  // Depends only on the text typed, never on whether an account exists.
+  if (email.length > MAX_EMAIL_LENGTH || !isValidEmail(email)) {
+    return NextResponse.json({ error: "Enter a valid email address" }, { status: 400 });
   }
 
   // Your own address isn't secret to you, so this can be a clear error.
@@ -83,13 +81,29 @@ export async function POST(req: NextRequest) {
       },
       { status: 429 },
     );
-  const countPending = (db: Pick<typeof prisma, "userConnection">) =>
-    db.userConnection.count({ where: { requesterId: userId, status: "PENDING" } });
+  // Unanswered invites count toward the same cap. Otherwise a 429 would appear only for
+  // unknown emails (which add invites, not requests) and reveal whether an account exists.
+  const countPending = async (db: Pick<typeof prisma, "userConnection" | "connectionInvite">) => {
+    const [requests, invites] = await Promise.all([
+      db.userConnection.count({ where: { requesterId: userId, status: "PENDING" } }),
+      db.connectionInvite.count({ where: { inviterId: userId, acceptedAt: null } }),
+    ]);
+    return requests + invites;
+  };
 
   // Checked before the lookup, so it applies the same way to every email.
   // This early check is a cheap fast path; the authoritative one is re-run
   // under a lock below, because count-then-create alone isn't atomic.
   if ((await countPending(prisma)) >= MAX_PENDING_OUTGOING) return capped();
+
+  // Daily limit on every valid send, known email or not, so a 429 never hints at whether
+  // an account exists.
+  if (!allowInvite(userId)) {
+    return NextResponse.json(
+      { error: "You've sent a lot of requests today. Please try again tomorrow." },
+      { status: 429, headers: { "Retry-After": "86400" } },
+    );
+  }
 
   // Case-insensitive exact match. Not Prisma's `mode: "insensitive"`: on
   // Postgres that is ILIKE, so "%" or "_" in the input act as wildcards and
@@ -98,7 +112,17 @@ export async function POST(req: NextRequest) {
   const [target] = await prisma.$queryRaw<{ id: string }[]>`
     SELECT "id" FROM "users" WHERE LOWER("email") = ${email.toLowerCase()} LIMIT 1`;
   if (!target) {
-    await handleNoAccount(email, userId);
+    // DB work only inside the request; the email goes out after the response, so
+    // response time can't reveal whether an account exists.
+    const invitee = normalizeEmail(email);
+    const inviterName = session.user.name ?? "";
+    try {
+      const claim = await recordInvite(invitee, userId, new Date());
+      if (claim) after(() => deliverInvite(invitee, userId, inviterName, claim));
+    } catch (err) {
+      // A failure here must look like success, or a 500 would mark "no account".
+      console.error("Recording invite failed", err instanceof Error ? err.message : err);
+    }
     return neutralOk();
   }
   if (target.id === userId) {

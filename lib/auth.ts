@@ -4,6 +4,7 @@ import Google from "next-auth/providers/google";
 import { prisma } from "./db";
 import { authConfig } from "./auth.config";
 import { devLoginProviders } from "./devLogin";
+import { convertInvites } from "./invites";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
@@ -31,6 +32,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           });
         }
         token.id = dbUser.id;
+        // Both Google and dev-login pass through here. Never throws.
+        await convertInvites(dbUser.id, user.email);
       }
       return token;
     },
