@@ -10,10 +10,10 @@
 #   --note   extra instructions appended to the brief
 #   --dry-run  print the brief and the launch plan, launch nothing
 #   --in NAME  resume in an EXISTING worktree (e.g. after an interruption) instead of creating one
-#   --force    launch even if MAX_AGENTS are already working (default cap: 4) or usage.sh gate refuses
+#   --force    launch even if MAX_AGENTS (default 4) or MAX_OPUS (default 1) are already working, or usage.sh gate refuses
 #
 # Cost controls (see docs/factory.md "Cost controls"): at most MAX_AGENTS (env, default 4)
-# agents run at once; the default model comes from the role file (Sonnet except planner/researcher);
+# agents run at once, and at most MAX_OPUS (env, default 1) of them on Opus; the default model comes from the role file (Sonnet except planner/researcher);
 # pass --model opus only for security-sensitive or design-heavy work.
 #
 # Why a script: every launch gets the same brief, port, safety rules and naming,
@@ -53,16 +53,29 @@ fi
 
 # --- Cost control: cap concurrent agents ---------------------------------
 MAX_AGENTS=${MAX_AGENTS:-4}
-WORKING=$("$ORCA" agent list --json 2>/dev/null | python3 -c '
+MAX_OPUS=${MAX_OPUS:-1}
+# Orca doesn't report an agent's model, so each launch records it in a marker file
+# next to its brief ($BRIEF_DIR/<name>.model), and we count working agents marked opus.
+BRIEF_DIR="${TMPDIR:-/tmp}/factory-briefs"; mkdir -p "$BRIEF_DIR"
+WORKING_NAMES=$("$ORCA" agent list --json 2>/dev/null | python3 -c '
 import json, sys
 try: agents = json.load(sys.stdin)["result"]["agents"]
-except Exception: print(0); sys.exit()
+except Exception: sys.exit()
 def name(a):
     w = a.get("workspace"); p = w.get("path", "") if isinstance(w, dict) else str(w)
     return p.rstrip("/").split("/")[-1]
-print(sum(1 for a in agents if a.get("state") == "working" and name(a) not in ("movie-app", "main")))')
+for a in agents:
+    if a.get("state") == "working" and name(a) not in ("movie-app", "main"): print(name(a))') || true
+WORKING=$(printf '%s' "$WORKING_NAMES" | grep -c . || true)
+OPUS_WORKING=0
+while IFS= read -r n; do
+  [ -n "$n" ] && [ "$(cat "$BRIEF_DIR/$n.model" 2>/dev/null)" = opus ] && OPUS_WORKING=$((OPUS_WORKING + 1))
+done <<< "$WORKING_NAMES"
 if [ "$DRY" -eq 0 ] && [ "$FORCE" -eq 0 ] && [ "${WORKING:-0}" -ge "$MAX_AGENTS" ]; then
   die "$WORKING agents already working (cap MAX_AGENTS=$MAX_AGENTS). Wait for one to finish, or pass --force."
+fi
+if [ "$DRY" -eq 0 ] && [ "$FORCE" -eq 0 ] && [ "$MODEL" = opus ] && [ "$OPUS_WORKING" -ge "$MAX_OPUS" ]; then
+  die "$OPUS_WORKING Opus agent(s) already working (cap MAX_OPUS=$MAX_OPUS). Use Sonnet, wait, or pass --force."
 fi
 
 # Deterministic per-issue port, away from the default 3000; reviewers/verifiers get +1.
@@ -74,7 +87,6 @@ TITLE=$(gh issue view "$ISSUE" --json title -q .title) || die "can't read issue 
 OPEN_PRS=$(gh pr list --state open --json number,title -q '.[]|"- #\(.number) \(.title)"' | head -15)
 
 # Briefs never live in the repo (a stray brief once landed in the working tree).
-BRIEF_DIR="${TMPDIR:-/tmp}/factory-briefs"; mkdir -p "$BRIEF_DIR"
 BRIEF="$BRIEF_DIR/$NAME.md"
 
 {
@@ -107,8 +119,9 @@ BRIEF="$BRIEF_DIR/$NAME.md"
   if [ -n "$NOTE" ]; then echo; echo "## Coordinator notes"; echo "$NOTE"; fi
 } > "$BRIEF"
 
-echo "dispatch: $NAME  model=$MODEL  port=$PORT  agents-working=${WORKING:-0}/$MAX_AGENTS  brief=$BRIEF"
+echo "dispatch: $NAME  model=$MODEL  port=$PORT  agents-working=${WORKING:-0}/$MAX_AGENTS  opus-working=$OPUS_WORKING/$MAX_OPUS  brief=$BRIEF"
 if [ $DRY -eq 1 ]; then echo "----- brief -----"; cat "$BRIEF"; exit 0; fi
+echo "$MODEL" > "$BRIEF_DIR/$NAME.model"
 
 if [ -n "$IN" ]; then
   WT=$(git worktree list --porcelain | awk '/^worktree /{print $2}' | grep -E "/$IN\$" | head -1)
