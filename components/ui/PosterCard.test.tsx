@@ -47,7 +47,7 @@ describe("PosterCard", () => {
     const add = renderToStaticMarkup(<PosterCard id={1} mediaType="movie" title="X" posterPath={null} onAdd={noop} onTrailer={noop} />);
     const added = renderToStaticMarkup(<PosterCard id={1} mediaType="movie" title="X" posterPath={null} onAdd={noop} onTrailer={noop} onList />);
     expect(add).not.toContain("bg-accent");
-    expect(added.match(/bg-accent/g)).toHaveLength(1);
+    expect(added.match(/bg-accent text-white/g)).toHaveLength(1);
     expect(added).toContain("polyline");
     expect(add).toContain("line");
   });
