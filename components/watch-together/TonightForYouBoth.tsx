@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import MoodControls from "@/components/mood/MoodControls";
 import { DEFAULT_SELECTION, type MoodSelection } from "@/lib/moodPicker";
 import type { PairCandidate } from "@/lib/pairPool";
 import {
@@ -46,13 +45,30 @@ function Notice({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** What the page needs to know to lay out its controls around the picks. */
+export interface TonightMeta {
+  /** Shuffle has something to draw from */
+  canShuffle: boolean;
+  /** Both people have saved services, so "Only services we both have" makes sense */
+  bothHaveServices: boolean;
+}
+
 /**
- * "Tonight for you both" (spec §5.3, §7): mood controls, 12 picks drawn from
- * the pair pool with a weighted shuffle, a reason under each, and Shuffle.
+ * "Tonight for you both" (spec §5.3, §7): 12 picks drawn from the pair pool
+ * with a weighted shuffle, and a reason under each. The page owns the mood
+ * controls, the media filter and the Shuffle button (What to Watch's header),
+ * so this renders the picks area only: pass `selection`, and bump `shuffleKey`
+ * to shuffle.
  */
 export default function TonightForYouBoth({
   partnerId,
   partnerName,
+  selection,
+  sharedOnly,
+  onSelectionChange,
+  onSharedOnlyChange,
+  shuffleKey,
+  onMeta,
   onPartnerName,
   onNotFound,
   hasEntry,
@@ -63,6 +79,17 @@ export default function TonightForYouBoth({
   partnerId: string;
   /** The partner's name once known, else null (the page may not have it yet) */
   partnerName: string | null;
+  /** The page's mood selection (vibe, time, fresh, services, media) */
+  selection: MoodSelection;
+  /** "Only services we both have" */
+  sharedOnly: boolean;
+  /** The empty state's "Clear moods" / "Turn services off" buttons ask the page to change these */
+  onSelectionChange: (next: MoodSelection) => void;
+  onSharedOnlyChange: (sharedOnly: boolean) => void;
+  /** Change this number to shuffle (the page's Shuffle button) */
+  shuffleKey: number;
+  /** Reports what the page's controls need; called when it changes */
+  onMeta?: (meta: TonightMeta) => void;
   /** Called with the partner's name when the picks response arrives */
   onPartnerName?: (name: string | null) => void;
   /** Called when the picks route says the partner isn't a connection (404) */
@@ -74,8 +101,6 @@ export default function TonightForYouBoth({
   onAdd: (t: PairCardTitle) => void;
   onTrailer: (t: PairCardTitle) => void;
 }) {
-  const [selection, setSelection] = useState<MoodSelection>(DEFAULT_SELECTION);
-  const [sharedOnly, setSharedOnly] = useState(false);
   const query = pairPicksQuery(selection, sharedOnly);
 
   // The query the current data was loaded for; loading = data is for an older query
@@ -151,9 +176,10 @@ export default function TonightForYouBoth({
     setFailed(null);
     setAttempt((n) => n + 1);
   };
+  // Clearing the moods keeps the media filter: it isn't a mood
   const clearMoods = () => {
-    setSharedOnly(false);
-    setSelection(DEFAULT_SELECTION);
+    onSharedOnlyChange(false);
+    onSelectionChange({ ...DEFAULT_SELECTION, media: selection.media });
   };
 
   // Shown until each person has 10 signals, with their own count (numbers only from the API)
@@ -163,39 +189,24 @@ export default function TonightForYouBoth({
   const noServices = data && !data.services.mine && !data.services.partners;
   const empty = emptyKind(selection);
 
+  // The page's Shuffle button bumps shuffleKey; the first value is the initial render, not a shuffle
+  const lastShuffleKey = useRef(shuffleKey);
+  useEffect(() => {
+    if (lastShuffleKey.current === shuffleKey) return;
+    lastShuffleKey.current = shuffleKey;
+    shuffle();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new shuffleKey should shuffle
+  }, [shuffleKey]);
+
+  const canShuffle = !isLoading && !hasError && pool.length > 0;
+  useEffect(() => {
+    onMeta?.({ canShuffle, bothHaveServices });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- report only when the values change
+  }, [canShuffle, bothHaveServices]);
+
   return (
-    <section aria-labelledby="tonight-heading" className="mb-12">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
-        <h2 id="tonight-heading" className="text-2xl font-bold" style={{ color: "var(--primary)" }}>
-          Tonight for you both
-        </h2>
-        <button
-          onClick={shuffle}
-          disabled={isLoading || hasError || pool.length === 0}
-          className="flex items-center gap-1.5 min-h-11 sm:min-h-9 px-4 py-1.5 text-white text-sm rounded-md cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ backgroundColor: "var(--accent)" }}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          Shuffle
-        </button>
-      </div>
-      <p className="text-sm mb-5" style={{ color: "var(--text-muted)" }}>
-        Movies and shows you&apos;re both likely to enjoy, nothing either of you has seen.
-      </p>
-
-      <MoodControls
-        hideMedia
-        value={selection}
-        onChange={setSelection}
-        servicesLabel="On our services"
-        showBothHave={bothHaveServices && selection.onMyServices}
-        bothHave={sharedOnly}
-        onBothHaveChange={setSharedOnly}
-      />
-
-      <div className="mt-4">
+    <section aria-label="Picks for you both">
+      <div className="mb-4">
         {partnerNudge && (
           <Notice>
             {partnerName ?? "Your friend"} has rated {partnerNudge.count} of {partnerNudge.target}, so picks lean on
@@ -249,8 +260,8 @@ export default function TonightForYouBoth({
               {empty === "services" && (
                 <button
                   onClick={() => {
-                    setSharedOnly(false);
-                    setSelection((s) => ({ ...s, onMyServices: false }));
+                    onSharedOnlyChange(false);
+                    onSelectionChange({ ...selection, onMyServices: false });
                   }}
                   className={`${buttonClass} text-white`}
                   style={{ backgroundColor: "var(--accent)" }}

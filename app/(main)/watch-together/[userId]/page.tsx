@@ -1,15 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, use } from "react";
+import { useCallback, useEffect, useState, use } from "react";
 import AddMovieModal from "@/components/movies/AddMovieModal";
 import TrailerModal from "@/components/movies/TrailerModal";
 import AddTVModal from "@/components/tv/AddTVModal";
 import PairCard, { PAIR_GRID, type PairCardTitle } from "@/components/watch-together/PairCard";
 import { DecideEntry } from "@/components/decide/DecideEntry";
-import TonightForYouBoth from "@/components/watch-together/TonightForYouBoth";
+import Link from "next/link";
 import Skeleton from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import ErrorState from "@/components/ui/ErrorState";
+import { loadMyEntries, type MyEntry } from "@/lib/myEntries";
 import type { ShelfItem } from "@/lib/watchTogetherShelves";
 
 interface WatchTogetherData {
@@ -19,43 +20,7 @@ interface WatchTogetherData {
   iLovedForFriend: ShelfItem[];
 }
 
-/** One of my watchlist rows, movie or TV, as the Add modals take it. */
-interface MyEntry {
-  id: string;
-  status: string;
-  platform?: string | null;
-  watchType?: string | null;
-  rating?: number | null;
-  review?: string | null;
-  currentSeason?: number | null;
-  currentEpisode?: number | null;
-}
-
 const keyOf = (t: { mediaType: "movie" | "tv"; id: number }) => `${t.mediaType}-${t.id}`;
-
-/** My movie and TV entries, keyed `movie-123` / `tv-456`. */
-async function loadMyEntries(): Promise<Record<string, MyEntry> | null> {
-  try {
-    const [want, watched, notInterested, tv] = await Promise.all([
-      fetch("/api/watchlist?status=WANT_TO_WATCH"),
-      fetch("/api/watchlist?status=WATCHED"),
-      fetch("/api/watchlist?status=NOT_INTERESTED"),
-      fetch("/api/tv/watchlist"),
-    ]);
-    if (![want, watched, notInterested, tv].every((r) => r.ok)) return null;
-    const [w, wd, ni, t] = await Promise.all([want.json(), watched.json(), notInterested.json(), tv.json()]);
-    const entries: Record<string, MyEntry> = {};
-    for (const e of [...(w.entries ?? []), ...(wd.entries ?? []), ...(ni.entries ?? [])] as (MyEntry & { movieId: number })[]) {
-      entries[`movie-${e.movieId}`] = e;
-    }
-    for (const e of (t.entries ?? []) as (MyEntry & { tvShowId: number })[]) {
-      entries[`tv-${e.tvShowId}`] = e;
-    }
-    return entries;
-  } catch {
-    return null;
-  }
-}
 
 function Shelf({
   title,
@@ -106,9 +71,6 @@ export default function WatchTogetherPage({ params }: { params: Promise<{ userId
 function WatchTogether({ userId }: { userId: string }) {
   const [data, setData] = useState<WatchTogetherData | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "notFound" | "error">("loading");
-  // The picks route reports a missing connection and the partner's name too; either response can arrive first
-  const [picksNotFound, setPicksNotFound] = useState(false);
-  const [picksName, setPicksName] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [entries, setEntries] = useState<Record<string, MyEntry>>({});
   const [adding, setAdding] = useState<PairCardTitle | null>(null);
@@ -146,18 +108,7 @@ function WatchTogether({ userId }: { userId: string }) {
 
   const hasEntry = useCallback((t: { id: number; mediaType: "movie" | "tv" }) => !!entries[keyOf(t)], [entries]);
 
-  // Titles I've since watched or ruled out drop out of "Tonight". A show I'm watching stays: it can be a pick.
-  const hidden = useMemo(
-    () =>
-      new Set(
-        Object.entries(entries)
-          .filter(([, e]) => e.status !== "WANT_TO_WATCH" && e.status !== "WATCHING")
-          .map(([k]) => k)
-      ),
-    [entries]
-  );
-
-  if (status === "notFound" || picksNotFound) {
+  if (status === "notFound") {
     return (
       <div className="max-w-xl mx-auto px-4 py-20">
         <EmptyState
@@ -171,9 +122,8 @@ function WatchTogether({ userId }: { userId: string }) {
   }
 
   // Never an email (spec §7): the API doesn't return one
-  // The name comes from whichever response arrives first; null until one does
-  const shelfName = data ? data.friend.name?.trim() || "your friend" : null;
-  const friendName = shelfName ?? picksName;
+  // null until the shelves load
+  const friendName = data ? data.friend.name?.trim() || "your friend" : null;
   const nameForCopy = friendName ?? "your friend";
   const shelvesEmpty =
     !!data &&
@@ -192,17 +142,15 @@ function WatchTogether({ userId }: { userId: string }) {
         </p>
         <DecideEntry partnerId={userId} partnerName={friendName} />
       </div>
-
-      <TonightForYouBoth
-        partnerId={userId}
-        partnerName={friendName}
-        onPartnerName={(n) => setPicksName(n ?? "your friend")}
-        onNotFound={() => setPicksNotFound(true)}
-        hasEntry={hasEntry}
-        hidden={hidden}
-        onAdd={setAdding}
-        onTrailer={setTrailer}
-      />
+      <p className="text-sm mb-8">
+        <Link
+          href={`/what-to-watch?with=${encodeURIComponent(userId)}`}
+          className="underline"
+          style={{ color: "var(--accent)" }}
+        >
+          Get picks for you both on What to Watch
+        </Link>
+      </p>
 
       {status === "loading" && <Skeleton count={5} label="Loading shelves" />}
       {status === "error" && (
