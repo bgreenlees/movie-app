@@ -327,7 +327,7 @@ function WhatToWatch() {
       ) : pair && friend ? (
         <>
         <TonightForYouBoth
-          key={friend.id}
+          key={`tonight-${friend.id}`}
           partnerId={friend.id}
           partnerName={friend.name}
           selection={selection}
@@ -345,7 +345,7 @@ function WhatToWatch() {
           onTrailer={(t) => setTrailer({ id: t.id, title: t.title, mediaType: t.mediaType })}
         />
         <WatchTogetherShelves
-          key={friend.id}
+          key={`shelves-${friend.id}`}
           partnerId={friend.id}
           partnerName={friend.name}
           media={selection.media}

@@ -43,6 +43,29 @@ test("What to Watch suggests titles and Shuffle keeps working", async ({ page })
   await expect(picks.first()).toBeVisible();
 });
 
+test("What to Watch picks fill complete rows at phone, laptop and wide widths", async ({ page }) => {
+  await signIn(page, newTestEmail("rows"));
+  const picks = page.getByRole("button", { name: /^Add Stub .* to a list$/ });
+  for (const width of [390, 1280, 1900]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/what-to-watch");
+    await expect(picks.first()).toBeVisible();
+    // Columns of the grid the picks sit in, from the browser's own layout
+    const { cols, count } = await picks.first().evaluate((el) => {
+      const grid = el.closest("ul, div.grid") as HTMLElement;
+      const template = getComputedStyle(grid).gridTemplateColumns;
+      return { cols: template.trim().split(/\s+/).length, count: grid.children.length };
+    });
+    expect(count % cols, `${width}px: ${count} picks in ${cols} columns`).toBe(0);
+    expect(count / cols).toBeGreaterThanOrEqual(2);
+    expect(count).toBeGreaterThanOrEqual(12);
+    // Shuffle keeps the count
+    await page.getByRole("button", { name: "Shuffle" }).click();
+    await expect(picks.first()).toBeVisible();
+    expect(await picks.count()).toBe(count);
+  }
+});
+
 test("Watch Together mode on What to Watch: two friends see shared picks", async ({ browser }) => {
   const alice = await signedInUser(browser, "alice");
   const bob = await signedInUser(browser, "bob");
