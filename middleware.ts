@@ -21,6 +21,10 @@ async function pageCsp(req: NextRequest) {
     isDev: process.env.NODE_ENV === "development",
   });
   const requestHeaders = new Headers(req.headers);
+  // Next reads the nonce from Content-Security-Policy first, then the report-only
+  // header, so drop any the client sent: only ours may reach it.
+  requestHeaders.delete("content-security-policy");
+  requestHeaders.delete("content-security-policy-report-only");
   requestHeaders.set(name, value);
   return { name, value, requestHeaders };
 }
