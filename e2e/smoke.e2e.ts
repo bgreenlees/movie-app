@@ -116,3 +116,36 @@ test("Watch Together mode on What to Watch: two friends see shared picks", async
     await bob.context.close();
   }
 });
+
+test("first-run onboarding picker works on a phone: titles shown, 5-pick cap, Escape closes", async ({ page }) => {
+  await page.route("**/_next/image**", (route) => route.abort());
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(newTestEmail("onboard"));
+  await page.getByRole("button", { name: "Sign in (dev)" }).click();
+  await page.waitForURL("**/search");
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  // Every tile shows its title without hovering
+  await expect(dialog.getByText("Ex Machina", { exact: true })).toBeVisible();
+  const tiles = dialog.getByRole("button", { pressed: false });
+  expect(await tiles.count()).toBeGreaterThanOrEqual(40);
+  await page.screenshot({ path: process.env.ONBOARDING_SHOT ?? "test-results/onboarding-390.png" });
+
+  // Fewer than about 3 screens of scrolling
+  const { scrollH, clientH } = await dialog.locator("div.overflow-y-auto").evaluate((el) => ({
+    scrollH: el.scrollHeight,
+    clientH: el.clientHeight,
+  }));
+  console.log(`onboarding scroll area: ${scrollH}px over a ${clientH}px viewport`);
+
+  // A 6th pick is blocked with a hint
+  for (let i = 0; i < 6; i++) await dialog.getByRole("button", { pressed: false }).nth(i).click();
+  await expect(dialog.getByRole("button", { pressed: true })).toHaveCount(5);
+  await expect(dialog.getByRole("alert")).toContainText("up to 5");
+
+  // Escape closes the dialog
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+});

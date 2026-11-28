@@ -106,16 +106,16 @@ export default function OnboardingModal({ onClose }: OnboardingModalProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 space-y-5">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 space-y-3">
           {CLUSTERS.map((cluster) => (
             <section key={cluster.label} aria-label={cluster.label}>
               <h2
-                className="text-xs font-semibold uppercase tracking-wider mb-2"
+                className="text-xs font-semibold uppercase tracking-wider mb-1.5"
                 style={{ color: "var(--text-muted)" }}
               >
                 {cluster.label}
               </h2>
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 sm:gap-4">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-x-2 gap-y-2 sm:gap-4">
                 {cluster.movies.map((movie) => {
                   const isSelected = selected.has(movie.id);
                   const posterPath = posters[movie.id];
@@ -129,7 +129,7 @@ export default function OnboardingModal({ onClose }: OnboardingModalProps) {
                       style={{ outlineColor: "var(--accent)" }}
                     >
                       <div
-                        className="aspect-[2/3] relative rounded-lg overflow-hidden"
+                        className="aspect-[3/4] relative rounded-lg overflow-hidden"
                         style={{
                           backgroundColor: "var(--border)",
                           boxShadow: isSelected ? "0 0 0 3px var(--accent)" : "none",
