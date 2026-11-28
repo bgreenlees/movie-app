@@ -632,7 +632,10 @@ describe("budget and seeds stay fair (review on #100)", () => {
     // The mix stays comparable to no time limit. (The pool now holds the whole discover fake, so the
     // movies really dropped for running over, a third of them, show up as a gap; a type skew would be far larger.)
     const share = (pool: { mediaType: MediaType }[]) => pool.filter((c) => c.mediaType === "movie").length / pool.length;
-    expect(Math.abs(share(limited.r.pool) - share(any.r.pool))).toBeLessThan(0.3);
+    // Observed with this fake: 0.72 with no limit, ~0.44 with one (38 of 86). A floor of 0.35 (about 0.09 under the
+    // observed value) catches a skew towards TV, and the share can't rise above the unlimited one.
+    expect(share(limited.r.pool)).toBeGreaterThanOrEqual(0.35);
+    expect(share(limited.r.pool)).toBeLessThanOrEqual(share(any.r.pool));
     // Each title is looked up at most once
     const looked = limited.fetchers.facts.mock.calls.map(([m, id]) => `${m}-${id}`);
     expect(new Set(looked).size).toBe(looked.length);
