@@ -1,40 +1,36 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   CSP_REPORT_PATH,
   ENFORCE_CSP_IN_PRODUCTION,
   contentSecurityPolicy,
+  cspHeaderName,
   cspMode,
+  generateNonce,
   securityHeaders,
 } from "./securityHeaders";
+import { THEME_SCRIPT, themeScriptHashSource } from "./themeScript";
 
-const header = (key: string, mode: "enforce" | "report-only" = "enforce", isDev = false) =>
-  securityHeaders(isDev, mode).find((h) => h.key === key)?.value;
+const header = (key: string) => securityHeaders().find((h) => h.key === key)?.value;
 
 const directive = (csp: string, name: string) =>
   csp.split("; ").find((d) => d.startsWith(`${name} `))?.split(" ").slice(1) ?? [];
 
 describe("securityHeaders", () => {
-  it("blocks framing two ways in either mode", () => {
-    for (const mode of ["enforce", "report-only"] as const) {
-      expect(header("X-Frame-Options", mode)).toBe("DENY");
-      expect(directive(header("Content-Security-Policy", mode)!, "frame-ancestors")).toEqual(["'none'"]);
-    }
+  it("blocks framing two ways, on every route", () => {
+    expect(header("X-Frame-Options")).toBe("DENY");
+    expect(header("Content-Security-Policy")).toBe("frame-ancestors 'none'");
+  });
+
+  it("leaves the full page CSP to middleware (it needs a per-request nonce)", () => {
+    expect(header("Content-Security-Policy-Report-Only")).toBeUndefined();
+    expect(header("Content-Security-Policy")).not.toContain("script-src");
   });
 
   it("sets the basic hardening headers", () => {
     expect(header("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
     expect(header("X-Content-Type-Options")).toBe("nosniff");
     expect(header("Permissions-Policy")).toBe("camera=(), microphone=(), geolocation=()");
-  });
-
-  it("enforces the full CSP in enforce mode", () => {
-    expect(header("Content-Security-Policy")).toBe(contentSecurityPolicy(false));
-    expect(header("Content-Security-Policy-Report-Only")).toBeUndefined();
-  });
-
-  it("sends the full CSP as report-only in report-only mode", () => {
-    expect(header("Content-Security-Policy", "report-only")).toBe("frame-ancestors 'none'");
-    expect(header("Content-Security-Policy-Report-Only", "report-only")).toBe(contentSecurityPolicy(false));
   });
 
   it("names the report endpoint for the Reporting API", () => {
@@ -56,16 +52,58 @@ describe("cspMode", () => {
   });
 });
 
+describe("cspHeaderName", () => {
+  it("enforces or only reports, by mode", () => {
+    expect(cspHeaderName("enforce")).toBe("Content-Security-Policy");
+    expect(cspHeaderName("report-only")).toBe("Content-Security-Policy-Report-Only");
+  });
+});
+
+describe("generateNonce", () => {
+  it("is base64 and different every time", () => {
+    const a = generateNonce();
+    expect(a).toMatch(/^[A-Za-z0-9+/]+=*$/);
+    expect(a.length).toBeGreaterThanOrEqual(24);
+    expect(generateNonce()).not.toBe(a);
+  });
+});
+
+describe("themeScriptHashSource", () => {
+  it("is the SHA-256 of the exact theme script text", async () => {
+    const expected = createHash("sha256").update(THEME_SCRIPT, "utf8").digest("base64");
+    expect(await themeScriptHashSource()).toBe(`'sha256-${expected}'`);
+  });
+});
+
 describe("contentSecurityPolicy", () => {
-  const csp = contentSecurityPolicy(false);
+  const nonce = "dGVzdC1ub25jZQ==";
+  const csp = contentSecurityPolicy({ nonce, isDev: false });
+
+  it("allows scripts only by nonce (plus what they load), never inline", () => {
+    const scriptSrc = directive(csp, "script-src");
+    expect(scriptSrc).toEqual(["'self'", `'nonce-${nonce}'`, "'strict-dynamic'"]);
+    expect(scriptSrc).not.toContain("'unsafe-inline'");
+    expect(scriptSrc).not.toContain("https://vercel.live");
+  });
+
+  it("allows the theme script by its hash", async () => {
+    const hash = await themeScriptHashSource();
+    const withTheme = contentSecurityPolicy({ nonce, scriptHashes: [hash], isDev: false });
+    expect(directive(withTheme, "script-src")).toContain(hash);
+  });
+
+  it("keeps the nonce out of style-src, where it would disable 'unsafe-inline'", () => {
+    expect(directive(csp, "style-src")).toContain("'unsafe-inline'");
+    expect(directive(csp, "style-src").join(" ")).not.toContain("nonce-");
+  });
 
   it("allows YouTube trailers and TMDB / news images", () => {
     expect(directive(csp, "frame-src")).toContain("https://www.youtube.com");
     expect(directive(csp, "img-src")).toEqual(expect.arrayContaining(["'self'", "https:"]));
   });
 
-  it("allows the Vercel Toolbar", () => {
-    for (const name of ["script-src", "style-src", "font-src", "connect-src", "frame-src"]) {
+  it("allows the Vercel Toolbar outside script-src", () => {
+    for (const name of ["style-src", "font-src", "connect-src", "frame-src"]) {
       expect(directive(csp, name)).toContain("https://vercel.live");
     }
     expect(directive(csp, "font-src")).toContain("https://assets.vercel.com");
@@ -85,7 +123,7 @@ describe("contentSecurityPolicy", () => {
   it("allows eval and websockets only in dev", () => {
     expect(directive(csp, "script-src")).not.toContain("'unsafe-eval'");
     expect(directive(csp, "connect-src")).not.toContain("ws:");
-    const dev = contentSecurityPolicy(true);
+    const dev = contentSecurityPolicy({ nonce, isDev: true });
     expect(directive(dev, "script-src")).toContain("'unsafe-eval'");
     expect(directive(dev, "connect-src")).toContain("ws:");
   });
