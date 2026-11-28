@@ -3,7 +3,7 @@
 #
 #   scripts/factory/dispatch.sh <issue> <role> [--model opus|sonnet] [--pr N] [--note "text"] [--dry-run]
 #
-#   role     planner | worker | researcher | reviewer | verifier  (.claude/agents/<role>.md)
+#   role     planner | worker | researcher | designer | reviewer | verifier  (.claude/agents/<role>.md)
 #   --pr N   reviewer/verifier: check the worktree out at PR N's head before the agent starts
 #            (Orca's own `--pr` flag links the PR but does NOT check it out)
 #   --model  overrides the role file's default model
@@ -14,8 +14,8 @@
 #              (the gate reserves this launch's typical cost; see USAGE_COST_* below)
 #
 # Cost controls (see docs/factory.md "Cost controls"): at most MAX_AGENTS (env, default 4)
-# agents run at once, and at most MAX_OPUS (env, default 1) of them on Opus; the default model comes from the role file (Sonnet except planner/researcher);
-# pass --model opus only for security-sensitive or design-heavy work.
+# agents run at once, and at most MAX_OPUS (env, default 1) of them on Opus; the default model comes from the role file (Sonnet except planner/researcher/designer);
+# pass --model opus only for security-sensitive or design-heavy work (the designer role defaults to Opus).
 #
 # Why a script: every launch gets the same brief, port, safety rules and naming,
 # so the coordinator doesn't hand-assemble them (and repeat mistakes).
@@ -119,7 +119,9 @@ BRIEF="$BRIEF_DIR/$NAME.md"
     worker)
       echo "- Fresh branch off \`main\`. Stay inside the issue's files; other agents are working in parallel."
       echo "- \`npx tsc --noEmit\`, \`npm run lint\` and \`npm test\` must pass. For auth, API or data-access changes, run \`/security-review\` on your diff and summarise it in the PR. The review is a middle step, not your final answer: after it, carry on and push, open the PR and wait for CI."
-      echo "- Open a **ready** (not draft) PR whose body contains \`Closes #$ISSUE\`, explains *why*, and has a \"how to verify\" section. Wait for \`gh pr checks --watch\` to go green. **Do not merge.** Finish by printing the PR URL." ;;
+      echo "- **The last step is always \`gh pr create\`** (a skill run such as \`/security-review\` or a green local check is never the end). Open a **ready** (not draft) PR whose body contains \`Closes #$ISSUE\`, explains *why*, and has a \"how to verify\" section. Wait for \`gh pr checks --watch\` to go green. **Do not merge.** Finish by printing the PR URL." ;;
+    designer)
+      echo "- Design only, never app code: write under \`docs/design/$ISSUE-<slug>/\`. Start from real screenshots of today's screens (390px and 1280px, Playwright), keep the existing design system, change only what the issue asks. Open a **ready** docs-only PR (body contains \`Refs #$ISSUE\`). Wait for CI. Do not merge. Do not create issues: propose them in the PR body." ;;
     planner|researcher)
       echo "- Docs only. Open a **ready** PR (body contains \`Refs #$ISSUE\`, or \`Closes #$ISSUE\` if the issue is the doc itself). Wait for CI. Do not merge. Do not create issues: propose them in the PR body." ;;
     reviewer|verifier)
