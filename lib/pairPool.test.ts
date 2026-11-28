@@ -689,7 +689,10 @@ describe("posters and partial results", () => {
     const both = entry("tv", 1, { posterPath: null });
     const me: PoolPerson = { entries: [both, entry("tv", 2, { posterPath: null })], providerIds: [] };
     const partner: PoolPerson = { entries: [{ ...both }], providerIds: [] };
-    const fetchers = fakeFetchers({ discover: { tv: [cand("tv", 3, { posterPath: null })] } });
+    const fetchers = fakeFetchers({
+      discover: { tv: [cand("tv", 3, { posterPath: null })] },
+      facts: { "tv-1": { posterPath: null }, "tv-2": { posterPath: null } },
+    });
     const { pool } = await buildPairPool(input({ me, partner, fetchers }));
     expect(keys(pool)).toEqual(["tv-1"]);
     expect(pool[0].posterPath).toBeNull();
@@ -740,11 +743,11 @@ describe("TMDB caps (§5.2, §6)", () => {
     expect(r.pool.length).toBeLessThanOrEqual(PAIR_POOL_SIZE);
   });
 
-  it("makes no details calls when neither time nor services is on", async () => {
+  it("looks up want-list titles for their vote data, and nothing else, when neither time nor services is on", async () => {
     const me: PoolPerson = { entries: [entry("movie", 1), entry("tv", 2)], providerIds: [] };
     const fetchers = fakeFetchers({ discover: { movie: [cand("movie", 3)] } });
     const { pool } = await buildPairPool(input({ me, fetchers }));
-    expect(fetchers.facts).not.toHaveBeenCalled();
+    expect(fetchers.facts.mock.calls.map(([m, id]) => `${m}-${id}`).sort()).toEqual(["movie-1", "tv-2"]);
     expect(keys(pool)).toEqual(["movie-1", "movie-3", "tv-2"]);
   });
 
@@ -785,5 +788,113 @@ describe("parsePairPicksQuery", () => {
     for (const q of ["vibe=sad", "time=999", "fresh=yes", "services=true", "sharedOnly=2", "media=book", "vibe=light&vibe=heavy"]) {
       expect(parse(q).success, q).toBe(false);
     }
+  });
+});
+
+describe("matching quick wins (#196)", () => {
+  const rated = (media: MediaType, id: number, rating: number, genreIds: number[]) =>
+    entry(media, id, { status: "WATCHED", rating, genreIds });
+
+  describe("recommendation vote floor", () => {
+    it("drops recommendations under 200 votes (movies) or 100 (TV), keeping the rest", async () => {
+      const me: PoolPerson = { entries: [rated("movie", 50, 3, [18]), rated("tv", 60, 3, [18])], providerIds: [] };
+      const fetchers = fakeFetchers({
+        recs: {
+          "movie-50": [cand("movie", 1, { voteCount: 199 }), cand("movie", 2, { voteCount: 200 })],
+          "tv-60": [cand("tv", 3, { voteCount: 99 }), cand("tv", 4, { voteCount: 100 })],
+        },
+      });
+      const { pool } = await buildPairPool(input({ me, fetchers }));
+      expect(keys(pool)).toEqual(["movie-2", "tv-4"]);
+    });
+  });
+
+  describe("want-list titles carry real vote data", () => {
+    it("scores a want by the details' ratings, not the cached row's zero", async () => {
+      const me: PoolPerson = { entries: [entry("movie", 1)], providerIds: [] };
+      const fetchers = fakeFetchers({ facts: { "movie-1": { voteAverage: 8.4, voteCount: 5000 } } });
+      const { pool } = await buildPairPool(input({ me, fetchers }));
+      expect(pool[0]).toMatchObject({ id: 1, voteAverage: 8.4, voteCount: 5000 });
+    });
+
+    it("keeps a want-list title whose details fail or are over budget, as the cached row", async () => {
+      const me: PoolPerson = { entries: [entry("movie", 1)], providerIds: [] };
+      const fetchers = fakeFetchers();
+      fetchers.facts.mockRejectedValue(new Error("boom"));
+      const { pool } = await buildPairPool(input({ me, fetchers }));
+      expect(keys(pool)).toEqual(["movie-1"]);
+      expect(pool[0].voteAverage).toBe(0);
+    });
+
+    it("doesn't drop a want below the mood picker's star floor when no time or services filter is on", async () => {
+      const me: PoolPerson = { entries: [entry("movie", 1)], providerIds: [] };
+      const fetchers = fakeFetchers({ facts: { "movie-1": { voteAverage: 5.1 } } });
+      const { pool } = await buildPairPool(input({ me, fetchers }));
+      expect(keys(pool)).toEqual(["movie-1"]);
+    });
+  });
+
+  describe("discover filters", () => {
+    const params = async (me: PoolPerson, partner: PoolPerson) => {
+      const fetchers = fakeFetchers();
+      await buildPairPool(input({ me, partner, fetchers }));
+      const byMedia = (m: MediaType) => fetchers.discover.mock.calls.find((c) => c[0] === m)![1];
+      return { movie: byMedia("movie"), tv: byMedia("tv") };
+    };
+    const person = (...entries: PoolEntry[]): PoolPerson => ({ entries, providerIds: [] });
+
+    it("keeps animation, family and kids' TV out, and asks for English, by default", async () => {
+      const p = await params(person(rated("movie", 1, 3, [18])), person());
+      expect(p.movie.without_genres.split(",").sort()).toEqual(["10751", "16"]);
+      expect(p.tv.without_genres.split(",")).toEqual(expect.arrayContaining(["16", "10751", "10762"]));
+      expect(p.movie.with_original_language).toBe("en");
+      expect(p.tv.with_original_language).toBe("en");
+    });
+
+    it("keeps the mood's own exclusions alongside", async () => {
+      const fetchers = fakeFetchers();
+      await buildPairPool(input({ fetchers, selection: { ...ANY, vibe: "intense" } }));
+      const movie = fetchers.discover.mock.calls.find((c) => c[0] === "movie")![1];
+      expect(movie.without_genres.split(",")).toEqual(expect.arrayContaining(["10751", "16", "35"]));
+    });
+
+    it("lifts the kids filter when either person has a positive signal for animation or family", async () => {
+      const p = await params(person(rated("movie", 1, 3, [16, 10751])), person(rated("movie", 2, 3, [18])));
+      expect(p.movie.without_genres).toBeUndefined();
+    });
+
+    it("does not lift it for someone who disliked animation", async () => {
+      const p = await params(person(rated("movie", 1, 1, [16])), person());
+      expect(p.movie.without_genres).toContain("16");
+    });
+
+    it("drops the language filter when someone has rated another language positively", async () => {
+      const p = await params(person({ ...rated("movie", 1, 3, [18]), originalLanguage: "ko" }), person());
+      expect(p.movie.with_original_language).toBeUndefined();
+    });
+
+    it("does not filter wants or recommendations by the kids' genres", async () => {
+      const me: PoolPerson = { entries: [entry("movie", 1, { genreIds: [16, 10751] })], providerIds: [] };
+      const { pool } = await buildPairPool(input({ me, fetchers: fakeFetchers({ facts: { "movie-1": { genreIds: [16, 10751] } } }) }));
+      expect(keys(pool)).toContain("movie-1");
+    });
+  });
+
+  describe("kids' and foreign-language titles rank below the rest", () => {
+    it("ranks a family animation under a drama of equal quality, and a foreign-language title too", async () => {
+      const me: PoolPerson = { entries: [rated("movie", 50, 3, [18])], providerIds: [] };
+      const fetchers = fakeFetchers({
+        recs: {
+          "movie-50": [
+            cand("movie", 1, { genreIds: [18] }),
+            cand("movie", 2, { genreIds: [16, 10751] }),
+            cand("movie", 3, { genreIds: [18], originalLanguage: "zh" }),
+          ],
+        },
+      });
+      const { pool } = await buildPairPool(input({ me, fetchers }));
+      expect(pool.map((c) => c.id)).toHaveLength(3);
+      expect(pool[0].id).toBe(1);
+    });
   });
 });

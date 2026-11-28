@@ -333,6 +333,11 @@ of about 40 requests per second remains, may change, and clients should handle 4
 ([TMDB: Errors, code 27](https://developer.themoviedb.org/docs/errors)). The existing limiter in
 `lib/concurrency.ts` keeps bursts well below that.
 
+## Known limits
+
+- **The language cap is English-first.** `likedLanguages` is always empty: cached `Movie`/`TVShow` rows have no `originalLanguage`, so a person's positive ratings never record a language. Every non-English candidate is capped (0.35) regardless of what they've enjoyed; English and unknown languages are never capped. Fixing it needs a schema column, which is out of scope here and planned in the engine spec (#199).
+- **The dislike cap needs two signals.** A trait only caps a title's affinity once it has weight below -0.2 *and* at least two disliked titles carry it, so a single weak signal doesn't veto a title.
+
 ## Decisions for the owner
 
 1. **Drop off-seed recommendations, or just demote them?** Recommendation: **drop** them. Demoting

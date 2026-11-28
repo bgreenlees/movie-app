@@ -8,6 +8,7 @@ interface TMDBMovie {
   release_date: string;
   overview: string;
   genre_ids: number[];
+  original_language?: string;
   popularity: number;
   vote_average: number;
   vote_count: number;
@@ -27,6 +28,7 @@ interface TMDBTVShow {
   first_air_date: string;
   overview: string;
   genre_ids: number[];
+  original_language?: string;
   popularity: number;
   vote_average: number;
   vote_count: number;
@@ -601,6 +603,7 @@ class TMDBClient {
     voteAverage: number;
     voteCount: number;
     genreIds: number[];
+    originalLanguage?: string;
     runtime: number | null;
     providerIds: number[];
   }> {
@@ -621,6 +624,7 @@ class TMDBClient {
       voteAverage: d.vote_average ?? 0,
       voteCount: d.vote_count ?? 0,
       genreIds: (d.genres ?? []).map((g: { id: number }) => g.id),
+      originalLanguage: typeof d.original_language === "string" ? d.original_language : undefined,
       runtime: typeof runtime === "number" && runtime > 0 ? runtime : null,
       providerIds: flatrate.map((p) => p.provider_id),
     };

@@ -4,6 +4,8 @@ import {
   affinity,
   buildTasteProfile,
   entrySignal,
+  FOREIGN_CAP,
+  KIDS_CAP,
   pairFit,
   pairScore,
   sourceBoost,
@@ -150,7 +152,7 @@ describe("pairScore", () => {
     { mediaType: "tv", genreIds: [TV.scifiFantasy, TV.drama] },
     { mediaType: "movie", genreIds: [M.drama] },
     { mediaType: "tv", genreIds: [TV.mystery] },
-    { mediaType: "movie", genreIds: [M.comedy, M.family] },
+    { mediaType: "movie", genreIds: [M.horror, M.drama] },
     { mediaType: "tv", genreIds: [TV.comedy] },
   ];
   const rank = (scores: number[]) => scores.map((s, i) => [s, i]).sort((x, y) => y[0] - x[0]).map(([, i]) => i);
@@ -178,5 +180,69 @@ describe("sourceBoost", () => {
     expect(sourceBoost({ wantedBy: 0, recSeededBy: 1 })).toBe(0.3);
     expect(sourceBoost({ wantedBy: 0, recSeededBy: 0 })).toBe(0);
     expect(sourceBoost({ wantedBy: 1, recSeededBy: 2 })).toBe(0.6);
+  });
+});
+
+describe("affinity: informative traits and caps (#196)", () => {
+  const entries = (n: number, rating: number, genreIds: number[], mediaType: "movie" | "tv" = "movie", originalLanguage?: string): TasteEntry[] =>
+    Array.from({ length: n }, () => ({ mediaType, status: "WATCHED", rating, genreIds, originalLanguage }) as TasteEntry);
+  const M2 = { crime: 80, action: 28, animation: 16, family: 10751 };
+
+  it("counts Drama for a fifth of another trait", () => {
+    // Loves drama and thrillers equally; a drama+thriller title leans towards the thriller side, not the midpoint
+    const p = buildTasteProfile([...entries(5, 3, [M.drama]), ...entries(5, 1, [53])]);
+    const plain = affinity(p, { mediaType: "movie", genreIds: [M.drama, 53] });
+    const mean = 0.5 + 0.5 * Math.tanh(1.5 * ((p.weights.drama + p.weights.thriller) / 2));
+    expect(plain).toBeLessThan(mean);
+  });
+
+  it("caps a title at what a clear dislike alone gives, so a liked Drama can't average it away", () => {
+    const p = buildTasteProfile([...entries(6, 3, [M.drama]), ...entries(4, 1, [M2.crime])]);
+    const crimeAlone = affinity(p, { mediaType: "movie", genreIds: [M2.crime] });
+    const crimeDrama = affinity(p, { mediaType: "movie", genreIds: [M2.crime, M.drama] });
+    expect(crimeDrama).toBeLessThanOrEqual(crimeAlone + 1e-9);
+    expect(crimeDrama).toBeLessThan(0.4);
+  });
+
+  it("doesn't cap on a single disliked title, even a strongly weighted one", () => {
+    const p = buildTasteProfile([...entries(6, 3, [M.drama]), ...entries(1, 1, [M2.crime])]);
+    expect(p.dislikes.crime).toBe(1);
+    const crimeAlone = affinity(p, { mediaType: "movie", genreIds: [M2.crime] });
+    expect(affinity(p, { mediaType: "movie", genreIds: [M2.crime, M.drama] })).toBeGreaterThan(crimeAlone);
+  });
+
+  it("doesn't cap on a mild dislike (weight above -0.2)", () => {
+    const p = buildTasteProfile([...entries(6, 3, [M.drama]), ...entries(1, 1, [M2.crime]), ...entries(6, 3, [M2.crime])]);
+    expect(p.weights.crime).toBeGreaterThan(-0.2);
+    expect(affinity(p, { mediaType: "movie", genreIds: [M2.crime, M.drama] })).toBeGreaterThan(0.6);
+  });
+
+  it("caps kids' animation and family at 0.3 unless the person has a positive signal for them", () => {
+    const fan = buildTasteProfile(entries(10, 3, [M.drama]));
+    expect(affinity(fan, { mediaType: "movie", genreIds: [M2.animation, M2.family, M.comedy] })).toBeLessThanOrEqual(KIDS_CAP);
+    expect(affinity(EMPTY_PROFILE, { mediaType: "tv", genreIds: [10762] })).toBeLessThanOrEqual(KIDS_CAP);
+    const parent = buildTasteProfile([...entries(10, 3, [M2.animation, M2.family])]);
+    expect(affinity(parent, { mediaType: "movie", genreIds: [M2.animation, M2.family] })).toBeGreaterThan(0.8);
+  });
+
+  it("caps a title in a language the person hasn't rated positively at 0.35, but never English or unknown", () => {
+    const p = buildTasteProfile(entries(10, 3, [M.drama]));
+    const title = (originalLanguage?: string) => ({ mediaType: "movie" as const, genreIds: [M.drama], originalLanguage });
+    expect(affinity(p, title("zh"))).toBeLessThanOrEqual(FOREIGN_CAP);
+    expect(affinity(p, title("en"))).toBeGreaterThan(0.8);
+    expect(affinity(p, title(undefined))).toBeGreaterThan(0.8);
+    const kofan = buildTasteProfile(entries(10, 3, [M.drama], "movie", "ko"));
+    expect(affinity(kofan, title("ko"))).toBeGreaterThan(0.8);
+    expect(affinity(kofan, title("zh"))).toBeLessThanOrEqual(FOREIGN_CAP);
+  });
+
+  it("only counts a Like or Love as rating a language positively", () => {
+    const p = buildTasteProfile([...entries(6, 3, [M.drama]), ...entries(2, 1, [M.drama], "movie", "fr")]);
+    expect(p.likedLanguages.has("fr")).toBe(false);
+  });
+
+  it("still lifts a want-list title to 0.8 over the caps", () => {
+    const p = buildTasteProfile(entries(10, 3, [M.drama]));
+    expect(affinity(p, { mediaType: "movie", genreIds: [M2.animation], originalLanguage: "ja", onWantList: true })).toBe(0.8);
   });
 });

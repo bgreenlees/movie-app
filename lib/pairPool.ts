@@ -53,6 +53,12 @@ export const DISCOVER_POOL_SIZE = 80;
  */
 export const FACTS_SHARES = { wants: 12, recs: 8, discover: 10 } as const;
 export const FACTS_BUDGET = FACTS_SHARES.wants + FACTS_SHARES.recs + FACTS_SHARES.discover;
+/** C: a recommendation needs at least this many TMDB votes (movies), so an obscure co-viewed title isn't vouched for */
+export const REC_MIN_VOTES_MOVIE = 200;
+/** C: the same floor for TV */
+export const REC_MIN_VOTES_TV = 100;
+/** Genres kept out of discover unless someone has rated them positively: Animation, Family, and Kids on TV */
+const KIDS_GENRES: Record<MediaType, readonly number[]> = { movie: [16, 10751], tv: [16, 10751, 10762] };
 /** Size of the ranked pool returned to the client */
 export const PAIR_POOL_SIZE = 100;
 
@@ -73,6 +79,8 @@ export interface PoolEntry {
   overview?: string | null;
   /** From the cached `Movie.genres` / `TVShow.genres` */
   genreIds: number[];
+  /** TMDB `original_language` when known; the cache doesn't store it yet, so usually absent */
+  originalLanguage?: string | null;
 }
 
 export interface PoolPerson {
@@ -90,6 +98,7 @@ export interface FullTitleFacts extends TitleFacts {
   overview: string;
   popularity: number;
   voteCount: number;
+  originalLanguage?: string;
 }
 
 export interface PoolFetchers {
@@ -294,6 +303,7 @@ function entryCandidate(e: PoolEntry): MoodCandidate {
     popularity: 0,
     voteAverage: 0,
     genreIds: e.genreIds,
+    originalLanguage: e.originalLanguage ?? undefined,
   };
 }
 
@@ -309,6 +319,7 @@ function factsCandidate(media: MediaType, f: FullTitleFacts): MoodCandidate {
     voteAverage: f.voteAverage,
     voteCount: f.voteCount,
     genreIds: f.genreIds,
+    originalLanguage: f.originalLanguage,
   };
 }
 
@@ -356,6 +367,26 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
     movie: moodToDiscoverParams(selection, "movie", ctx),
     tv: moodToDiscoverParams(selection, "tv", ctx),
   };
+  // What the discover calls ask TMDB for (the filters above still judge wants and recommendations).
+  // Taste-blind popular titles are where kids' animation and foreign-language hits come from, so
+  // keep them out at the source unless someone has rated that kind positively. TMDB takes one
+  // original language only, so the filter applies when the pair's languages are just English.
+  const kidsRated = [profiles.me, profiles.partner].some((p) =>
+    (["animation", "family"] as const).some((t) => (p.weights[t] ?? 0) > 0)
+  );
+  const pairLanguages = new Set(["en", ...profiles.me.likedLanguages, ...profiles.partner.likedLanguages]);
+  const discoverParams = Object.fromEntries(
+    mediaTypes.map((media) => {
+      const p = { ...paramsFor[media] };
+      if (!kidsRated) {
+        const without = new Set(p.without_genres ? p.without_genres.split(",") : []);
+        KIDS_GENRES[media].forEach((g) => without.add(String(g)));
+        p.without_genres = [...without].join(",");
+      }
+      if (pairLanguages.size === 1) p.with_original_language = "en";
+      return [media, p];
+    })
+  ) as Record<MediaType, Record<string, string>>;
   // Runtime and providers only come from a details lookup; genres, date and
   // poster are already cached. So titles that aren't from discover need one
   // only when time or services are on.
@@ -444,7 +475,10 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
   }
   const wantChecks = wantOrder.map(({ e, by }) => {
     // Over budget → `undefined`: it needed a check and didn't get one
-    const facts = needsFacts ? reserveFacts(e.mediaType, e.tmdbId, FACTS_SHARES.wants) ?? undefined : null;
+    // Without a time or services filter the lookup is only for real vote data
+    // (the cache has none), so over budget isn't a reason to drop the title.
+    const reserved = reserveFacts(e.mediaType, e.tmdbId, FACTS_SHARES.wants);
+    const facts = needsFacts ? reserved ?? undefined : reserved;
     return { e, by, facts };
   });
 
@@ -495,7 +529,7 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
   const discoverCalls = Promise.all(
     mediaTypes.map(async (media) => {
       const pages = await Promise.allSettled(
-        DISCOVER_PAGES.map((page) => fetchers.discover(media, paramsFor[media], page))
+        DISCOVER_PAGES.map((page) => fetchers.discover(media, discoverParams[media], page))
       );
       const ok = pages.flatMap((r, i) => {
         if (r.status === "fulfilled") return [r.value];
@@ -517,10 +551,15 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
       try {
         const f = await facts;
         candidate = { ...factsCandidate(e.mediaType, f), posterPath: f.posterPath ?? e.posterPath };
-        tf = f;
-        providerIds = f.providerIds;
+        // Only a time or services filter judges a want by its details: a list title below the
+        // mood picker's ★ floor is still one you asked for
+        if (needsFacts) {
+          tf = f;
+          providerIds = f.providerIds;
+        }
       } catch {
-        continue; // over budget or failed: can't vouch for its runtime / services
+        if (needsFacts) continue; // failed: can't vouch for its runtime / services
+        // otherwise the lookup was only for vote data: keep the cached row as it is
       }
     }
     if (!matchesDiscoverParams(paramsFor[e.mediaType], tf)) continue;
@@ -559,6 +598,7 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
   });
   const topRecs = [...recs.values()]
     .filter((r) => mediaTypes.includes(r.c.mediaType))
+    .filter((r) => (r.c.voteCount ?? 0) >= (r.c.mediaType === "movie" ? REC_MIN_VOTES_MOVIE : REC_MIN_VOTES_TV))
     .sort(
       (a, b) =>
         Object.keys(b.by).length - Object.keys(a.by).length || b.hits - a.hits || a.order - b.order

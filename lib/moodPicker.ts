@@ -176,6 +176,8 @@ export interface MoodCandidate {
   /** Traits used for scoring; optional so partial data still works */
   voteCount?: number;
   genreIds?: number[];
+  /** TMDB `original_language` ("en", "ko"…) when the source gives it */
+  originalLanguage?: string;
 }
 
 export interface MoodPick extends MoodCandidate {

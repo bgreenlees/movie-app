@@ -8,6 +8,7 @@ import {
   TONIGHT_COUNT,
   drawPairPicks,
   drawWeight,
+  drawWindow,
   emptyKind,
   nextShuffle,
   pairPicksQuery,
@@ -81,6 +82,26 @@ describe("drawPairPicks", () => {
   it("has no type quota: an all-TV pool gives all TV", () => {
     const tv = Array.from({ length: 10 }, (_, i) => c(i, 1 - i / 10, "tv"));
     expect(drawPairPicks(tv, { random: seeded(7) }).every((p) => p.mediaType === "tv")).toBe(true);
+  });
+});
+
+describe("draw window (top 36)", () => {
+  const big = Array.from({ length: 100 }, (_, i) => c(i + 1, 1 - i / 100));
+
+  it("never draws from below the top 36 of the pool", () => {
+    for (let s = 1; s <= 200; s++) {
+      for (const p of drawPairPicks(big, { random: seeded(s) })) expect(p.id).toBeLessThanOrEqual(36);
+    }
+  });
+
+  it("windows by score, not by the order the pool arrives in", () => {
+    const shuffled = [...big].reverse();
+    expect(drawWindow(shuffled).map((p) => p.id)).toEqual(Array.from({ length: 36 }, (_, i) => i + 1));
+  });
+
+  it("grows to three screens on a wider grid, and keeps a small pool whole", () => {
+    expect(drawWindow(big, 14)).toHaveLength(42);
+    expect(drawWindow(big.slice(0, 20))).toHaveLength(20);
   });
 });
 
@@ -162,17 +183,19 @@ describe("nextShuffle", () => {
   const pool = Array.from({ length: 60 }, (_, i) => c(i + 1, 1 - i / 60, i % 2 ? "tv" : "movie"));
   const key = (p: { id: number; mediaType: string }) => `${p.mediaType}-${p.id}`;
 
-  it("gives a new 12 each time, with no repeats, while the pool lasts", () => {
+  it("gives a new 12 each time, with no repeats, through the top 36", () => {
     const random = seeded(11);
     let seen = new Set<string>();
     const all: string[] = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 3; i++) {
       const next = nextShuffle(pool, seen, { random });
       expect(next.picks).toHaveLength(12);
       all.push(...next.picks.map(key));
       seen = next.seen;
     }
-    expect(new Set(all).size).toBe(60); // five draws used the whole pool, none twice
+    // three screens used the whole window, none twice, and nothing from the tail
+    expect(new Set(all).size).toBe(36);
+    expect(all.every((k) => Number(k.split("-")[1]) <= 36)).toBe(true);
   });
 
   it("starts a new cycle when fewer than 12 unseen titles are left", () => {
@@ -260,7 +283,8 @@ describe("per-seed cap", () => {
   };
 
   it("lets one seed contribute at most 3 picks while others can fill the draw", () => {
-    const pool = seededPool({ a: 30, b: 4, c: 4, d: 4, e: 4, f: 4 });
+    // the big seed ranks last, so the top 42 holds all of the small seeds and the cap never has to relax
+    const pool = seededPool({ b: 4, c: 4, d: 4, e: 4, f: 4, a: 30 });
     for (let s = 1; s <= 20; s++) {
       const picks = drawPairPicks(pool, { count: 14, random: seeded(s) });
       expect(picks).toHaveLength(14);

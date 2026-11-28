@@ -3,9 +3,9 @@ import { PAIRS } from "./pair-personas";
 
 // Guards the fixtures only (no network): a typo here would silently skew the eval.
 describe("pair persona fixtures", () => {
-  it("has the six pairs from the spec, with unique ids", () => {
-    expect(PAIRS).toHaveLength(6);
-    expect(new Set(PAIRS.map((p) => p.id)).size).toBe(6);
+  it("has the six pairs from the spec plus the labelled true-story pair, with unique ids", () => {
+    expect(PAIRS).toHaveLength(7);
+    expect(new Set(PAIRS.map((p) => p.id)).size).toBe(7);
   });
 
   it("has no duplicate title within a person and only valid ratings", () => {
