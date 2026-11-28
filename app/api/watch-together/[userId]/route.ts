@@ -3,15 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { requireConnection } from "@/lib/connections";
 import { idSchema } from "@/lib/decide";
-import { tmdb } from "@/lib/tmdb";
-import {
-  buildShelves,
-  freshSeeds,
-  rankFreshPicks,
-  shelfKey,
-  type ShelfEntry,
-  type ShelfItem,
-} from "@/lib/watchTogetherShelves";
+import { buildShelves, type ShelfEntry } from "@/lib/watchTogetherShelves";
 
 const notFound = () => NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -46,19 +38,6 @@ async function loadEntries(userId: string): Promise<ShelfEntry[]> {
   ];
 }
 
-async function recommendationsFor(seed: { mediaType: "movie" | "tv"; tmdbId: number }): Promise<ShelfItem[]> {
-  if (seed.mediaType === "movie") {
-    const res = await tmdb.getMovieRecommendations(seed.tmdbId);
-    return (res.results ?? []).map((m) => ({
-      id: m.id, mediaType: "movie", title: m.title, posterPath: m.poster_path, date: m.release_date || null,
-    }));
-  }
-  const res = await tmdb.getTVRecommendations(seed.tmdbId);
-  return (res.results ?? []).map((s) => ({
-    id: s.id, mediaType: "tv", title: s.name, posterPath: s.poster_path, date: s.first_air_date || null,
-  }));
-}
-
 /**
  * GET /api/watch-together/[userId] — the Watch Together shelves for the
  * signed-in user and a connected friend, movies and TV alike.
@@ -82,19 +61,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ use
 
   const shelves = buildShelves(mine, theirs);
 
-  // Fresh recommendations seeded by titles both liked: at most FRESH_SEEDS
-  // TMDB calls. A failed call just contributes nothing.
-  const recs = await Promise.allSettled(freshSeeds(mine, theirs).map(recommendationsFor));
-  const exclude = new Set([...mine, ...theirs].map(shelfKey));
-  const freshPicks = rankFreshPicks(
-    recs.flatMap((r) => (r.status === "fulfilled" ? [r.value] : [])),
-    exclude
-  );
-
   // { id, name } only: the friend's email is never returned (spec §5.5, F7).
   return NextResponse.json({
     friend: { id: friendId, name: friend?.name ?? null },
     ...shelves,
-    freshPicks,
   });
 }

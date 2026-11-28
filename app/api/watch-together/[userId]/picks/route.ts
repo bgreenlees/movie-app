@@ -48,6 +48,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
       pool: result.pool,
       services: result.services,
       coldStart: result.coldStart,
+      // Counts only (no titles): the UI shows "rated 4 of 10"
+      signals: result.signals,
       // Some TMDB calls failed: the UI can say "some picks couldn't load"
       partial: result.partial,
     });

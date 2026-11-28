@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SELECTION } from "./moodPicker";
-import { drawPairPicks, drawWeight, emptyKind, pairPicksQuery, refillPicks } from "./pairPicks";
+import {
+  RATINGS_TARGET,
+  TONIGHT_COUNT,
+  drawPairPicks,
+  drawWeight,
+  emptyKind,
+  nextShuffle,
+  pairPicksQuery,
+  ratingsNudge,
+  refillPicks,
+} from "./pairPicks";
 
 const c = (id: number, pairScore: number, mediaType: "movie" | "tv" = "movie") => ({ id, mediaType, pairScore });
 
@@ -16,12 +26,13 @@ function seeded(seed: number) {
 }
 
 describe("drawPairPicks", () => {
-  const pool = Array.from({ length: 20 }, (_, i) => c(i, (20 - i) / 20, i % 2 ? "tv" : "movie"));
+  const pool = Array.from({ length: 30 }, (_, i) => c(i, (30 - i) / 30, i % 2 ? "tv" : "movie"));
 
-  it("draws 5 distinct titles, best first", () => {
+  it("draws 12 distinct titles, best first", () => {
+    expect(TONIGHT_COUNT).toBe(12);
     const picks = drawPairPicks(pool, { random: seeded(1) });
-    expect(picks).toHaveLength(5);
-    expect(new Set(picks.map((p) => `${p.mediaType}-${p.id}`)).size).toBe(5);
+    expect(picks).toHaveLength(12);
+    expect(new Set(picks.map((p) => `${p.mediaType}-${p.id}`)).size).toBe(12);
     const scores = picks.map((p) => p.pairScore);
     expect(scores).toEqual([...scores].sort((a, b) => b - a));
   });
@@ -43,10 +54,10 @@ describe("drawPairPicks", () => {
       for (const p of drawPairPicks(pool, { random })) hits.set(p.id, (hits.get(p.id) ?? 0) + 1);
     }
     const top = hits.get(0) ?? 0;
-    const bottom = hits.get(19) ?? 0;
+    const bottom = hits.get(29) ?? 0;
     expect(top).toBeGreaterThan(bottom * 3);
     expect(bottom).toBeGreaterThan(0); // the floor keeps every title possible
-    expect(top).toBeLessThan(2000); // not a fixed top 5
+    expect(top).toBeLessThan(2000); // not a fixed top 12
   });
 
   it("Shuffle avoids the cards on screen when it can", () => {
@@ -57,11 +68,11 @@ describe("drawPairPicks", () => {
   });
 
   it("tops up from the avoided cards when there aren't enough others", () => {
-    const small = [c(1, 1), c(2, 0.8), c(3, 0.6), c(4, 0.4), c(5, 0.2), c(6, 0.1)];
-    const avoid = new Set(["movie-1", "movie-2", "movie-3", "movie-4", "movie-5"]);
+    const small = Array.from({ length: 14 }, (_, i) => c(i + 1, 1 - i / 14));
+    const avoid = new Set(small.slice(0, 12).map((p) => `movie-${p.id}`));
     const picks = drawPairPicks(small, { random: seeded(6), avoid });
-    expect(picks).toHaveLength(5);
-    expect(picks.map((p) => p.id)).toContain(6);
+    expect(picks).toHaveLength(12);
+    expect(picks.map((p) => p.id)).toEqual(expect.arrayContaining([13, 14]));
   });
 
   it("has no type quota: an all-TV pool gives all TV", () => {
@@ -107,35 +118,84 @@ describe("emptyKind", () => {
 });
 
 describe("refillPicks", () => {
-  const pool = Array.from({ length: 12 }, (_, i) => c(i + 1, 1 - i / 12));
-  const shownNow = pool.slice(0, 5);
+  const pool = Array.from({ length: 30 }, (_, i) => c(i + 1, 1 - i / 30));
+  const shownNow = pool.slice(0, TONIGHT_COUNT);
 
   it("returns the same array when nothing is hidden", () => {
     expect(refillPicks(shownNow, pool, new Set())).toBe(shownNow);
   });
 
-  it("tops up to 5 when picks are hidden, never repeating or using hidden titles", () => {
+  it("tops up to 12 when picks are hidden, never repeating or using hidden titles", () => {
     const hidden = new Set(shownNow.map((p) => `${p.mediaType}-${p.id}`));
     const out = refillPicks(shownNow, pool, hidden, { random: seeded(1) });
-    expect(out).toHaveLength(5);
+    expect(out).toHaveLength(12);
     const ids = out.map((p) => p.id);
-    expect(new Set(ids).size).toBe(5);
-    expect(ids.every((id) => id > 5)).toBe(true);
+    expect(new Set(ids).size).toBe(12);
+    expect(ids.every((id) => id > 12)).toBe(true);
   });
 
   it("keeps the visible picks and replaces only the hidden one", () => {
     const hidden = new Set(["movie-3"]);
     const out = refillPicks(shownNow, pool, hidden, { random: seeded(2) });
-    expect(out).toHaveLength(5);
-    expect(out.map((p) => p.id)).toEqual(expect.arrayContaining([1, 2, 4, 5]));
+    expect(out).toHaveLength(12);
+    expect(out.map((p) => p.id)).toEqual(expect.arrayContaining([1, 2, 4, 5, 12]));
     expect(out.some((p) => p.id === 3)).toBe(false);
   });
 
   it("gives what's left when the pool runs short, and none when it is empty", () => {
-    const small = pool.slice(0, 6);
-    const hidden = new Set(shownNow.slice(0, 4).map((p) => `${p.mediaType}-${p.id}`));
-    expect(refillPicks(shownNow, small, hidden).map((p) => p.id).sort()).toEqual([5, 6]);
+    const small = pool.slice(0, 14);
+    const hidden = new Set(shownNow.slice(0, 10).map((p) => `${p.mediaType}-${p.id}`));
+    expect(refillPicks(shownNow, small, hidden).map((p) => p.id).sort((a, b) => a - b)).toEqual([11, 12, 13, 14]);
     const all = new Set(small.map((p) => `${p.mediaType}-${p.id}`));
     expect(refillPicks(shownNow, small, all)).toEqual([]);
+  });
+});
+
+describe("nextShuffle", () => {
+  const pool = Array.from({ length: 60 }, (_, i) => c(i + 1, 1 - i / 60, i % 2 ? "tv" : "movie"));
+  const key = (p: { id: number; mediaType: string }) => `${p.mediaType}-${p.id}`;
+
+  it("gives a new 12 each time, with no repeats, while the pool lasts", () => {
+    const random = seeded(11);
+    let seen = new Set<string>();
+    const all: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const next = nextShuffle(pool, seen, { random });
+      expect(next.picks).toHaveLength(12);
+      all.push(...next.picks.map(key));
+      seen = next.seen;
+    }
+    expect(new Set(all).size).toBe(60); // five draws used the whole pool, none twice
+  });
+
+  it("starts a new cycle when fewer than 12 unseen titles are left", () => {
+    const small = pool.slice(0, 20);
+    const first = nextShuffle(small, new Set(), { random: seeded(1) });
+    const second = nextShuffle(small, first.seen, { random: seeded(2) });
+    expect(second.picks).toHaveLength(12); // 8 unseen + 4 repeats
+    expect(second.picks.filter((p) => !first.seen.has(key(p)))).toHaveLength(8);
+    expect(second.seen).toEqual(new Set(second.picks.map(key))); // cycle restarted from what's on screen
+  });
+
+  it("copes with a pool smaller than 12", () => {
+    const tiny = pool.slice(0, 3);
+    const next = nextShuffle(tiny, new Set(), { random: seeded(1) });
+    expect(next.picks).toHaveLength(3);
+  });
+});
+
+describe("ratingsNudge", () => {
+  it("shows the count until the target of 10 and then disappears", () => {
+    expect(RATINGS_TARGET).toBe(10);
+    expect(ratingsNudge(0)).toEqual({ count: 0, target: 10 });
+    expect(ratingsNudge(4)).toEqual({ count: 4, target: 10 });
+    expect(ratingsNudge(9)).toEqual({ count: 9, target: 10 });
+    expect(ratingsNudge(10)).toBeNull();
+    expect(ratingsNudge(25)).toBeNull();
+  });
+
+  it("shows nothing when the API gave no count", () => {
+    expect(ratingsNudge(undefined)).toBeNull();
+    expect(ratingsNudge(Number.NaN)).toBeNull();
   });
 });

@@ -19,6 +19,11 @@ no real user's data) and runs the real pair pool (`lib/pairPool.ts`, the code be
 ~30 min. It prints the top 10 for each with genres and source (the reason line), then a summary.
 It needs only `TMDB_API_KEY` from `.env.local` and never touches the database.
 
+Since the 12-pick change the pool also includes shows either persona is watching and seeds
+recommendations from titles both personas liked (see spec §5.2). The persona fixtures have no
+WATCHING rows, so the results are only affected by the extra joint seeds. Re-run it and add marks
+for any new titles before comparing numbers with the table below.
+
 Pairs: 1 similar (crime dramas) · 2 complementary (rom-com + sci-fi) · 3 opposites (horror +
 family) · 4 one cold start · 5 both cold start · 6 movie person + TV person.
 

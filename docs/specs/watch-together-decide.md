@@ -9,7 +9,7 @@ Two people who live or watch together (a partner, a family member, a friend) los
 **Goal:** in under two minutes, two connected people get one title they'll **both** enjoy tonight, on a service they can watch it on, and both feel the choice was fair.
 
 What changes for them:
-- **Tonight for you both:** the Watch Together page leads with 5 picks ranked for the pair, under the same mood controls as "What to Watch". It covers movies *and* TV, not just movies as the page does today.
+- **Tonight for you both:** the Watch Together page leads with 12 picks ranked for the pair, under the same mood controls as "What to Watch". It covers movies *and* TV, not just movies as the page does today.
 - **Decide together:** one person starts a quick vote, each votes privately on their own phone on the same shortlist of 10, and the app reveals the match. If there's no match, it offers another round or picks for them.
 
 Success measures are in §9.
@@ -19,7 +19,7 @@ Success measures are in §9.
 | Piece | Where | Notes for this feature |
 |---|---|---|
 | Connections | `UserConnection` (PENDING/ACCEPTED), `app/api/connections/*`, Profile → Friends | Accept by addressee only (checked). Spam and email-oracle issues: security F6, F7. |
-| Watch Together page | `app/(main)/watch-together/[userId]/page.tsx`, `app/api/watch-together/[userId]/route.ts` | **Movies only** (ignores `TVWatchlistEntry`). Sections: Both want to watch, friend loved, I loved, fresh picks from TMDB recs of titles both rated ≥ Like. Checks for an ACCEPTED connection (403 otherwise). Returns the friend's email. |
+| Watch Together page | `app/(main)/watch-together/[userId]/page.tsx`, `app/api/watch-together/[userId]/route.ts` | **Movies only** (ignores `TVWatchlistEntry`). Sections: Both want to watch, friend loved, I loved (the "fresh picks" shelf is gone: its seeds now feed Tonight, §5.2). Checks for an ACCEPTED connection (403 otherwise). Returns the friend's email. |
 | Mood picker | `lib/moodPicker.ts`, `app/api/mood-picks/route.ts`, `app/(main)/what-to-watch/page.tsx` | `moodToDiscoverParams`, `matchesDiscoverParams`, `filterByRealRuntime`, `traitScore`, `blendPools`, `pickRecommendations`. Already written to be reused here. |
 | Ratings | `rating` on both watchlist tables | 1 = Didn't like, 2 = Like, 3 = Love (`components/ui/ThumbRating.tsx`). **Not range-checked on PATCH (F5)**, so values like 999 exist and must be treated as unknown. |
 | Onboarding picks | `app/api/onboarding/route.ts` | Stored as `WATCHED` + `rating: 3`, so they already count as Loves. |
@@ -50,7 +50,7 @@ Success measures are in §9.
 From the owner, and it applies to every part of this spec:
 
 - Movies and TV are **one catalogue**. Every candidate is scored on the same traits: **time available** (runtime or episode length, a hard filter), **tone** (genre fit to the mood) and **quality** (vote-shrunk rating), plus, here, **pair fit**.
-- There is **no quota, no alternation and no per-type slot** anywhere: not in the pool, the 5 picks, the shortlist of 10 or the fallback.
+- There is **no quota, no alternation and no per-type slot** anywhere: not in the pool, the 12 picks, the shortlist of 10 or the fallback.
 - A person's taste is stored as **traits, not types**. A Love for *Arrival* (a movie) raises sci-fi and drama, and so lifts *Severance* (TV) as much as another film. Movie and TV genre ids are mapped onto one shared trait vocabulary (§5.1) so this works.
 - The movie/TV split of what we show is an **outcome we report in the eval**, never a target.
 
@@ -79,7 +79,7 @@ Each decision lists the options and the recommendation. The big ones are also re
 
 **One person's predicted affinity for a candidate**, 0–1:
 1. Trait affinity: `0.5 + 0.5 × tanh(1.5 × mean(w[t] for t in candidate's traits))`.
-2. Direct signals override: on their want list → at least 0.8. Not interested, watched or watching → the title is excluded (§5.2), so it is never scored.
+2. Direct signals override: on their want list → at least 0.8. Not interested or watched → the title is excluded (§5.2), so it is never scored. A TV show someone is *watching* counts like want-to-watch (0.8 floor, source boost below).
 3. **Little data:** confidence `c = min(1, signals / 10)`; `affinity = 0.5 + c × (affinity − 0.5)`. A person with no history is neutral (0.5): they neither drag a title down nor push it up, so ranking leans on the other person plus quality. Fewer than 5 signals sets a `coldStart` flag, and the UI shows "Rate a few things you've seen so picks fit you both" with a link to My Movies. A "rate 10 quickly" flow is a later item.
 
 **Blending two people.** Options:
@@ -106,12 +106,14 @@ Every source returns movies **and** TV. Every candidate passes the **same mood f
 |---|---|---|---|
 | A | **Both want to watch** (intersection of want lists) | all | one `getTitleMoodFacts` each (24 h cache) |
 | B | **One person wants it**, the other hasn't seen it (union minus A) | 15 most recent per person | same |
-| C | **TMDB recommendations** seeded from each person's 3 most recent Loves (movie seeds → `getMovieRecommendations`, TV seeds → `getTVRecommendations`). A title recommended from both people's seeds ranks higher. | top 30 by seed count | ≤ 6 rec calls, then facts checks when time or services are on |
+| C | **TMDB recommendations** seeded from (1) up to 3 titles **both** people liked, Loves first (the old "Fresh Picks for Both of You" shelf), then (2) each person's 3 most recent Loves, alternating (movie seeds → `getMovieRecommendations`, TV seeds → `getTVRecommendations`). A title in both groups is one call. A joint seed counts as seeded by both people (source boost 0.6, same as a title recommended from both people's Loves); a title recommended from both people's seeds ranks higher. | top 30 by seed count | ≤ 8 rec calls in all (joint seeds first), then facts checks when time or services are on |
 | D | **Mood discover**: the mood picker's pool (`moodToDiscoverParams` → `blendPools`), 2 pages per type | 40 | 4 discover calls |
 
 C seeds by type, so a pair who mostly love films get more film recs. That's taste, not a quota, and D plus the cross-type trait profile keep the other type in play.
 
-**Excluded, always:** any title either person has marked watched, watching or not interested. One person's watch history is enough to drop a title: "I've seen it" ends most debates. Rewatches are out of scope.
+**Included:** a TV show either person is **watching** is treated like want-to-watch in A and B (one person = source boost 0.5, both = 1.0) and gets its own reason: "You're watching this", "Sam is watching this", "You're both watching this", or, when one is watching and the other wants it, "Sam is watching this, and it's on your list" / "You're watching this, and it's on Sam's list". Only the titles' list status is used, never a dislike (§5.5).
+
+**Excluded, always:** any title either person has marked watched or not interested. One person's watch history is enough to drop a title: "I've seen it" ends most debates. Rewatches are out of scope.
 
 **Streaming services.** Options:
 
@@ -156,7 +158,7 @@ Options:
 | Reveal / no match | n/a | n/a | n/a |
 | Expired (6 h) or cancelled | n/a | "This vote has ended": **Start a new one** | n/a |
 | Not your session / not connected | n/a | the standard 404 | n/a |
-| Partner cold start | banner on the page: "Sam hasn't rated much yet, so picks lean on your taste" | | |
+| Under 10 taste signals | note per person until they reach 10 (confidence `c` = 1): "You've rated 4 of 10 — rate a few more so picks fit you both. Go to My Movies"; for the partner "Sam has rated 2 of 10, so picks lean on your taste." The model's own <5 cold-start behaviour is unchanged. | | |
 
 ### 5.4 Data model
 
@@ -295,9 +297,10 @@ All routes:
 ```ts
 {
   partner: { id: string; name: string | null };
-  pool: PairCandidate[];        // ≤ 60, ranked; the client draws 5 with a weighted shuffle
+  pool: PairCandidate[];        // ≤ 60, ranked; the client draws 12 with a weighted shuffle (5 shuffles before a repeat)
   services: { mine: boolean; partners: boolean; shared: number[] }; // for toggle state
   coldStart: { me: boolean; partner: boolean };
+  signals: { me: number; partner: number }; // taste signals, numbers only: drives "rated 4 of 10"
 }
 type PairCandidate = MoodCandidate & {
   pairScore: number;            // 0–1, final score from §5.1
@@ -343,7 +346,7 @@ type PairCandidate = MoodCandidate & {
 
 | Finding | How this spec respects it |
 |---|---|
-| **F1** unauthenticated TMDB proxies, quota | Every new route requires a session. TMDB calls happen only in `/picks` and `POST /api/decide`, are capped per request (§5.2: ≤ 6 rec calls, ≤ 4 discover calls, ≤ 30 facts lookups on a cold cache) and go through `createLimiter(6)`, mostly with a 24 h cache. Session creation is capped at 20 per user per day (counted from `decide_sessions`, no new infrastructure). Polling reads only the database. |
+| **F1** unauthenticated TMDB proxies, quota | Every new route requires a session. TMDB calls happen only in `/picks` and `POST /api/decide`, are capped per request (§5.2: ≤ 8 rec calls, ≤ 4 discover calls, ≤ 30 facts lookups on a cold cache) and go through `createLimiter(6)`, mostly with a 24 h cache. Session creation is capped at 20 per user per day (counted from `decide_sessions`, no new infrastructure). Polling reads only the database. |
 | **F5** input validation | zod schemas for the mood, `partnerId` (cuid string, ≤ 40 chars), `candidateId` and `vote` (integer 0–2). Unknown keys are stripped. Ratings outside 1–3 are ignored by the taste model instead of trusted. |
 | **F6** connection abuse | Sessions exist only on ACCEPTED connections, so a pending or declined requester can't push sessions or a Join banner at anyone. One open session per pair (starting another cancels it), the 24 h cap, and unfriending cascades everything away. If F6's block or `DECLINED` status lands first, `requireConnection` still only accepts ACCEPTED. |
 | **F7** email oracle | No new route takes an email or returns one. Partner objects are `{ id, name }`. Unknown-user and not-connected both return 404. |
@@ -417,7 +420,6 @@ zod is already installed. Taste is deterministic code over cached genres, not an
 - Each person picks a mood, and the app combines them (time = the shorter; vibes ranked by overlap)
 - Email or push "Sam started a vote" via Resend
 - Feed decide votes back into taste (a No as a soft not-interested), only with clear consent
-- "Keep watching together": shows both people are watching
 - A quick "rate 10 you've seen" flow for cold-start partners
 - Groups of 3+ (a family): least misery generalises; the session needs a participants table
 - Region support beyond US
@@ -486,11 +488,11 @@ Move the mood chips and toggles from `what-to-watch/page.tsx` into `components/m
 **Done when:** What to Watch looks and works the same on the preview (the verifier compares it with production), and lint, type-check and tests pass.
 
 ### Task 5: "Tonight for you both" UI
-- On `/watch-together/[userId]`: `MoodControls` (no media control), 5 picks drawn from the pool with a weighted shuffle, a reason caption on each, Shuffle, the loading, empty, error and cold-start states from §5.3, and PosterCard if it has merged.
+- On `/watch-together/[userId]`: `MoodControls` (no media control), 12 picks drawn from the pool with a weighted shuffle, a reason caption on each, Shuffle (a new 12 without repeats while the pool lasts), the loading, empty, error and rate-10 note states from §5.3, and PosterCard if it has merged.
 - Extend the existing route's shelves to include TV, and drop `email` from its `friend` response.
 
 **Done when:** on the preview, signed in with a connected test account:
-- 5 picks show, with movies and TV both possible.
+- 12 picks show, with movies and TV both possible.
 - Changing the mood refetches.
 - With services on and nothing matching, the empty state shows.
 - A cold-start partner shows the banner.

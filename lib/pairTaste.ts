@@ -33,8 +33,8 @@ export interface TasteProfile {
 }
 
 export const COLD_START_SIGNALS = 5;
-/** Signals needed for full confidence */
-const FULL_CONFIDENCE_SIGNALS = 10;
+/** Signals needed for full confidence (c = 1); the UI nudges people up to here */
+export const FULL_CONFIDENCE_SIGNALS = 10;
 /** Pseudo-count that shrinks traits seen only once or twice towards 0 */
 const TRAIT_PRIOR = 2;
 

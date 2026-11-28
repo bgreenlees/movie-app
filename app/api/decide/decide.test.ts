@@ -285,6 +285,21 @@ describe("GET /api/decide/[id]", () => {
     expect((await view("me1", id)).status).toBe(404);
   });
 
+  it("shows a show Sam is watching as Sam's, and the same card to Sam as his own", async () => {
+    const result = poolResult(30);
+    result.pool[0] = {
+      ...result.pool[0],
+      mediaType: "tv",
+      reason: "Sam is watching this",
+      partnerReason: "You're watching this",
+      onMyList: false,
+    };
+    m.buildPairPool.mockResolvedValueOnce(result);
+    const id = await startSession();
+    expect((await view("me1", id)).body.candidates[0]).toMatchObject({ mediaType: "tv", reason: "Sam is watching this" });
+    expect((await view("pal1", id)).body.candidates[0]).toMatchObject({ mediaType: "tv", reason: "You're watching this" });
+  });
+
   it("shows the current round with each person's own reason wording", async () => {
     const id = await startSession();
     const mine = (await view("me1", id)).body;

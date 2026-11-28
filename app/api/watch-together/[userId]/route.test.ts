@@ -7,8 +7,6 @@ const m = vi.hoisted(() => ({
   findUnique: vi.fn(),
   movies: vi.fn(),
   shows: vi.fn(),
-  movieRecs: vi.fn(),
-  tvRecs: vi.fn(),
 }));
 vi.mock("@/lib/auth", () => ({ auth: m.auth }));
 vi.mock("@/lib/connections", () => ({ requireConnection: m.requireConnection }));
@@ -18,9 +16,6 @@ vi.mock("@/lib/db", () => ({
     watchlistEntry: { findMany: m.movies },
     tVWatchlistEntry: { findMany: m.shows },
   },
-}));
-vi.mock("@/lib/tmdb", () => ({
-  tmdb: { getMovieRecommendations: m.movieRecs, getTVRecommendations: m.tvRecs },
 }));
 // No "@/" alias in the Vitest setup: map the pure helpers to the real modules.
 vi.mock("@/lib/decide", () => import("../../../../lib/decide"));
@@ -56,10 +51,6 @@ beforeEach(() => {
       ? [show(10, "WANT_TO_WATCH"), show(20, "WATCHED", 3)]
       : [show(10, "WANT_TO_WATCH"), show(20, "WATCHED", 3), show(30, "WATCHED", 3)]
   );
-  m.movieRecs.mockResolvedValue({ results: [] });
-  m.tvRecs.mockResolvedValue({
-    results: [{ id: 40, name: "Rec Show", poster_path: "/r.jpg", first_air_date: "2022-01-01" }],
-  });
 });
 
 describe("GET /api/watch-together/[userId]", () => {
@@ -76,13 +67,12 @@ describe("GET /api/watch-together/[userId]", () => {
     expect(m.movies).not.toHaveBeenCalled();
   });
 
-  it("includes TV in the shelves and seeds fresh picks from a show both loved", async () => {
+  it("includes TV in the shelves and has no Fresh Picks shelf", async () => {
     const body = await (await call("pal1")).json();
     const keys = (xs: { mediaType: string; id: number }[]) => xs.map((x) => `${x.mediaType}-${x.id}`).sort();
     expect(keys(body.bothWantToWatch)).toEqual(["movie-1", "tv-10"]);
     expect(keys(body.friendLovedForMe)).toEqual(["tv-30"]);
-    expect(m.tvRecs).toHaveBeenCalledWith(20);
-    expect(keys(body.freshPicks)).toEqual(["tv-40"]);
+    expect(body).not.toHaveProperty("freshPicks");
   });
 
   it("returns the friend as { id, name } with no email", async () => {
@@ -90,12 +80,5 @@ describe("GET /api/watch-together/[userId]", () => {
     expect(body.friend).toEqual({ id: "pal1", name: "Sam" });
     expect(m.findUnique).toHaveBeenCalledWith({ where: { id: "pal1" }, select: { name: true } });
     expect(JSON.stringify(body)).not.toMatch(/email/i);
-  });
-
-  it("still loads when a TMDB recommendation call fails", async () => {
-    m.tvRecs.mockRejectedValue(new Error("down"));
-    const res = await call("pal1");
-    expect(res.status).toBe(200);
-    expect((await res.json()).freshPicks).toEqual([]);
   });
 });
