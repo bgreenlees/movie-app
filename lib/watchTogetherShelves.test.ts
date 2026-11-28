@@ -60,6 +60,7 @@ describe("buildShelves", () => {
     const loved = buildShelves([], theirs).friendLovedForMe;
     expect(keys(loved).slice(0, 3)).toEqual(["movie-3", "tv-2", "movie-1"]);
     expect(loved).toHaveLength(SHELF_SIZE);
+    expect(loved.slice(0, 3).map((x) => x.rating)).toEqual([3, 3, 2]);
   });
 });
 

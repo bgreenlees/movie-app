@@ -17,6 +17,9 @@ interface ShelvesData {
 
 const keyOf = (t: { mediaType: "movie" | "tv"; id: number }) => `${t.mediaType}-${t.id}`;
 
+/** Badge under a poster on the "loved or liked" shelves. */
+const ratingLabel = (rating?: number) => (rating === 3 ? "♥ Loved" : rating === 2 ? "👍 Liked" : undefined);
+
 function Shelf({
   title,
   subtitle,
@@ -45,7 +48,7 @@ function Shelf({
       <ul className={PAIR_GRID}>
         {items.map((item) => (
           <li key={keyOf(item)}>
-            <PairCard item={item} hasEntry={hasEntry(item)} onAdd={() => onAdd(item)} onTrailer={() => onTrailer(item)} />
+            <PairCard item={item} caption={ratingLabel(item.rating)} hasEntry={hasEntry(item)} onAdd={() => onAdd(item)} onTrailer={() => onTrailer(item)} />
           </li>
         ))}
       </ul>
@@ -55,7 +58,7 @@ function Shelf({
 
 /**
  * The three Watch Together shelves (both want to watch, what each of you loved
- * that the other hasn't seen), from `GET /api/watch-together/[userId]`. They
+ * that aren't on the other's lists), from `GET /api/watch-together/[userId]`. They
  * are lists, so they ignore the mood controls but follow the Both/Movies/TV
  * filter. Keyed on the friend by the caller, so one friend's shelves never
  * show under another.
@@ -135,16 +138,16 @@ export default function WatchTogetherShelves({
         onTrailer={onTrailer}
       />
       <Shelf
-        title={`${name} Loved — You Haven't Seen`}
-        subtitle={`${name}'s top-rated titles that aren't on your lists yet`}
+        title={`${name} Loved or Liked — Not on Your Lists`}
+        subtitle={`Titles ${name} rated ♥ or 👍 that aren't on your lists yet, loves first`}
         items={theirs}
         hasEntry={hasEntry}
         onAdd={onAdd}
         onTrailer={onTrailer}
       />
       <Shelf
-        title={`You Loved — ${name} Hasn't Seen`}
-        subtitle={`Your top-rated titles that ${name} hasn't added yet`}
+        title={`You Loved or Liked — Not on ${name}'s Lists`}
+        subtitle={`Titles you rated ♥ or 👍 that aren't on ${name}'s lists yet, loves first`}
         items={mine}
         hasEntry={hasEntry}
         onAdd={onAdd}
