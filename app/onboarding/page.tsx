@@ -73,7 +73,7 @@ export default function OnboardingPage() {
   if (status === "loading" || status === "unauthenticated") return null;
 
   const count = selected.size;
-  const canSubmit = count >= 3 && count <= 5;
+  const canSubmit = count >= 10 && count <= 10;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -85,7 +85,7 @@ export default function OnboardingPage() {
               What films do you love?
             </h1>
             <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-              Pick 3 to 5 films you love and we’ll suggest more like them
+              Pick at least 5 films (up to 10) you love and we’ll suggest more like them
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -96,7 +96,7 @@ export default function OnboardingPage() {
                 color: canSubmit ? "var(--color-accent-text)" : "var(--text-muted)",
               }}
             >
-              {count} / 5 selected
+              {count} / 10 selected
             </span>
             <button
               onClick={() => submit(false)}
@@ -133,11 +133,11 @@ export default function OnboardingPage() {
                   <button
                     key={movie.id}
                     onClick={() => toggle(movie.id)}
-                    disabled={!isSelected && count >= 5}
+                    disabled={!isSelected && count >= 10}
                     className="relative rounded-lg overflow-hidden group transition-all duration-200"
                     style={{
                       boxShadow: isSelected ? `0 0 0 3px var(--accent), 0 0 20px color-mix(in srgb, var(--accent) 40%, transparent)` : "none",
-                      opacity: !isSelected && count >= 5 ? 0.4 : 1,
+                      opacity: !isSelected && count >= 10 ? 0.4 : 1,
                     }}
                     title={movie.title}
                   >

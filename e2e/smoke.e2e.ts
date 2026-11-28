@@ -140,10 +140,10 @@ test("first-run onboarding picker works on a phone: titles shown, 5-pick cap, Es
   }));
   console.log(`onboarding scroll area: ${scrollH}px over a ${clientH}px viewport`);
 
-  // A 6th pick is blocked with a hint
-  for (let i = 0; i < 6; i++) await dialog.getByRole("button", { pressed: false }).nth(i).click();
-  await expect(dialog.getByRole("button", { pressed: true })).toHaveCount(5);
-  await expect(dialog.getByRole("alert")).toContainText("up to 5");
+  // A 11th pick is blocked with a hint
+  for (let i = 0; i < 11; i++) await dialog.getByRole("button", { pressed: false }).nth(i).click();
+  await expect(dialog.getByRole("button", { pressed: true })).toHaveCount(10);
+  await expect(dialog.getByRole("alert")).toContainText("up to 10");
 
   // Escape closes the dialog
   await page.keyboard.press("Escape");

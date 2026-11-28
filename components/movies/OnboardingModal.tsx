@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { ONBOARDING_CLUSTERS as CLUSTERS } from "@/lib/onboarding";
 
-const MIN_PICKS = 3;
-const MAX_PICKS = 5;
+const MIN_PICKS = 5;
+const MAX_PICKS = 10;
 const POSTER_BASE = "https://image.tmdb.org/t/p/w342";
 
 interface OnboardingModalProps {
@@ -100,7 +100,7 @@ export default function OnboardingModal({ onClose }: OnboardingModalProps) {
             What films do you love?
           </h1>
           <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-            Pick {MIN_PICKS} to {MAX_PICKS} films you love and we’ll suggest more like them.
+            Pick at least {MIN_PICKS} films you love ({MAX_PICKS} max) and we’ll suggest more like them.
           </p>
         </div>
       </div>
@@ -191,7 +191,9 @@ export default function OnboardingModal({ onClose }: OnboardingModalProps) {
               style={{ color: canSubmit ? "var(--color-accent-text)" : "var(--text-muted)" }}
               aria-live="polite"
             >
-              {count} of {MAX_PICKS}{count < MIN_PICKS ? ` · pick ${MIN_PICKS - count} more` : ""}
+              {count < MIN_PICKS
+                ? `${count} of ${MIN_PICKS} · pick ${MIN_PICKS - count} more`
+                : `${count} picked, up to ${MAX_PICKS} for better picks`}
             </span>
             <button
               type="button"
