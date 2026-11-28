@@ -91,9 +91,13 @@ describe("drawWeight", () => {
 });
 
 describe("pairPicksQuery", () => {
-  it("sends nothing for the defaults and never sends media", () => {
+  it("sends nothing for the defaults (media both is the default)", () => {
     expect(pairPicksQuery(DEFAULT_SELECTION, false)).toBe("");
-    expect(pairPicksQuery({ ...DEFAULT_SELECTION, media: "movie" }, false)).toBe("");
+  });
+
+  it("sends media only when it filters", () => {
+    expect(pairPicksQuery({ ...DEFAULT_SELECTION, media: "movie" }, false)).toBe("media=movie");
+    expect(pairPicksQuery({ ...DEFAULT_SELECTION, media: "tv" }, false)).toBe("media=tv");
   });
 
   it("sends the chosen moods", () => {

@@ -99,6 +99,16 @@ describe("GET /api/watch-together/[userId]/picks", () => {
     expect(JSON.stringify(body)).not.toMatch(/email/i);
   });
 
+  it("filters by media, and rejects an invalid media value", async () => {
+    const movies = await (await call("pal1", "?media=movie")).json();
+    expect(movies.pool.map((c: { mediaType: string }) => c.mediaType)).toEqual(["movie"]);
+    const shows = await (await call("pal1", "?media=tv")).json();
+    expect(shows.pool.map((c: { mediaType: string }) => c.mediaType)).toEqual(["tv"]);
+    const both = await (await call("pal1", "?media=both")).json();
+    expect(both.pool.map((c: { mediaType: string }) => c.mediaType).sort()).toEqual(["movie", "tv"]);
+    expect((await call("pal1", "?media=book")).status).toBe(400);
+  });
+
   it("returns 502 when TMDB discover is down and nothing else qualifies", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     m.discover.mockRejectedValue(new Error("TMDB API error"));

@@ -14,6 +14,7 @@ import { z } from "zod";
 import {
   blendPools,
   candidateKey,
+  mediaTypesFor,
   filterByRealRuntime,
   fitsRuntime,
   matchesDiscoverParams,
@@ -54,8 +55,6 @@ export const FACTS_SHARES = { wants: 12, recs: 8, discover: 10 } as const;
 export const FACTS_BUDGET = FACTS_SHARES.wants + FACTS_SHARES.recs + FACTS_SHARES.discover;
 /** Size of the ranked pool returned to the client */
 export const PAIR_POOL_SIZE = 60;
-
-const MEDIA_TYPES: readonly MediaType[] = ["movie", "tv"];
 
 // ── Inputs ───────────────────────────────────────────────────────────────────
 
@@ -111,7 +110,10 @@ export interface PairPoolInput {
   partner: PoolPerson;
   /** Partner's display name for reasons; null → "your friend" */
   partnerName: string | null;
-  /** `media` is ignored: the pair pool is always movies and TV */
+  /**
+   * `media` is a filter only: "both" (the default) mixes movies and TV by
+   * traits with no quota; "movie" / "tv" keep just that type.
+   */
   selection: MoodSelection;
   /** "Only services we both have" */
   sharedOnly: boolean;
@@ -170,8 +172,8 @@ const flag = z
 /**
  * `GET /api/watch-together/[userId]/picks?vibe=&time=&fresh=&services=&sharedOnly=`
  * Missing params take defaults; a present but invalid value is a 400, not a
- * silent fallback (F5). Unknown keys are stripped. `media` is accepted for
- * links shared with What to Watch, and ignored.
+ * silent fallback (F5). Unknown keys are stripped. `media` (both | movie | tv,
+ * default both) filters the pool and nothing else.
  */
 export const pairPicksQuerySchema = z
   .object({
@@ -180,7 +182,7 @@ export const pairPicksQuerySchema = z
     fresh: flag,
     services: flag,
     sharedOnly: flag,
-    media: z.enum(["movie", "tv", "both"]).optional(),
+    media: z.enum(["movie", "tv", "both"]).default("both"),
   })
   .transform((q): { selection: MoodSelection; sharedOnly: boolean } => ({
     selection: {
@@ -188,7 +190,7 @@ export const pairPicksQuerySchema = z
       time: q.time,
       fresh: q.fresh,
       onMyServices: q.services,
-      media: "both",
+      media: q.media,
     },
     sharedOnly: q.sharedOnly,
   }));
@@ -335,7 +337,8 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
 
   const services = resolveServices(me.providerIds, partner.providerIds, sharedOnly);
   const servicesOn = input.selection.onMyServices && services.mode !== "none";
-  const selection: MoodSelection = { ...input.selection, onMyServices: servicesOn, media: "both" };
+  const selection: MoodSelection = { ...input.selection, onMyServices: servicesOn };
+  const mediaTypes = mediaTypesFor(selection.media);
 
   // "Only services we both have" with nothing in common: nothing can qualify.
   // (moodToDiscoverParams would otherwise drop the filter for an empty list.)
@@ -391,7 +394,7 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
     extra?: { wantBy?: Who; watching?: boolean; seed?: [Who, string, boolean]; providerIds?: number[] }
   ) => {
     const key = candidateKey(c);
-    if (exclude.has(key)) return;
+    if (exclude.has(key) || !mediaTypes.includes(c.mediaType)) return;
     let d = drafts.get(key);
     if (!d) {
       d = { c, wantedBy: new Set(), watchingBy: new Set(), seededBy: {}, likedSeeds: new Set() };
@@ -411,9 +414,12 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
   };
 
   // ── A and B: want lists, and shows someone is watching (counted as wanted) ──
+  // Other-type titles are skipped here so they don't spend the lookup budget
+  const wantable = (e: PoolEntry) =>
+    isOpen(e.status) && !exclude.has(entryKey(e)) && mediaTypes.includes(e.mediaType);
   const wants: Record<Who, PoolEntry[]> = {
-    me: me.entries.filter((e) => isOpen(e.status) && !exclude.has(entryKey(e))).sort(byRecent),
-    partner: partner.entries.filter((e) => isOpen(e.status) && !exclude.has(entryKey(e))).sort(byRecent),
+    me: me.entries.filter(wantable).sort(byRecent),
+    partner: partner.entries.filter(wantable).sort(byRecent),
   };
   const watchingKeys: Record<Who, Set<string>> = {
     me: new Set(me.entries.filter((e) => e.status === "WATCHING").map(entryKey)),
@@ -482,7 +488,7 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
     seeds.map(({ e }) => fetchers.recommendations(e.mediaType, e.tmdbId))
   );
   const discoverCalls = Promise.all(
-    MEDIA_TYPES.map(async (media) => {
+    mediaTypes.map(async (media) => {
       const pages = await Promise.allSettled(
         DISCOVER_PAGES.map((page) => fetchers.discover(media, paramsFor[media], page))
       );
@@ -547,6 +553,7 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
     });
   });
   const topRecs = [...recs.values()]
+    .filter((r) => mediaTypes.includes(r.c.mediaType))
     .sort(
       (a, b) =>
         Object.keys(b.by).length - Object.keys(a.by).length || b.hits - a.hits || a.order - b.order

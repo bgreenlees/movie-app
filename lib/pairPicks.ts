@@ -122,12 +122,13 @@ export function refillPicks<C extends Drawable>(
 }
 
 /**
- * Query for `GET /api/watch-together/[userId]/picks`. No `media`: the pair
- * pool is always movies and TV. Only non-default values are sent.
+ * Query for `GET /api/watch-together/[userId]/picks`. Only non-default
+ * values are sent; `media` is a filter (both = movies and TV mixed).
  */
 export function pairPicksQuery(selection: MoodSelection, sharedOnly: boolean): string {
   const q = new URLSearchParams();
   if (selection.vibe !== "any") q.set("vibe", selection.vibe);
+  if (selection.media !== "both") q.set("media", selection.media);
   if (selection.time !== "any") q.set("time", selection.time);
   if (selection.fresh) q.set("fresh", "1");
   if (selection.onMyServices) q.set("services", "1");
