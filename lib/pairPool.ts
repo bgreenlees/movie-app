@@ -56,7 +56,6 @@ export const FACTS_BUDGET = FACTS_SHARES.wants + FACTS_SHARES.recs + FACTS_SHARE
 /** Size of the ranked pool returned to the client */
 export const PAIR_POOL_SIZE = 60;
 
-
 // ── Inputs ───────────────────────────────────────────────────────────────────
 
 /** One row of a person's movie or TV watchlist, with the cached title data. */

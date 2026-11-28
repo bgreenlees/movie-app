@@ -17,7 +17,7 @@ import { DecideEntry } from "@/components/decide/DecideEntry";
 import TonightForYouBoth, { type TonightMeta } from "@/components/watch-together/TonightForYouBoth";
 import WatchWithPicker from "@/components/watch-together/WatchWithPicker";
 import { loadMyEntries, type MyEntry } from "@/lib/myEntries";
-import { parseFriends, resolveWith, type WatchFriend } from "@/lib/watchWith";
+import { parseFriends, withMode, type FriendsState } from "@/lib/watchWith";
 import {
   DEFAULT_SELECTION,
   candidateKey,
@@ -75,37 +75,45 @@ function WhatToWatch() {
   const router = useRouter();
   const pathname = usePathname();
   const withParam = useSearchParams().get("with");
-  // Accepted friends (null while loading); a failed load means "Just me" only
-  const [friends, setFriends] = useState<WatchFriend[] | null>(null);
+  // Accepted friends. A failed load is its own state: it isn't "no friends", so ?with= is kept and Retry is offered
+  const [friendsState, setFriendsState] = useState<FriendsState>({ status: "loading" });
+  const [friendsAttempt, setFriendsAttempt] = useState(0);
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const res = await fetch("/api/connections");
-        const list = res.ok ? parseFriends(await res.json()) : [];
-        if (!cancelled) setFriends(list);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const friends = parseFriends(await res.json());
+        if (!cancelled) setFriendsState({ status: "ready", friends });
       } catch {
-        if (!cancelled) setFriends([]);
+        if (!cancelled) setFriendsState({ status: "error" });
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [friendsAttempt]);
+  const retryFriends = () => {
+    setFriendsState({ status: "loading" });
+    setFriendsAttempt((n) => n + 1);
+  };
   // An id that isn't an accepted friend quietly means "Just me": same result for unknown and non-friend ids
-  const friend = friends ? resolveWith(withParam, friends) : null;
-  // A shared link is waiting on the friends list: don't load picks for the wrong mode yet
-  const resolving = !!withParam && friends === null;
+  const mode = withMode(withParam, friendsState);
+  const friend = mode.kind === "pair" ? mode.friend : null;
+  // A shared link can't be placed yet (list loading, or failed to load): no picks for either mode
+  const resolving = mode.kind === "resolving";
+  const friendsFailedOnLink = mode.kind === "error" && mode.hasWith;
   const pair = !!friend;
-  const solo = !pair && !resolving;
+  const solo = !pair && !resolving && !friendsFailedOnLink;
 
   const setWith = useCallback(
     (id: string | null) => router.replace(id ? `${pathname}?with=${encodeURIComponent(id)}` : pathname, { scroll: false }),
     [router, pathname]
   );
   useEffect(() => {
-    if (friends && withParam && !friend) router.replace(pathname, { scroll: false });
-  }, [friends, withParam, friend, router, pathname]);
+    if (mode.kind === "stale") router.replace(pathname, { scroll: false });
+  }, [mode.kind, router, pathname]);
 
   const [sharedOnly, setSharedOnly] = useState(false);
   const [shuffleKey, setShuffleKey] = useState(0);
@@ -228,12 +236,12 @@ function WhatToWatch() {
         <h1 className="text-3xl font-bold" style={{ color: "var(--primary)" }}>
           What to Watch
         </h1>
-        <WatchWithPicker friends={friends} value={friend?.id ?? null} onChange={setWith} />
+        <WatchWithPicker state={friendsState} value={friend?.id ?? null} onChange={setWith} onRetry={retryFriends} />
       </div>
       <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
         {pair
           ? `Movies and shows you and ${friendName} are both likely to enjoy, nothing either of you has seen.`
-          : "Pick a mood and we\u2019ll suggest a few titles \u2014 your watchlist first, nothing you\u2019ve already seen."}
+          : "Pick a mood and we’ll suggest a few titles — your watchlist first, nothing you’ve already seen."}
       </p>
 
       <MoodControls
@@ -252,7 +260,7 @@ function WhatToWatch() {
           <Link href="/profile" style={{ color: "var(--color-accent-text)" }}>
             Profile
           </Link>{" "}
-          to filter by them \u2014 showing everything for now.
+          to filter by them — showing everything for now.
         </p>
       )}
 
@@ -291,6 +299,8 @@ function WhatToWatch() {
 
       {resolving ? (
         <Skeleton count={PICK_COUNT} label="Loading suggestions" />
+      ) : friendsFailedOnLink ? (
+        <ErrorState title="Couldn't load your friends" onRetry={retryFriends} />
       ) : pair && friend ? (
         <TonightForYouBoth
           key={friend.id}

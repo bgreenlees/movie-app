@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseFriends, resolveWith } from "./watchWith";
+import { parseFriends, resolveWith, withMode, type FriendsState } from "./watchWith";
 
 const body = {
   friends: [
@@ -42,5 +42,26 @@ describe("resolveWith", () => {
 
   it("is null when there are no friends", () => {
     expect(resolveWith("u2", [])).toBeNull();
+  });
+});
+
+describe("withMode", () => {
+  const ready: FriendsState = { status: "ready", friends: parseFriends(body) };
+
+  it("waits for the list when a link names a friend, otherwise is solo", () => {
+    expect(withMode("u2", { status: "loading" })).toEqual({ kind: "resolving" });
+    expect(withMode(null, { status: "loading" })).toEqual({ kind: "solo" });
+  });
+
+  it("on a failed load keeps the link and never falls back", () => {
+    expect(withMode("u2", { status: "error" })).toEqual({ kind: "error", hasWith: true });
+    expect(withMode(null, { status: "error" })).toEqual({ kind: "error", hasWith: false });
+  });
+
+  it("is pair for an accepted friend, stale for anyone else, solo with no link", () => {
+    expect(withMode("u2", ready)).toEqual({ kind: "pair", friend: { id: "u2", name: "Sam" } });
+    expect(withMode("stranger", ready)).toEqual({ kind: "stale" });
+    expect(withMode(null, ready)).toEqual({ kind: "solo" });
+    expect(withMode("u2", { status: "ready", friends: [] })).toEqual({ kind: "stale" });
   });
 });

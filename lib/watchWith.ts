@@ -39,3 +39,28 @@ export function resolveWith(raw: string | null | undefined, friends: readonly Wa
   if (!raw) return null;
   return friends.find((f) => f.id === raw) ?? null;
 }
+
+/** The friends list as the page knows it: loading, failed to load, or loaded. */
+export type FriendsState =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; friends: WatchFriend[] };
+
+/** What the page should be doing for the current `?with=` and friends list. */
+export type WithMode =
+  /** Waiting on the friends list (a shared link can't be resolved yet) */
+  | { kind: "resolving" }
+  /** The list failed to load: keep `?with=` in the URL, offer Retry, don't guess */
+  | { kind: "error"; hasWith: boolean }
+  | { kind: "solo" }
+  | { kind: "pair"; friend: WatchFriend }
+  /** Loaded, and `?with=` isn't an accepted friend: quietly drop it */
+  | { kind: "stale" };
+
+export function withMode(raw: string | null | undefined, state: FriendsState): WithMode {
+  if (state.status === "loading") return raw ? { kind: "resolving" } : { kind: "solo" };
+  if (state.status === "error") return { kind: "error", hasWith: !!raw };
+  const friend = resolveWith(raw, state.friends);
+  if (friend) return { kind: "pair", friend };
+  return raw ? { kind: "stale" } : { kind: "solo" };
+}

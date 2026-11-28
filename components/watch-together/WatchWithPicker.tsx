@@ -1,24 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import type { WatchFriend } from "@/lib/watchWith";
+import type { FriendsState } from "@/lib/watchWith";
 
 /**
  * "Watch together" control for What to Watch: a dropdown of accepted friends,
  * with "Just me" first. With no friends it's a short link to add one.
- * `friends` is null while they load.
+ * If the friends couldn't be loaded it says so with a Retry, rather than
+ * pretending there are none.
  */
 export default function WatchWithPicker({
-  friends,
+  state,
   value,
   onChange,
+  onRetry,
 }: {
-  friends: readonly WatchFriend[] | null;
+  state: FriendsState;
   /** The selected friend's id, or null for "Just me" */
   value: string | null;
   onChange: (friendId: string | null) => void;
+  onRetry: () => void;
 }) {
-  if (friends === null) return null;
+  if (state.status === "loading") return null;
+  if (state.status === "error") {
+    return (
+      <p role="status" className="text-sm" style={{ color: "var(--text-muted)" }}>
+        Couldn&apos;t load your friends —{" "}
+        <button onClick={onRetry} className="underline cursor-pointer" style={{ color: "var(--accent)" }}>
+          Retry
+        </button>
+      </p>
+    );
+  }
+  const { friends } = state;
   if (friends.length === 0) {
     return (
       <Link href="/profile" className="text-sm underline" style={{ color: "var(--accent)" }}>
