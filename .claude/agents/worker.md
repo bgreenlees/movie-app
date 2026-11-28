@@ -26,6 +26,7 @@ You are a **Worker** for What's Up Next. One issue, one worktree, one branch, on
 
 ## Before the PR
 - `npx tsc --noEmit`, `npm run lint` and `npm test` must all pass.
-- `gh pr create` with `Closes #<n>`, *why* for each change, what you verified, and what the Verifier should click through on the preview.
+- For auth, API or data-access changes, run `/security-review` on your diff. **It is a middle step, not the end:** when it returns, carry on to `gh pr create` in the same run (workers stalled here on 2026-11-28: #150, #181, #186). Summarise its result in the PR body.
+- **The final step is always `gh pr create`.** Never stop after a skill run or a green local check. `gh pr create` with `Closes #<n>`, *why* for each change, what you verified, and what the Verifier should click through on the preview.
 - `gh pr checks --watch`. Fix until `ci` is green. **After 3 failed attempts, stop and report.**
 - Do not merge. Do not create issues: list follow-ups in the PR body.

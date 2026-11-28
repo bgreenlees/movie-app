@@ -5,6 +5,7 @@ How work flows from idea to production, and which agent does what. Role definiti
 ## Flow
 ```
 idea ──► issue (owner) ──► [planner: spec + task breakdown, for big features]
+     ──► [designer: mockups from real screenshots, for new or redesigned screens]
      ──► worker (own worktree) ──► PR
      ──► gates: ci + e2e checks (type-check, lint, test, smoke tests) → reviewer → verifier (new UI only)
      ──► coordinator merges ──► main ──► Vercel production
@@ -17,8 +18,11 @@ idea ──► issue (owner) ──► [planner: spec + task breakdown, for big 
 | Planner | `docs/specs/*` | read + web + docs | Opus, high | once per large feature |
 | Worker | code + tests | all, in own worktree | Sonnet (Opus for design-heavy) | one per issue |
 | Researcher | `docs/reviews/*`, `docs/research/*` | read + web + docs | Opus, high | spikes, reviews, audits |
+| Designer | `docs/design/<issue>-<slug>/*` (screenshots, prototype, spec) | read + shell (Playwright) + write docs, never app code | Opus | one per mockup or redesign issue |
 | Reviewer | review comments only | read-only | Opus, medium, fresh session | every PR |
 | Verifier | pass/fail report | browser + read | Sonnet, medium | PRs that change UI |
+
+**No design by the coordinator** (owner rule, 2026-11-28). Beyond minor layout, every mockup or screen redesign goes to a **designer** agent (`dispatch.sh <n> designer`). The designer starts from real screenshots of today's screens (Playwright at 390px and 1280px), keeps the Cinema dark design system, changes only what the issue asks, and hands a worker a spec to build from. If the budget is short, queue the design issue; don't draw it yourself.
 
 Escalate: start at the default, and relaunch at higher effort or on Opus after a failed attempt. Stop and ask the owner after 3.
 
@@ -50,7 +54,7 @@ The coordinator is the long-lived session on `main`. It's also the most expensiv
 Agent time is the factory's main cost, and usage credits can run out mid-task (it happened on 2026-11-26 and killed two workers). These rules keep it in check:
 
 1. **At most 4 agents at once.** `dispatch.sh` refuses a launch when `MAX_AGENTS` (default 4) are already working; queue the rest in the Factory state issue and launch as slots free. `--force` only for something urgent.
-2. **Sonnet by default.** Workers, reviewers and verifiers default to Sonnet. Use `--model opus` only for: security-sensitive code (auth, API authorization, data access), design-heavy UI built from a spec, planners and researchers. **At most one Opus agent at a time** (`MAX_OPUS`, default 1): on the Pro plan two Opus workers in parallel used about a third of a 5-hour session window in 30 minutes. `dispatch.sh` records each launch's model and refuses a second Opus launch; queue it or run it on Sonnet.
+2. **Sonnet by default.** Workers, reviewers and verifiers default to Sonnet (designers, planners and researchers default to Opus). Use `--model opus` only for: security-sensitive code (auth, API authorization, data access), design-heavy UI built from a spec, designers, planners and researchers. **At most one Opus agent at a time** (`MAX_OPUS`, default 1): on the Pro plan two Opus workers in parallel used about a third of a 5-hour session window in 30 minutes. `dispatch.sh` records each launch's model and refuses a second Opus launch; queue it or run it on Sonnet.
 3. **Right-size the checks.** A PR under ~150 changed lines that isn't security-sensitive gets **one** check: a Verifier if it changes the UI, otherwise a Reviewer. Bigger or security-sensitive PRs get both. Docs-only PRs get the coordinator's own read.
 4. **Fresh coordinator sessions.** The coordinator re-reads its whole conversation every turn, so it is the single biggest cost. Start a new session at least daily, and immediately after any long batch; resume from the Factory state issue (#102).
 5. **Coordinator habits:** keep replies short, wait in the background (`wait-pr.sh`), and don't pull large logs or transcripts into the conversation (read just the verdict).
