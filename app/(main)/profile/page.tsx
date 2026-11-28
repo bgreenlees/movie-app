@@ -223,9 +223,9 @@ export default function ProfilePage() {
       <div className="max-w-2xl mx-auto p-6 space-y-4" role="status" aria-busy="true">
         <span className="sr-only">Loading your profile…</span>
         <SkeletonBlock className="h-8 w-48" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2 sm:gap-3">
           {Array.from({ length: 8 }, (_, i) => (
-            <SkeletonBlock key={i} className="h-16" />
+            <SkeletonBlock key={i} className="h-[88px]" />
           ))}
         </div>
       </div>
@@ -262,14 +262,16 @@ export default function ProfilePage() {
           {isSaving && <span className="ml-2 text-xs font-normal" style={{ color: "var(--text-muted)" }}>Saving...</span>}
         </h2>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2 sm:gap-3">
           {allProviders.map((provider) => {
             const isSelected = selected.has(provider.provider_id);
             return (
               <button
                 key={provider.provider_id}
                 onClick={() => toggle(provider.provider_id)}
-                className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all"
+                title={provider.provider_name}
+                aria-pressed={isSelected}
+                className="flex flex-col items-center justify-start gap-1 min-h-[88px] p-1.5 sm:p-3 rounded-lg border-2 transition-all"
                 style={{
                   borderColor: isSelected ? "var(--accent)" : "var(--border)",
                   backgroundColor: isSelected ? "color-mix(in srgb, var(--accent) 10%, var(--card-bg))" : "var(--card-bg)",
@@ -281,18 +283,18 @@ export default function ProfilePage() {
                     alt={provider.provider_name}
                     width={48}
                     height={48}
-                    className="rounded-lg"
+                    className="rounded-lg w-9 h-9 sm:w-12 sm:h-12"
                   />
                   {isSelected && (
                     <div
-                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs"
+                      className="absolute -top-1.5 -right-1.5 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-white text-[10px] sm:text-xs"
                       style={{ backgroundColor: "var(--accent)" }}
                     >
                       ✓
                     </div>
                   )}
                 </div>
-                <span className="text-xs text-center font-medium leading-tight" style={{ color: "var(--foreground)" }}>
+                <span className="text-[11px] sm:text-xs text-center font-medium leading-tight line-clamp-2 break-words w-full" style={{ color: "var(--foreground)" }}>
                   {provider.provider_name}
                 </span>
               </button>
