@@ -61,7 +61,7 @@ async function get<T>(path: string, params: Record<string, string> = {}): Promis
 type Details = {
   id: number; title?: string; name?: string; poster_path: string | null;
   release_date?: string; first_air_date?: string; overview?: string;
-  genres?: { id: number }[]; runtime?: number; episode_run_time?: number[];
+  genres?: { id: number }[]; original_language?: string; runtime?: number; episode_run_time?: number[];
   last_episode_to_air?: { runtime?: number | null } | null;
   popularity?: number; vote_average?: number; vote_count?: number;
   "watch/providers"?: { results?: { US?: { flatrate?: { provider_id: number }[] } } };
@@ -87,12 +87,12 @@ function runtimeOf(media: MediaType, d: Details): number | null {
 type Raw = {
   id: number; title?: string; name?: string; poster_path: string | null; release_date?: string;
   first_air_date?: string; overview: string; popularity: number; vote_average: number;
-  vote_count: number; genre_ids: number[];
+  vote_count: number; genre_ids: number[]; original_language?: string;
 };
 const toCandidate = (media: MediaType, r: Raw): MoodCandidate => ({
   id: r.id, mediaType: media, title: r.title ?? r.name ?? "?", posterPath: r.poster_path,
   date: (media === "movie" ? r.release_date : r.first_air_date) ?? "", overview: r.overview,
-  popularity: r.popularity, voteAverage: r.vote_average, voteCount: r.vote_count, genreIds: r.genre_ids,
+  popularity: r.popularity, voteAverage: r.vote_average, voteCount: r.vote_count, genreIds: r.genre_ids, originalLanguage: r.original_language,
 });
 
 const fetchers: PoolFetchers = {
@@ -108,6 +108,7 @@ const fetchers: PoolFetchers = {
       voteAverage: d.vote_average ?? 0,
       voteCount: d.vote_count ?? 0,
       genreIds: (d.genres ?? []).map((g) => g.id),
+      originalLanguage: d.original_language,
       runtime: runtimeOf(media, d),
       providerIds: (d["watch/providers"]?.results?.US?.flatrate ?? []).map((p) => p.provider_id),
     };

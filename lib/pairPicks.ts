@@ -46,6 +46,25 @@ export interface Drawable {
 
 const keyOf = (c: Drawable) => `${c.mediaType}-${c.id}`;
 
+/** Screens of picks a draw may reach into: the draw window is this many times the grid size. */
+export const DRAW_SCREENS = 3;
+
+/**
+ * The part of the ranked pool a draw may use: the top 36 (3 screens of 12; 3 x
+ * the grid on wider grids). The tail of the 100-title pool is there for
+ * Decide's later rounds, not for the grid: with a squared-rank weight rank 80
+ * still landed in about 3% of draws, and every bad pick left in the eval came
+ * from that tail. Best first; ties keep the pool's order.
+ */
+export function drawWindow<C extends Drawable>(pool: readonly C[], count = TONIGHT_COUNT): C[] {
+  const size = Math.max(TONIGHT_COUNT * DRAW_SCREENS, count * DRAW_SCREENS);
+  return pool
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => b.c.pairScore - a.c.pairScore || a.i - b.i)
+    .slice(0, size)
+    .map((x) => x.c);
+}
+
 /**
  * Weight for a candidate when drawing. Squaring the 0–1 rank makes the top of
  * the pool several times likelier than the bottom, so a draw is mostly the
@@ -87,7 +106,7 @@ export function drawPairPicks<C extends Drawable>(pool: readonly C[], opts: Draw
   const seen = new Set<string>();
   const fresh: C[] = [];
   const repeats: C[] = [];
-  for (const c of pool) {
+  for (const c of drawWindow(pool, count)) {
     const key = keyOf(c);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -150,7 +169,7 @@ export function nextShuffle<C extends Drawable>(
   opts: { count?: number; random?: () => number } = {}
 ): { picks: C[]; seen: Set<string> } {
   const count = opts.count ?? TONIGHT_COUNT;
-  const unseen = new Set(pool.map(keyOf).filter((k) => !seen.has(k))).size;
+  const unseen = new Set(drawWindow(pool, count).map(keyOf).filter((k) => !seen.has(k))).size;
   const picks = drawPairPicks(pool, { count, avoid: seen, random: opts.random });
   const shown = picks.map(keyOf);
   return { picks, seen: new Set(unseen >= count ? [...seen, ...shown] : shown) };
@@ -177,7 +196,11 @@ export function refillPicks<C extends Drawable>(
     return kept.length === current.length ? (current as C[]) : kept;
   }
   const onScreen = new Set(kept.map(keyOf));
-  const candidates = pool.filter((c) => !hidden.has(keyOf(c)) && !onScreen.has(keyOf(c)));
+  // Window first (minus hidden titles), then drop what's on screen, so refills stay inside the top 36
+  const candidates = drawWindow(
+    pool.filter((c) => !hidden.has(keyOf(c))),
+    count
+  ).filter((c) => !onScreen.has(keyOf(c)));
   const seedCounts = new Map<string, number>();
   for (const c of kept) if (c.seedKey) seedCounts.set(c.seedKey, (seedCounts.get(c.seedKey) ?? 0) + 1);
   const extra = drawPairPicks(candidates, { count: count - kept.length, random, seedCounts });

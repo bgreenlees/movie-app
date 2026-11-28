@@ -81,12 +81,12 @@ export function createPoolFetchers(): PoolFetchers {
           ? ((await tmdb.getMovieRecommendations(tmdbId)).results ?? []).map((m) => ({
               id: m.id, mediaType: "movie", title: m.title, posterPath: m.poster_path,
               date: m.release_date, overview: m.overview, popularity: m.popularity,
-              voteAverage: m.vote_average, voteCount: m.vote_count, genreIds: m.genre_ids,
+              voteAverage: m.vote_average, voteCount: m.vote_count, genreIds: m.genre_ids, originalLanguage: m.original_language,
             }))
           : ((await tmdb.getTVRecommendations(tmdbId)).results ?? []).map((s) => ({
               id: s.id, mediaType: "tv", title: s.name, posterPath: s.poster_path,
               date: s.first_air_date, overview: s.overview, popularity: s.popularity,
-              voteAverage: s.vote_average, voteCount: s.vote_count, genreIds: s.genre_ids,
+              voteAverage: s.vote_average, voteCount: s.vote_count, genreIds: s.genre_ids, originalLanguage: s.original_language,
             }))
       ),
     discover: (media, discoverParams, page) =>
@@ -98,7 +98,7 @@ export function createPoolFetchers(): PoolFetchers {
             candidates: (d.results ?? []).map((m): MoodCandidate => ({
               id: m.id, mediaType: "movie", title: m.title, posterPath: m.poster_path,
               date: m.release_date, overview: m.overview, popularity: m.popularity,
-              voteAverage: m.vote_average, voteCount: m.vote_count, genreIds: m.genre_ids,
+              voteAverage: m.vote_average, voteCount: m.vote_count, genreIds: m.genre_ids, originalLanguage: m.original_language,
             })),
           };
         }
@@ -108,7 +108,7 @@ export function createPoolFetchers(): PoolFetchers {
           candidates: (d.results ?? []).map((s): MoodCandidate => ({
             id: s.id, mediaType: "tv", title: s.name, posterPath: s.poster_path,
             date: s.first_air_date, overview: s.overview, popularity: s.popularity,
-            voteAverage: s.vote_average, voteCount: s.vote_count, genreIds: s.genre_ids,
+            voteAverage: s.vote_average, voteCount: s.vote_count, genreIds: s.genre_ids, originalLanguage: s.original_language,
           })),
         };
       }),
