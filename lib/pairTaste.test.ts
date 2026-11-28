@@ -204,6 +204,13 @@ describe("affinity: informative traits and caps (#196)", () => {
     expect(crimeDrama).toBeLessThan(0.4);
   });
 
+  it("doesn't cap on a single disliked title, even a strongly weighted one", () => {
+    const p = buildTasteProfile([...entries(6, 3, [M.drama]), ...entries(1, 1, [M2.crime])]);
+    expect(p.dislikes.crime).toBe(1);
+    const crimeAlone = affinity(p, { mediaType: "movie", genreIds: [M2.crime] });
+    expect(affinity(p, { mediaType: "movie", genreIds: [M2.crime, M.drama] })).toBeGreaterThan(crimeAlone);
+  });
+
   it("doesn't cap on a mild dislike (weight above -0.2)", () => {
     const p = buildTasteProfile([...entries(6, 3, [M.drama]), ...entries(1, 1, [M2.crime]), ...entries(6, 3, [M2.crime])]);
     expect(p.weights.crime).toBeGreaterThan(-0.2);

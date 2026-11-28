@@ -28,7 +28,15 @@ export interface TasteEntry {
 export interface TasteProfile {
   /** Per-trait weight, Σ signal / (n + 2) */
   weights: Readonly<Record<Trait, number>>;
-  /** Languages of titles they rated positively (Like or Love), lower-case */
+  /** Per-trait count of negative signals (Dislike), so one weak signal can't trigger a cap */
+  dislikes: Readonly<Record<Trait, number>>;
+  /**
+   * Languages of titles they rated positively (Like or Love), lower-case.
+   * KNOWN LIMIT: always empty in practice. Cached Movie/TVShow rows have no
+   * originalLanguage, so TasteEntry.originalLanguage is never filled. The
+   * language cap is therefore English-first: every non-English title is capped.
+   * Fixing it needs a schema column (planned in the engine spec, #199).
+   */
   likedLanguages: ReadonlySet<string>;
   /** Entries that contributed (had a signal and at least one trait) */
   signals: number;
@@ -69,6 +77,7 @@ export function entrySignal(entry: TasteEntry): number | null {
 export function buildTasteProfile(entries: readonly TasteEntry[]): TasteProfile {
   const sum: Record<Trait, number> = {};
   const count: Record<Trait, number> = {};
+  const dislikes: Record<Trait, number> = {};
   const likedLanguages = new Set<string>();
   let signals = 0;
 
@@ -82,12 +91,13 @@ export function buildTasteProfile(entries: readonly TasteEntry[]): TasteProfile 
     for (const t of traits) {
       sum[t] = (sum[t] ?? 0) + signal;
       count[t] = (count[t] ?? 0) + 1;
+      if (signal < 0) dislikes[t] = (dislikes[t] ?? 0) + 1;
     }
   }
 
   const weights: Record<Trait, number> = {};
   for (const t of Object.keys(sum)) weights[t] = sum[t] / (count[t] + TRAIT_PRIOR);
-  return { weights, likedLanguages, signals, coldStart: signals < COLD_START_SIGNALS };
+  return { weights, dislikes, likedLanguages, signals, coldStart: signals < COLD_START_SIGNALS };
 }
 
 export const EMPTY_PROFILE: TasteProfile = buildTasteProfile([]);
@@ -103,8 +113,10 @@ export interface TasteCandidate {
 
 /** Drama is on nearly every title, so it says little about taste: it counts for a fifth of any other trait. */
 export const COMMON_TRAIT_WEIGHT: Readonly<Record<Trait, number>> = { drama: 0.2 };
-/** A trait weight below this is a clear dislike that caps the title's affinity. */
+/** A trait weight below this is a clear dislike that caps the title's affinity... */
 export const CLEAR_DISLIKE = -0.2;
+/** ...but only once the person has disliked at least this many titles with that trait (one weak signal isn't a pattern). */
+export const MIN_DISLIKES_FOR_CAP = 2;
 /** Kids' animation and family titles are capped unless the person has a positive signal for them. */
 export const KIDS_CAP = 0.3;
 /** Titles not in a language the person has rated positively (English always counts) are capped. */
@@ -118,7 +130,7 @@ const DEFAULT_LANGUAGE = "en";
  * One person's predicted liking for a candidate, 0–1 (0.5 = neutral).
  *  1. trait affinity: 0.5 + 0.5·tanh(1.5·mean(w[t])), traits they've never
  *     seen counting as 0. Drama is down-weighted (COMMON_TRAIT_WEIGHT).
- *     A trait below CLEAR_DISLIKE caps this at what that trait alone gives,
+ *     A trait below CLEAR_DISLIKE, backed by ≥ MIN_DISLIKES_FOR_CAP disliked titles, caps this at what that trait alone gives,
  *     so one clear dislike (crime) isn't averaged away by a liked trait (drama).
  *  2. confidence shrinkage: c = min(1, signals / 10), so little history pulls
  *     the result towards 0.5 and an empty profile is exactly 0.5
@@ -136,15 +148,19 @@ export function affinity(profile: TasteProfile, candidate: TasteCandidate): numb
     let sum = 0;
     let total = 0;
     let worst = Infinity;
+    let capped = false;
     for (const t of traits) {
       const w = profile.weights[t] ?? 0;
       const share = COMMON_TRAIT_WEIGHT[t] ?? 1;
       sum += share * w;
       total += share;
-      worst = Math.min(worst, w);
+      if (w < CLEAR_DISLIKE && (profile.dislikes[t] ?? 0) >= MIN_DISLIKES_FOR_CAP) {
+        capped = true;
+        worst = Math.min(worst, w);
+      }
     }
     raw = 0.5 + 0.5 * Math.tanh(1.5 * (sum / total));
-    if (worst < CLEAR_DISLIKE) raw = Math.min(raw, 0.5 + 0.5 * Math.tanh(1.5 * worst));
+    if (capped) raw = Math.min(raw, 0.5 + 0.5 * Math.tanh(1.5 * worst));
   }
   const confidence = Math.min(1, profile.signals / FULL_CONFIDENCE_SIGNALS);
   let shrunk = 0.5 + confidence * (raw - 0.5);
