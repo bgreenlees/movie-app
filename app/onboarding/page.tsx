@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { ONBOARDING_CLUSTERS as CLUSTERS } from "@/lib/onboarding";
+import {
+  ONBOARDING_CLUSTERS as CLUSTERS,
+  MAX_PICKS,
+  canContinue,
+  picksCounterText,
+} from "@/lib/onboarding";
 
 // Poster paths curated from TMDB — fetched client-side
 const POSTER_BASE = "https://image.tmdb.org/t/p/w342";
@@ -73,7 +78,7 @@ export default function OnboardingPage() {
   if (status === "loading" || status === "unauthenticated") return null;
 
   const count = selected.size;
-  const canSubmit = count >= 10 && count <= 10;
+  const canSubmit = canContinue(count);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -96,7 +101,7 @@ export default function OnboardingPage() {
                 color: canSubmit ? "var(--color-accent-text)" : "var(--text-muted)",
               }}
             >
-              {count} / 10 selected
+              {picksCounterText(count)}
             </span>
             <button
               onClick={() => submit(false)}
@@ -133,11 +138,11 @@ export default function OnboardingPage() {
                   <button
                     key={movie.id}
                     onClick={() => toggle(movie.id)}
-                    disabled={!isSelected && count >= 10}
+                    disabled={!isSelected && count >= MAX_PICKS}
                     className="relative rounded-lg overflow-hidden group transition-all duration-200"
                     style={{
                       boxShadow: isSelected ? `0 0 0 3px var(--accent), 0 0 20px color-mix(in srgb, var(--accent) 40%, transparent)` : "none",
-                      opacity: !isSelected && count >= 10 ? 0.4 : 1,
+                      opacity: !isSelected && count >= MAX_PICKS ? 0.4 : 1,
                     }}
                     title={movie.title}
                   >

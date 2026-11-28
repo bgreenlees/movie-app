@@ -110,3 +110,19 @@ export function parseOnboardingIds(input: unknown): number[] | null {
   }
   return [...ids];
 }
+
+/** Fewest and most films a person may pick (the recommender needs at least 5 ratings). */
+export const MIN_PICKS = 5;
+export const MAX_PICKS = 10;
+
+/** True when `count` picks is enough to continue (MIN_PICKS to MAX_PICKS). */
+export function canContinue(count: number): boolean {
+  return count >= MIN_PICKS && count <= MAX_PICKS;
+}
+
+/** The counter shown beside Continue in both onboarding pickers. */
+export function picksCounterText(count: number): string {
+  return count < MIN_PICKS
+    ? `${count} of ${MIN_PICKS} · pick ${MIN_PICKS - count} more`
+    : `${count} picked, up to ${MAX_PICKS} for better picks`;
+}

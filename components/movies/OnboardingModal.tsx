@@ -2,10 +2,14 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { ONBOARDING_CLUSTERS as CLUSTERS } from "@/lib/onboarding";
+import {
+  ONBOARDING_CLUSTERS as CLUSTERS,
+  MIN_PICKS,
+  MAX_PICKS,
+  canContinue,
+  picksCounterText,
+} from "@/lib/onboarding";
 
-const MIN_PICKS = 5;
-const MAX_PICKS = 10;
 const POSTER_BASE = "https://image.tmdb.org/t/p/w342";
 
 interface OnboardingModalProps {
@@ -81,7 +85,7 @@ export default function OnboardingModal({ onClose }: OnboardingModalProps) {
   });
 
   const count = selected.size;
-  const canSubmit = count >= MIN_PICKS;
+  const canSubmit = canContinue(count);
 
   return (
     <div
@@ -191,9 +195,7 @@ export default function OnboardingModal({ onClose }: OnboardingModalProps) {
               style={{ color: canSubmit ? "var(--color-accent-text)" : "var(--text-muted)" }}
               aria-live="polite"
             >
-              {count < MIN_PICKS
-                ? `${count} of ${MIN_PICKS} · pick ${MIN_PICKS - count} more`
-                : `${count} picked, up to ${MAX_PICKS} for better picks`}
+              {picksCounterText(count)}
             </span>
             <button
               type="button"

@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   MAX_ONBOARDING_IDS,
+  canContinue,
+  picksCounterText,
   ONBOARDING_CLUSTERS,
   ONBOARDING_MOVIE_IDS,
   parseOnboardingIds,
@@ -94,5 +96,16 @@ describe("curated onboarding list", () => {
   [122906, "About Time"],
   [4348, "Pride & Prejudice"],
     ]);
+  });
+});
+
+describe("pick limits", () => {
+  it("lets people continue with 5 to 10 picks only", () => {
+    expect([0, 4, 5, 7, 10, 11].map(canContinue)).toEqual([false, false, true, true, true, false]);
+  });
+
+  it("words the counter", () => {
+    expect(picksCounterText(3)).toBe("3 of 5 · pick 2 more");
+    expect(picksCounterText(5)).toBe("5 picked, up to 10 for better picks");
   });
 });
