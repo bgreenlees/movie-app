@@ -686,11 +686,13 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
 }
 
 /** The same title seen from the partner's side: "me" and "partner" swap. */
-function mirrorDraft(d: Pick<Draft, "c" | "wantedBy" | "seededBy">) {
+function mirrorDraft(d: Pick<Draft, "c" | "wantedBy" | "watchingBy" | "seededBy" | "likedSeeds">) {
   const swap = (w: Who): Who => (w === "me" ? "partner" : "me");
   return {
     c: d.c,
     wantedBy: new Set([...d.wantedBy].map(swap)),
+    watchingBy: new Set([...d.watchingBy].map(swap)),
+    likedSeeds: d.likedSeeds,
     seededBy: { me: d.seededBy.partner, partner: d.seededBy.me },
   };
 }

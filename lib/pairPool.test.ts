@@ -179,6 +179,42 @@ describe("watching", () => {
   });
 });
 
+describe("watching in a Decide shortlist (partnerView)", () => {
+  it("each phone reads its own wording for a show either person is watching", async () => {
+    const w = (id: number, status: "WATCHING" | "WANT_TO_WATCH") => entry("tv", id, { status });
+    const { pool } = await buildPairPool(
+      input({
+        me: { entries: [w(1, "WATCHING"), w(2, "WANT_TO_WATCH"), w(3, "WATCHING")], providerIds: [] },
+        partner: { entries: [w(1, "WATCHING"), w(2, "WATCHING"), w(3, "WANT_TO_WATCH"), w(4, "WATCHING")], providerIds: [] },
+        fetchers: fakeFetchers(),
+        partnerView: { myName: "Alex" },
+      })
+    );
+    const view = (id: number) => {
+      const c = pool.find((p) => p.id === id);
+      return [c?.reason, c?.partnerReason];
+    };
+    expect(view(1)).toEqual(["You're both watching this", "You're both watching this"]);
+    expect(view(2)).toEqual(["Sam is watching this, and it's on your list", "You're watching this, and it's on Alex's list"]);
+    expect(view(3)).toEqual(["You're watching this, and it's on Sam's list", "Alex is watching this, and it's on your list"]);
+    expect(view(4)).toEqual(["Sam is watching this", "You're watching this"]);
+  });
+
+  it("mirrors a joint 'liked' seed too", async () => {
+    const fetchers = fakeFetchers({ recs: { "movie-5": [cand("movie", 60)] } });
+    const { pool } = await buildPairPool(
+      input({
+        me: { entries: [entry("movie", 5, { status: "WATCHED", rating: 2, title: "Up" })], providerIds: [] },
+        partner: { entries: [entry("movie", 5, { status: "WATCHED", rating: 2, title: "Up" })], providerIds: [] },
+        fetchers,
+        partnerView: { myName: "Alex" },
+      })
+    );
+    const c = pool.find((p) => p.id === 60);
+    expect([c?.reason, c?.partnerReason]).toEqual(["Because you both liked Up", "Because you both liked Up"]);
+  });
+});
+
 describe("seeds from titles you both liked (the old Fresh Picks)", () => {
   const run = async (me: PoolEntry[], partner: PoolEntry[], recs: Record<string, MoodCandidate[]>) => {
     const fetchers = fakeFetchers({ recs, discover: { movie: [cand("movie", 99)], tv: [] } });
