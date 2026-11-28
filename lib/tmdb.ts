@@ -182,9 +182,9 @@ class TMDBClient {
     return response.json();
   }
 
-  async getTrending(): Promise<TMDBSearchResponse> {
+  async getTrending(page = 1): Promise<TMDBSearchResponse> {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
-    const url = `${this.baseUrl}/trending/movie/week?api_key=${this.apiKey}`;
+    const url = `${this.baseUrl}/trending/movie/week?page=${page}&api_key=${this.apiKey}`;
     const response = await fetch(url, { next: { revalidate: 3600 } });
     if (!response.ok) throw new Error("TMDB API error");
     return response.json();

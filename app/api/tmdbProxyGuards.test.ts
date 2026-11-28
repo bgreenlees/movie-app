@@ -27,8 +27,9 @@ vi.mock("@/lib/countries", () => import("../../lib/countries"));
 vi.mock("@/lib/discoverPaging", () => import("../../lib/discoverPaging"));
 vi.mock("@/lib/onboarding", () => import("../../lib/onboarding"));
 vi.mock("@/lib/providers", () => import("../../lib/providers"));
+vi.mock("@/lib/contextualFeed", () => import("../../lib/contextualFeed"));
 // news reads the signed-in user's streaming services.
-vi.mock("@/lib/db", () => ({ prisma: { user: { findUnique: vi.fn().mockResolvedValue({ streamingServices: [] }) } } }));
+vi.mock("@/lib/db", () => ({ prisma: { user: { findUnique: vi.fn().mockResolvedValue({ streamingServices: [] }) }, watchlistEntry: { count: vi.fn().mockResolvedValue(0) } } }));
 
 type Handler = (req: Request, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
 

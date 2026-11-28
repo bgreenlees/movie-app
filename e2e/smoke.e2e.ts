@@ -8,7 +8,7 @@ import { signedInUser, newTestEmail, signIn } from "./helpers";
 test("signed-out visitors are sent to the login page", async ({ page }) => {
   await page.goto("/watchlist");
   await expect(page).toHaveURL(/\/login/);
-  await expect(page.getByRole("heading", { name: "Welcome back." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in to What's Up Next" })).toBeVisible();
 });
 
 test("dev login signs in and lands on Discover with posters", async ({ page }) => {

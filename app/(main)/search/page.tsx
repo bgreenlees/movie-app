@@ -331,7 +331,7 @@ function DiscoverPageInner() {
                 return;
               }
               setIsPersonalized(false);
-              return fetch("/api/movies/contextual").then((r) => r.json()).then((ctxData) => {
+              return fetch(`/api/movies/contextual?hour=${new Date().getHours()}`).then((r) => r.json()).then((ctxData) => {
                 if (cancelled) return;
                 setMovies((ctxData.results || []).sort(() => Math.random() - 0.5));
                 setShowNudge(true);

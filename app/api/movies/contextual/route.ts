@@ -1,30 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/apiGuard";
 import { tmdb } from "@/lib/tmdb";
 import { parsePage } from "@/lib/discoverPaging";
-
-const TIME_SLOTS = [
-  { label: "Late Night", hours: [0, 1, 2, 3, 4, 5], genres: [27, 9648, 80] },      // Horror, Mystery, Crime
-  { label: "Morning",    hours: [6, 7, 8, 9, 10, 11], genres: [35, 18, 10749] },    // Comedy, Drama, Romance
-  { label: "Afternoon",  hours: [12, 13, 14, 15, 16, 17], genres: [12, 10751, 16] },// Adventure, Family, Animation
-  { label: "Evening",    hours: [18, 19, 20, 21, 22, 23], genres: [28, 878, 53] },  // Action, Sci-Fi, Thriller
-];
+import { parseLocalHour, planContextualFeed } from "@/lib/contextualFeed";
 
 export async function GET(req: NextRequest) {
   const denied = await requireSession();
   if (denied) return denied;
+
   const page = parsePage(req.nextUrl.searchParams.get("page"));
   if (page === null) {
     return NextResponse.json({ error: "Invalid page" }, { status: 400 });
   }
-  const hour = new Date().getUTCHours();
-  const slot = TIME_SLOTS.find((s) => s.hours.includes(hour)) ?? TIME_SLOTS[3];
+
+  // The hour is the browser's local hour (untrusted, validated 0-23 or ignored).
+  const localHour = parseLocalHour(req.nextUrl.searchParams.get("hour"));
+  const session = await auth();
+  const userId = session?.user?.id as string | undefined;
+  const hasRatings = userId
+    ? (await prisma.watchlistEntry.count({ where: { userId, rating: { gte: 2 } } })) > 0
+    : false;
+  const plan = planContextualFeed(hasRatings, localHour);
 
   try {
-    const data = await tmdb.getByGenre(slot.genres, page);
+    const data = plan.kind === "genres" ? await tmdb.getByGenre(plan.genres, page) : await tmdb.getTrending(page);
     const results = (data.results || []).filter((m) => m.poster_path);
-    return NextResponse.json({ results, timeSlot: slot.label });
+    return NextResponse.json({ results, timeSlot: plan.label });
   } catch {
-    return NextResponse.json({ results: [], timeSlot: slot.label });
+    return NextResponse.json({ results: [], timeSlot: plan.label });
   }
 }
