@@ -119,3 +119,70 @@ only has 2 to 15 ratings). All 240 titles rated (24 pair/mood combinations × 10
 - Surface a hint when a mood is a poor fit for the pair.
 - Add the Vitest leave-one-out proxy from spec §9.1 (it needs `lib/pairTaste.ts` ordering
   pinned in tests; not part of this task).
+
+## Results: matching step 1, quick wins (2026-11-27, #196)
+
+Changes under test: the draw reaches only the top 36 of the pool; kids' animation / family and
+non-English titles are capped unless the person rated that kind positively (discover also adds
+`without_genres` and `with_original_language`); recommendations need 200 votes (movies) or 100 (TV);
+Drama counts for a fifth of other traits and a trait under -0.2 caps a title's affinity; want-list
+titles carry real vote data. Plan: `docs/research/watch-together-matching.md`.
+
+**Labelled pair 7 ("true-story")** is new: the owner's good titles (Trumbo, Beautiful Boy) and bad
+ones (If I Stay, Creed III, MobLand, Minions & Monsters, The Shadow's Edge) live in
+`scripts/fixtures/pair-labels.ts`. The eval prints each one's pool rank and chance of being in a
+12-card draw. It's a synthetic pair modelled on the owner's feedback (the research doc's Bob-like and
+Laura-like), not their real lists.
+
+| Any mood, pair 7 | Rank in pool | Chance in a 12-card draw |
+|---|---|---|
+| Trumbo (good) | not in pool | 0% |
+| Beautiful Boy (good) | not in pool | 0% |
+| If I Stay (bad) | 2 | 38% |
+| Creed III (bad) | 59 | 0% (outside the top 36) |
+| MobLand (bad) | 75 | 0% (outside the top 36) |
+| Minions & Monsters (bad) | not in pool | 0% |
+| The Shadow's Edge (bad) | not in pool | 0% |
+
+Expected bad titles per draw **0.38** (research baseline 0.60), expected good **0.00**. What's left is
+exactly what later steps own: **If I Stay** is a joint-seed recommendation of The Social Network
+(step "drop off-seed recommendations"), and **Trumbo and Beautiful Boy** need taste-led discover to
+reach the pool at all (neither is a recommendation or popular-discover title for this pair).
+
+**The six existing pairs**, top 10 across the four moods, same code before and after (the only
+differences are the changes above):
+
+| | Before | After |
+|---|---|---|
+| Kids' / animation titles in the top 10, Any mood (of 60) | 3 | 0 |
+| Kids' / animation titles, Light (of 60) | 40 | 7 |
+| Kids' / animation titles, ~30 min (of 60) | 53 | 5 |
+| Kids' / animation titles, Intense + <2 hrs (of 60) | 0 | 0 |
+
+That is the "Light and ~30 min override taste" finding above, mostly fixed: the same few animated
+films no longer fill every pair's Light grid. ~30 min now includes some short films (Michael
+Jackson's Thriller, The Great Train Robbery) where the kids' shorts used to be.
+
+Rated-only joint hit / misery for "Any mood" (the default view), using the marks in
+`pair-ratings.json`; **the 62 new marks added for this run are Claude's first-pass persona judgements,
+like the earlier ones, and need the owner's second opinion**:
+
+| Pair | Before | After |
+|---|---|---|
+| 1 similar | 95% / 0% | 95% / 0% |
+| 2 complementary | 44% / 38% | 50% / 20% |
+| 3 opposites | 50% / 0% | 45% / 10% |
+| 4 one cold | 65% / 0% | 65% / 0% |
+| 5 both cold | 81% / 0% | 75% / 0% |
+| 6 movie + TV | 61% / 11% | 60% / 20% |
+
+Not a regression the numbers can prove either way (about 10 rated titles each, so one mark moves a
+row by 5 to 10 points), but two things are worth a human look:
+- **Pair 3 (opposites)**: the horror fan's two disliked kids' films (Coco, Encanto) also make
+  *adventure*, *comedy* and *fantasy* clear dislikes, so adventure titles like Interstellar are now
+  capped and neutral pure dramas (The Summer I Turned Pretty, The Gilded Age) take their slots.
+  That is the "trait under -0.2" rule working as specified, on a persona whose only dislikes are
+  family films. If real accounts do this, raise the threshold or require two dislikes of a trait.
+- The language cap treats English as the only language everyone likes, because the cached `Movie` /
+  `TVShow` rows don't store `original_language` yet. Someone who loves subtitled films has them
+  capped until a column (Phase 2) lets the profile see their languages.

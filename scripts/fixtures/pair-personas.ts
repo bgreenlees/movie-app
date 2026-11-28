@@ -153,4 +153,25 @@ export const PAIRS: PersonaPair[] = [
       ],
     },
   },
+  {
+    id: "true-story",
+    name: "7. Prestige true-story drama pair (the owner's feedback, #193)",
+    checks:
+      "Both love true-story dramas (The Social Network is the shared Love). Trumbo and Beautiful Boy should reach the grid; If I Stay, Creed III, MobLand, Minions & Monsters and The Shadow's Edge should not. Scored by LABELS below.",
+    a: {
+      name: "A: true-story dramas, no franchise action",
+      titles: [
+        m(37799, "The Social Network", 3), m(60308, "Moneyball", 3), m(314365, "Spotlight", 3), t(76331, "Succession", 3),
+        t(65494, "The Crown", 2), m(318846, "The Big Short", 2), m(385687, "Fast X", 1), m(840430, "The Holdovers", undefined, true),
+      ],
+    },
+    b: {
+      name: "B: literate dramas, no violent crime",
+      titles: [
+        m(37799, "The Social Network", 3), m(331482, "Little Women", 3), m(492188, "Marriage Story", 3), t(89905, "Normal People", 3),
+        t(97546, "Ted Lasso", 2), m(391713, "Lady Bird", 2), t(60574, "Peaky Blinders", 1), m(245891, "John Wick", 1),
+        m(666277, "Past Lives", undefined, true),
+      ],
+    },
+  },
 ];

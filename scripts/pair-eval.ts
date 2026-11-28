@@ -27,6 +27,7 @@ import { createLimiter } from "../lib/concurrency";
 import { DEFAULT_SELECTION, candidateKey, type MediaType, type MoodCandidate, type MoodSelection } from "../lib/moodPicker";
 import { buildPairPool, type FullTitleFacts, type PairCandidate, type PoolEntry, type PoolFetchers } from "../lib/pairPool";
 import { PAIRS, type Persona } from "./fixtures/pair-personas";
+import { LABELLED_PAIR, LABELS, labelReport, type LabelReport } from "./fixtures/pair-labels";
 
 const API = process.env.TMDB_API_BASE_URL || "https://api.themoviedb.org/3";
 const KEY = process.env.TMDB_API_KEY;
@@ -160,11 +161,23 @@ async function personEntries(p: Persona): Promise<PoolEntry[]> {
 const ratings: Record<string, Mark> = existsSync(RATINGS_FILE) ? JSON.parse(readFileSync(RATINGS_FILE, "utf8")) : {};
 const markFor = (pair: string, who: "a" | "b", key: string): Mark | undefined => ratings[`${pair}/${who}/${key}`];
 
+// Repeatable draws, so two runs differ only when the app does (mulberry32)
+function seededRandom(seed: number) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 function pct(x: number) { return `${Math.round(x * 100)}%`; }
 
 type Result = {
   pair: string; mood: string; movies: number; tv: number; rated: number;
   hit: number | null; misery: number | null;
+  /** Labelled pair only: where the owner's good/bad titles land (pool rank and draw chance) */
+  labels?: LabelReport;
   rows: { key: string; title: string; type: string; year: string; genres: string; source: string; a?: Mark; b?: Mark }[];
 };
 
@@ -213,6 +226,7 @@ async function main() {
       results.push({
         pair: pair.id, mood: mood.id, movies: top.filter((c) => c.mediaType === "movie").length,
         tv: top.filter((c) => c.mediaType === "tv").length, rated: both.length, hit: joint, misery, rows,
+        labels: pair.id === LABELLED_PAIR ? labelReport(res.pool, LABELS, seededRandom(42)) : undefined,
       });
       if (errors.length && !json) console.error(`(${pair.id} / ${mood.name}: ${errors.length} TMDB call(s) failed, e.g. ${errors[0]})`);
     }
@@ -228,6 +242,18 @@ async function main() {
       console.log("| # | Title | Type | Year | Genres | Source | A likes? | B likes? |\n|---|---|---|---|---|---|---|---|");
       r.rows.forEach((x, i) => console.log(`| ${i + 1} | ${x.title} | ${x.type} | ${x.year} | ${x.genres} | ${x.source} | ${x.a ?? ""} | ${x.b ?? ""} |`));
       console.log();
+    }
+  }
+
+  const labelled = results.filter((r) => r.labels);
+  if (labelled.length) {
+    console.log(`\n## Labelled titles (pair ${LABELLED_PAIR})\n`);
+    console.log("Chance = share of simulated 12-card draws that include the title. Good titles should be high, bad ones near 0.\n");
+    for (const r of labelled) {
+      console.log(`### ${MOODS.find((m) => m.id === r.mood)!.name}\n`);
+      console.log("| Title | Label | Pool rank | Chance |\n|---|---|---|---|");
+      for (const x of r.labels!.rows) console.log(`| ${x.title} | ${x.label} | ${x.rank ?? "not in pool"} | ${pct(x.chance)} |`);
+      console.log(`\nExpected good in a draw: ${r.labels!.expectedGood.toFixed(2)} · expected bad: ${r.labels!.expectedBad.toFixed(2)}\n`);
     }
   }
 
