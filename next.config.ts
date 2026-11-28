@@ -1,5 +1,5 @@
 import type { NextConfig } from "next";
-import { cspMode, securityHeaders } from "./lib/securityHeaders";
+import { securityHeaders } from "./lib/securityHeaders";
 
 const nextConfig: NextConfig = {
   // Don't advertise the framework (security audit F3).
@@ -17,11 +17,9 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/:path*",
-        // VERCEL_ENV is set at build time on Vercel: "production", "preview" or "development".
-        headers: securityHeaders(
-          process.env.NODE_ENV === "development",
-          cspMode(process.env.NODE_ENV, process.env.VERCEL_ENV),
-        ),
+        // Static headers only. The page CSP needs a per-request nonce, so
+        // middleware.ts sets it (lib/securityHeaders.ts).
+        headers: securityHeaders(),
       },
     ];
   },

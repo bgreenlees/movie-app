@@ -1,4 +1,5 @@
-// Response headers for every route (security audit F3). Imported by next.config.ts.
+// Security headers (security audit F3). Static ones are set in next.config.ts; the page
+// Content-Security-Policy is built per request in middleware.ts.
 
 type Header = { key: string; value: string };
 
@@ -28,17 +29,45 @@ export function cspMode(nodeEnv: string | undefined, vercelEnv: string | undefin
 }
 
 /**
- * The full Content-Security-Policy. Still allows 'unsafe-inline' scripts; nonces
- * would remove that but make every page dynamically rendered (Next.js CSP guide).
+ * The full page Content-Security-Policy, built per request by middleware.ts.
+ *
+ * Scripts run only if they carry this request's nonce (Next.js adds it to all of its
+ * own scripts, reading it from the request's CSP header) or match one of
+ * `scriptHashes` (the theme script, lib/themeScript.ts). 'strict-dynamic' lets those
+ * scripts load further chunks, and makes browsers ignore host allowlists in script-src,
+ * so there is no 'unsafe-inline' and no https://vercel.live there: an injected inline
+ * script is blocked.
+ *
+ * Nonces assume every page is dynamically rendered. Today they all are: auth() in
+ * app/not-found.tsx reads cookies, and the root not-found boundary is part of every
+ * route (docs/reviews/csp-script-nonces.md §2). A statically rendered page would be
+ * built without a nonce and its scripts would be blocked, so if you make pages static
+ * again, plan for that first (e.g. Vercel's "CSP nonces with CDN cache" technique).
  */
-export function contentSecurityPolicy(isDev: boolean): string {
+export function contentSecurityPolicy({
+  nonce,
+  scriptHashes = [],
+  isDev,
+}: {
+  nonce: string;
+  scriptHashes?: string[];
+  isDev: boolean;
+}): string {
   // The Vercel Toolbar on preview deployments needs these (vercel.com/docs/vercel-toolbar/managing-toolbar).
   const toolbar = "https://vercel.live";
   const directives: Record<string, string[]> = {
     "default-src": ["'self'"],
-    // 'unsafe-inline' covers the theme script in app/layout.tsx and Next's inline
-    // bootstrap scripts until nonces are added. React needs eval only in dev.
-    "script-src": ["'self'", "'unsafe-inline'", toolbar, ...(isDev ? ["'unsafe-eval'"] : [])],
+    // 'self' is a fallback for browsers without 'strict-dynamic' (CSP Level 2).
+    // React needs eval only in dev.
+    "script-src": [
+      "'self'",
+      `'nonce-${nonce}'`,
+      "'strict-dynamic'",
+      ...scriptHashes,
+      ...(isDev ? ["'unsafe-eval'"] : []),
+    ],
+    // Styles keep 'unsafe-inline' (React style props, next/font, react-hot-toast).
+    // Don't add the nonce here: a nonce makes browsers ignore 'unsafe-inline'.
     "style-src": ["'self'", "'unsafe-inline'", toolbar],
     // TMDB posters plus /news, whose images come from many RSS feeds' CDNs.
     "img-src": ["'self'", "data:", "blob:", "https:"],
@@ -60,18 +89,26 @@ export function contentSecurityPolicy(isDev: boolean): string {
     .join("; ");
 }
 
-export function securityHeaders(isDev: boolean, mode: CspMode): Header[] {
-  const csp = contentSecurityPolicy(isDev);
+/** Which header carries the page CSP: enforced, or report-only (see cspMode). */
+export function cspHeaderName(mode: CspMode): string {
+  return mode === "enforce" ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only";
+}
+
+/** A fresh, unguessable nonce for one response: 128 random bits, base64. */
+export function generateNonce(): string {
+  return btoa(crypto.randomUUID());
+}
+
+/**
+ * Static headers for every route, set in next.config.ts. The full page CSP isn't here:
+ * it needs a per-request nonce, so middleware.ts sets it. This minimal CSP still stops
+ * framing on the responses middleware skips (/api/*, static files), in every mode.
+ */
+export function securityHeaders(): Header[] {
   return [
     // Both stop other sites framing the app (clickjacking, e.g. a disguised "Delete account").
     { key: "X-Frame-Options", value: "DENY" },
-    // In report-only mode, still enforce frame-ancestors on its own.
-    ...(mode === "enforce"
-      ? [{ key: "Content-Security-Policy", value: csp }]
-      : [
-          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
-          { key: "Content-Security-Policy-Report-Only", value: csp },
-        ]),
+    { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
     { key: "Reporting-Endpoints", value: `${REPORT_GROUP}="${CSP_REPORT_PATH}"` },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
     { key: "X-Content-Type-Options", value: "nosniff" },
