@@ -43,7 +43,7 @@ test("What to Watch suggests titles and Shuffle keeps working", async ({ page })
   await expect(picks.first()).toBeVisible();
 });
 
-test("Watch Together: two friends see shared picks", async ({ browser }) => {
+test("Watch Together mode on What to Watch: two friends see shared picks", async ({ browser }) => {
   const alice = await signedInUser(browser, "alice");
   const bob = await signedInUser(browser, "bob");
   try {
@@ -59,12 +59,32 @@ test("Watch Together: two friends see shared picks", async ({ browser }) => {
     const { friends } = await (await alice.page.request.get("/api/connections")).json();
     expect(friends).toHaveLength(1);
 
+    // From What to Watch: pick the friend, get picks for you both, filter, shuffle, Decide together
+    const picks = alice.page.getByRole("button", { name: /^Add Stub .* to a list$/ });
+    await alice.page.goto("/what-to-watch");
+    await expect(picks.first()).toBeVisible();
+    await alice.page.getByLabel("Watch together").selectOption({ index: 1 });
+    await expect(alice.page).toHaveURL(new RegExp(`with=${friends[0].friend.id}`));
+    await expect(alice.page.getByRole("heading", { name: "Up next for you both" })).toBeVisible();
+    await expect(picks.first()).toBeVisible();
+    await expect(alice.page.getByRole("button", { name: "Decide together" })).toBeVisible();
+    await alice.page.getByRole("button", { name: "TV" }).click();
+    await expect(picks.first()).toBeVisible();
+    await alice.page.getByRole("button", { name: "Shuffle" }).click();
+    await expect(picks.first()).toBeVisible();
+
+    // The link survives a reload; an id that isn't a friend quietly means "Just me"
+    await alice.page.reload();
+    await expect(alice.page.getByRole("heading", { name: "Up next for you both" })).toBeVisible();
+    await alice.page.goto("/what-to-watch?with=not-a-friend");
+    await expect(alice.page.getByRole("heading", { name: "Up next for you", exact: true })).toBeVisible();
+    await expect(alice.page).not.toHaveURL(/with=/);
+
+    // The Watch Together page keeps its shelves and links back, without Tonight
     await alice.page.goto(`/watch-together/${friends[0].friend.id}`);
     await expect(alice.page.getByRole("heading", { name: "Watch Together" })).toBeVisible();
-    await expect(alice.page.getByRole("heading", { name: "Tonight for you both" })).toBeVisible();
-    await expect(
-      alice.page.getByRole("button", { name: /^Add Stub .* to a list$/ }).first(),
-    ).toBeVisible();
+    await expect(alice.page.getByRole("link", { name: /picks for you both on What to Watch/ })).toBeVisible();
+    await expect(alice.page.getByRole("heading", { name: "Tonight for you both" })).toHaveCount(0);
   } finally {
     await alice.context.close();
     await bob.context.close();
