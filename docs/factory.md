@@ -39,8 +39,8 @@ The coordinator is the long-lived session on `main`. It's also the most expensiv
 | Command | What it does |
 |---|---|
 | `dispatch.sh <issue> <role> [--model M] [--pr N] [--note T] [--dry-run]` | Builds the standard brief (role file + issue + safety rules + other open PRs), picks a per-issue port (3200 + issue % 700) and launches the agent in its own Orca worktree. With `--pr N` it checks out the PR head first. |
-| `wait-pr.sh <issue>... [--interval S]` | Waits (run in background) until a PR that `Closes #N` has a finished `ci` check. |
-| `send.sh <worktree> "<subject>" <file>` | Sends follow-up instructions (e.g. review findings) to the agent in that worktree. |
+| `wait-pr.sh <issue>... [--interval S]` | Waits (run in background) until **every** listed issue has an open PR that `Closes #N` with a finished `ci` check; prints one line per issue as each finishes. |
+| `send.sh <worktree> "<subject>" <file>` | Sends follow-up instructions (e.g. review findings) to the agent in that worktree. `<worktree>` is the exact folder name (matched by path, so `worker-167` never hits `worker-167-2`). |
 | `board.sh <number> "<Stage>" ["<Area>"]` | Moves an issue/PR on the **progress board** (https://github.com/users/bgreenlees/projects/1): In progress on dispatch, In review when its PR opens, Waiting on you for owner decisions, Done on merge. |
 
 **Keep the board current** (it's how the owner tracks progress): move cards with `board.sh` at every dispatch, PR, owner decision and merge; owner decisions get an `owner-action` issue so they appear in *Waiting on you*.
