@@ -1,13 +1,19 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { tmdb } from "@/lib/tmdb";
 import type { TMDBTVShow } from "@/lib/tmdb";
+import { parsePage } from "@/lib/discoverPaging";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // Page N re-runs the same scoring over TMDB's page N of each source, so later pages are new titles
+  const page = parsePage(req.nextUrl.searchParams.get("page"));
+  if (page === null) {
+    return NextResponse.json({ error: "Invalid page" }, { status: 400 });
   }
   const userId = session.user.id as string;
 
@@ -23,7 +29,7 @@ export async function GET() {
 
   if (positiveEntries.length === 0) {
     // No ratings yet — fall back to trending TV
-    const trending = await tmdb.getTrendingTV();
+    const trending = await tmdb.getTrendingTV(page);
     return NextResponse.json({
       results: (trending.results || []).filter((s) => s.poster_path).slice(0, 40),
       personalized: false,
@@ -64,7 +70,7 @@ export async function GET() {
     // Track A: TMDB TV recommendations
     Promise.allSettled(
       topSeeds.map((entry) =>
-        tmdb.getTVRecommendations(entry.tvShowId).then((data) => ({
+        tmdb.getTVRecommendations(entry.tvShowId, page).then((data) => ({
           weight: entry.rating === 3 ? 3 : 1,
           shows: (data.results || []).filter((s) => s.poster_path),
         }))
@@ -73,7 +79,7 @@ export async function GET() {
     // Track B: TMDB similar TV shows
     Promise.allSettled(
       topSeeds.slice(0, 10).map((entry) =>
-        tmdb.getSimilarTVShows(entry.tvShowId).then((data) => ({
+        tmdb.getSimilarTVShows(entry.tvShowId, page).then((data) => ({
           weight: entry.rating === 3 ? 2 : 1,
           shows: (data.results || []).filter((s) => s.poster_path),
         }))
@@ -81,7 +87,7 @@ export async function GET() {
     ),
     // Track C: Hidden gem TV in user's top genres
     topGenres.length > 0
-      ? tmdb.discoverHiddenGemTV(topGenres).then((data) =>
+      ? tmdb.discoverHiddenGemTV(topGenres, page).then((data) =>
           (data.results || []).filter((s) => s.poster_path)
         )
       : Promise.resolve([] as TMDBTVShow[]),

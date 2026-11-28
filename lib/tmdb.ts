@@ -206,11 +206,11 @@ class TMDBClient {
     return response.json();
   }
 
-  async getByGenre(genreIds: number[]): Promise<TMDBSearchResponse> {
+  async getByGenre(genreIds: number[], page = 1): Promise<TMDBSearchResponse> {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
     const url =
       `${this.baseUrl}/discover/movie?with_genres=${genreIds.join(",")}&sort_by=popularity.desc` +
-      `&vote_count.gte=500&api_key=${this.apiKey}`;
+      `&vote_count.gte=500&page=${page}&api_key=${this.apiKey}`;
     const response = await fetch(url, { next: { revalidate: 3600 } });
     if (!response.ok) throw new Error("TMDB API error");
     return response.json();
@@ -267,29 +267,29 @@ class TMDBClient {
     return response.json();
   }
 
-  async getSimilarMovies(movieId: number): Promise<TMDBSearchResponse> {
+  async getSimilarMovies(movieId: number, page = 1): Promise<TMDBSearchResponse> {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
-    const url = `${this.baseUrl}/movie/${movieId}/similar?api_key=${this.apiKey}`;
+    const url = `${this.baseUrl}/movie/${movieId}/similar?page=${page}&api_key=${this.apiKey}`;
     const response = await fetch(url, { next: { revalidate: 86400 } });
     if (!response.ok) throw new Error("TMDB API error");
     return response.json();
   }
 
-  async discoverHiddenGems(genreIds: number[]): Promise<TMDBSearchResponse> {
+  async discoverHiddenGems(genreIds: number[], page = 1): Promise<TMDBSearchResponse> {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
     // OR-joined genres, quality floor, low vote count = hidden gems
     const url =
       `${this.baseUrl}/discover/movie?with_genres=${genreIds.join("|")}` +
       `&vote_average.gte=6.8&vote_count.gte=150&vote_count.lte=4000` +
-      `&sort_by=vote_average.desc&api_key=${this.apiKey}`;
+      `&sort_by=vote_average.desc&page=${page}&api_key=${this.apiKey}`;
     const response = await fetch(url, { next: { revalidate: 3600 } });
     if (!response.ok) throw new Error("TMDB API error");
     return response.json();
   }
 
-  async getMovieRecommendations(movieId: number): Promise<TMDBSearchResponse> {
+  async getMovieRecommendations(movieId: number, page = 1): Promise<TMDBSearchResponse> {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
-    const url = `${this.baseUrl}/movie/${movieId}/recommendations?api_key=${this.apiKey}`;
+    const url = `${this.baseUrl}/movie/${movieId}/recommendations?page=${page}&api_key=${this.apiKey}`;
     const response = await fetch(url, { next: { revalidate: 86400 } });
     if (!response.ok) throw new Error("TMDB API error");
     return response.json();
@@ -403,25 +403,25 @@ class TMDBClient {
     return response.json();
   }
 
-  async getTrendingTV(): Promise<TMDBTVSearchResponse> {
+  async getTrendingTV(page = 1): Promise<TMDBTVSearchResponse> {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
-    const url = `${this.baseUrl}/trending/tv/week?api_key=${this.apiKey}`;
+    const url = `${this.baseUrl}/trending/tv/week?page=${page}&api_key=${this.apiKey}`;
     const response = await fetch(url, { next: { revalidate: 3600 } });
     if (!response.ok) throw new Error("TMDB API error");
     return response.json();
   }
 
-  async getSimilarTVShows(tvId: number): Promise<TMDBTVSearchResponse> {
+  async getSimilarTVShows(tvId: number, page = 1): Promise<TMDBTVSearchResponse> {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
-    const url = `${this.baseUrl}/tv/${tvId}/similar?api_key=${this.apiKey}`;
+    const url = `${this.baseUrl}/tv/${tvId}/similar?page=${page}&api_key=${this.apiKey}`;
     const response = await fetch(url, { next: { revalidate: 86400 } });
     if (!response.ok) throw new Error("TMDB API error");
     return response.json();
   }
 
-  async getTVRecommendations(tvId: number): Promise<TMDBTVSearchResponse> {
+  async getTVRecommendations(tvId: number, page = 1): Promise<TMDBTVSearchResponse> {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
-    const url = `${this.baseUrl}/tv/${tvId}/recommendations?api_key=${this.apiKey}`;
+    const url = `${this.baseUrl}/tv/${tvId}/recommendations?page=${page}&api_key=${this.apiKey}`;
     const response = await fetch(url, { next: { revalidate: 86400 } });
     if (!response.ok) throw new Error("TMDB API error");
     return response.json();
@@ -521,21 +521,21 @@ class TMDBClient {
     return data.genres || [];
   }
 
-  async discoverMoviesByGenre(genreId: number): Promise<TMDBSearchResponse> {
+  async discoverMoviesByGenre(genreId: number, page = 1): Promise<TMDBSearchResponse> {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
     const url =
       `${this.baseUrl}/discover/movie?with_genres=${genreId}` +
-      `&sort_by=popularity.desc&vote_count.gte=200&api_key=${this.apiKey}`;
+      `&sort_by=popularity.desc&vote_count.gte=200&page=${page}&api_key=${this.apiKey}`;
     const response = await fetch(url, { next: { revalidate: 3600 } });
     if (!response.ok) throw new Error("TMDB API error");
     return response.json();
   }
 
-  async discoverTVByGenreSingle(genreId: number): Promise<TMDBTVSearchResponse> {
+  async discoverTVByGenreSingle(genreId: number, page = 1): Promise<TMDBTVSearchResponse> {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
     const url =
       `${this.baseUrl}/discover/tv?with_genres=${genreId}` +
-      `&sort_by=popularity.desc&vote_count.gte=100&api_key=${this.apiKey}`;
+      `&sort_by=popularity.desc&vote_count.gte=100&page=${page}&api_key=${this.apiKey}`;
     const response = await fetch(url, { next: { revalidate: 3600 } });
     if (!response.ok) throw new Error("TMDB API error");
     return response.json();
@@ -626,12 +626,12 @@ class TMDBClient {
     };
   }
 
-  async discoverHiddenGemTV(genreIds: number[]): Promise<TMDBTVSearchResponse> {
+  async discoverHiddenGemTV(genreIds: number[], page = 1): Promise<TMDBTVSearchResponse> {
     if (!this.apiKey) throw new Error("TMDB API key is not configured");
     const url =
       `${this.baseUrl}/discover/tv?with_genres=${genreIds.join("|")}` +
       `&vote_average.gte=7.0&vote_count.gte=100&vote_count.lte=3000` +
-      `&sort_by=vote_average.desc&api_key=${this.apiKey}`;
+      `&sort_by=vote_average.desc&page=${page}&api_key=${this.apiKey}`;
     const response = await fetch(url, { next: { revalidate: 3600 } });
     if (!response.ok) throw new Error("TMDB API error");
     return response.json();
