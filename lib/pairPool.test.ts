@@ -395,6 +395,36 @@ describe("one catalogue, no type quota", () => {
   });
 });
 
+describe("media filter", () => {
+  const both = {
+    discover: { movie: [cand("movie", 1), cand("movie", 2)], tv: [cand("tv", 3), cand("tv", 4)] },
+  };
+
+  it("keeps movies and TV mixed for both, with no quota", async () => {
+    const { pool } = await buildPairPool(input({ fetchers: fakeFetchers(both) }));
+    expect(keys(pool)).toEqual(["movie-1", "movie-2", "tv-3", "tv-4"]);
+  });
+
+  it("returns only movies for movie, and never asks TMDB for TV", async () => {
+    const fetchers = fakeFetchers(both);
+    const { pool } = await buildPairPool(input({ selection: { ...DEFAULT_SELECTION, media: "movie" }, fetchers }));
+    expect(keys(pool)).toEqual(["movie-1", "movie-2"]);
+    expect(fetchers.discover.mock.calls.every((c) => c[0] === "movie")).toBe(true);
+  });
+
+  it("returns only TV for tv, including want-list titles and recommendations", async () => {
+    const me = { entries: [entry("movie", 10), entry("tv", 11)], providerIds: [] };
+    const fetchers = fakeFetchers({
+      ...both,
+      recs: { "movie-10": [cand("movie", 20), cand("tv", 21)] },
+    });
+    const { pool } = await buildPairPool(input({ me, selection: { ...DEFAULT_SELECTION, media: "tv" }, fetchers }));
+    expect(pool.length).toBeGreaterThan(0);
+    expect(pool.every((c) => c.mediaType === "tv")).toBe(true);
+    expect(keys(pool)).toContain("tv-11");
+  });
+});
+
 describe("reasons", () => {
   const BANNED = /dislik|didn.t like|not interested|hated|nope|avoid/i;
 
@@ -728,15 +758,22 @@ describe("TMDB caps (§5.2, §6)", () => {
 describe("parsePairPicksQuery", () => {
   const parse = (q: string) => parsePairPicksQuery(new URLSearchParams(q));
 
-  it("defaults missing params and always uses both media types", () => {
+  it("defaults missing params, with media both", () => {
     expect(parse("")).toEqual({
       success: true,
       data: { selection: { ...DEFAULT_SELECTION, media: "both" }, sharedOnly: false },
     });
     expect(parse("vibe=light&time=30&fresh=1&services=1&sharedOnly=1&media=movie&utm=x")).toEqual({
       success: true,
-      data: { selection: { vibe: "light", time: "30", fresh: true, onMyServices: true, media: "both" }, sharedOnly: true },
+      data: { selection: { vibe: "light", time: "30", fresh: true, onMyServices: true, media: "movie" }, sharedOnly: true },
     });
+  });
+
+  it("accepts media both, movie and tv", () => {
+    for (const media of ["both", "movie", "tv"]) {
+      const r = parse(`media=${media}`);
+      expect(r.success && r.data.selection.media).toBe(media);
+    }
   });
 
   it("rejects invalid or repeated values instead of guessing", () => {
