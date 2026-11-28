@@ -78,7 +78,7 @@ describe("GET /api/mood-picks error decision", () => {
     m.tmdb.getTitleMoodFacts.mockResolvedValue({ runtime: 25 });
     const res = await get("media=movie&time=30");
     expect(res.status).toBe(200);
-    expect((await res.json()).pool).toHaveLength(9); // 3 per discover page
+    expect((await res.json()).pool).toHaveLength(12); // 3 per discover page x 4 pages
   });
 
   it("checks at most 25 movie runtimes (maxChecks is wired)", async () => {
