@@ -40,11 +40,11 @@ export const JOINT_SEEDS = 3;
 /** C: total recommendation calls per request, joint seeds first, then each person's Loves */
 export const REC_CALLS_MAX = 8;
 /** C: recommendations kept, best seed count first */
-export const REC_POOL_SIZE = 30;
-/** D: discover pages per media type (2 × 2 = 4 discover calls) */
-export const DISCOVER_PAGES = [1, 2] as const;
+export const REC_POOL_SIZE = 40;
+/** D: discover pages per media type (4 × 2 = 8 cached discover calls), so a Movies or TV filter still fills several shuffles of the widest grid */
+export const DISCOVER_PAGES = [1, 2, 3, 4] as const;
 /** D: size of the blended discover pool */
-export const DISCOVER_POOL_SIZE = 40;
+export const DISCOVER_POOL_SIZE = 80;
 /**
  * Title-details lookups per request (each is 24 h cached by the TMDB client),
  * shared out by source so no source can starve another: want lists first,
@@ -54,7 +54,7 @@ export const DISCOVER_POOL_SIZE = 40;
 export const FACTS_SHARES = { wants: 12, recs: 8, discover: 10 } as const;
 export const FACTS_BUDGET = FACTS_SHARES.wants + FACTS_SHARES.recs + FACTS_SHARES.discover;
 /** Size of the ranked pool returned to the client */
-export const PAIR_POOL_SIZE = 60;
+export const PAIR_POOL_SIZE = 100;
 
 // ── Inputs ───────────────────────────────────────────────────────────────────
 
@@ -143,6 +143,11 @@ export type PairCandidate = MoodCandidate & {
   pairScore: number;
   /** One privacy-safe line (§5.5): only lists and Loves, never a dislike */
   reason: string;
+  /**
+   * Set when the reason is a "Because … loved X" seed line (not a want-list
+   * one): the draw caps how many picks share it so one seed can't fill the grid
+   */
+  seedKey?: string;
   onMyList: boolean;
   /** `reason` as the partner should read it; only with `partnerView` */
   partnerReason?: string;
@@ -681,6 +686,7 @@ export async function buildPairPool(input: PairPoolInput): Promise<PairPoolResul
       reason: reasonFor(d, input.partnerName, selection),
       onMyList: d.wantedBy.has("me"),
     };
+    if (d.wantedBy.size === 0 && (d.seededBy.me || d.seededBy.partner)) out.seedKey = out.reason;
     if (input.partnerView) {
       out.partnerReason = reasonFor(mirrorDraft(d), input.partnerView.myName, selection);
     }

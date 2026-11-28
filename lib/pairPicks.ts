@@ -8,12 +8,40 @@ import { FULL_CONFIDENCE_SIGNALS } from "./pairTaste";
 
 export const TONIGHT_COUNT = 12;
 
+/** Most picks in one draw that may share a "Because you loved X" seed line. */
+export const MAX_PER_SEED = 3;
+
+/**
+ * How many picks to show so the grid ends on a full row: at least
+ * TONIGHT_COUNT and at least two rows. 3 columns → 12, 7 → 14, 11 → 22.
+ * An unmeasured or nonsensical column count falls back to TONIGHT_COUNT.
+ */
+export function pickCountForColumns(columns: number): number {
+  if (!Number.isFinite(columns) || columns < 1) return TONIGHT_COUNT;
+  const cols = Math.floor(columns);
+  return cols * Math.max(2, Math.ceil(TONIGHT_COUNT / cols));
+}
+
+/**
+ * Columns in a laid-out CSS grid, from its computed `grid-template-columns`
+ * (a space-separated list of resolved track sizes, e.g. "150px 150px 150px").
+ * Returns 0 when it can't be read ("none", "").
+ */
+export function columnsFromTemplate(template: string | null | undefined): number {
+  const t = (template ?? "").trim();
+  if (!t || t === "none") return 0;
+  // Resolved sizes never contain spaces, except inside a function like minmax(...), which a computed value doesn't keep
+  return t.split(/\s+/).length;
+}
+
 /** The minimum a candidate needs from the pool to be drawn. */
 export interface Drawable {
   id: number;
   mediaType: "movie" | "tv";
   /** 0–1, 1 = top of the ranked pool */
   pairScore: number;
+  /** Picks with the same seedKey are capped per draw (MAX_PER_SEED) */
+  seedKey?: string;
 }
 
 const keyOf = (c: Drawable) => `${c.mediaType}-${c.id}`;
@@ -35,6 +63,10 @@ export interface DrawOptions {
   avoid?: ReadonlySet<string>;
   /** Injected for tests; defaults to Math.random */
   random?: () => number;
+  /** Most picks that may share a seedKey; defaults to MAX_PER_SEED */
+  maxPerSeed?: number;
+  /** Seed counts of picks already on screen (when topping up a draw) */
+  seedCounts?: ReadonlyMap<string, number>;
 }
 
 /**
@@ -44,7 +76,13 @@ export interface DrawOptions {
  * strongest pick leads the row.
  */
 export function drawPairPicks<C extends Drawable>(pool: readonly C[], opts: DrawOptions = {}): C[] {
-  const { count = TONIGHT_COUNT, avoid = new Set<string>(), random = Math.random } = opts;
+  const {
+    count = TONIGHT_COUNT,
+    avoid = new Set<string>(),
+    random = Math.random,
+    maxPerSeed = MAX_PER_SEED,
+    seedCounts,
+  } = opts;
 
   const seen = new Set<string>();
   const fresh: C[] = [];
@@ -56,25 +94,46 @@ export function drawPairPicks<C extends Drawable>(pool: readonly C[], opts: Draw
     (avoid.has(key) ? repeats : fresh).push(c);
   }
 
-  const drawn = drawFrom(fresh, count, random);
-  if (drawn.length < count) drawn.push(...drawFrom(repeats, count - drawn.length, random));
+  // Each pass respects the per-seed cap; fresh titles come before repeats. Only if the capped
+  // passes can't fill the grid (a small pool dominated by one seed) is the cap relaxed, because
+  // a complete row matters more than the mix.
+  const counts = new Map(seedCounts);
+  const drawn: C[] = [];
+  const take = (items: readonly C[], cap: number) => drawn.push(...drawFrom(items, count - drawn.length, random, counts, cap));
+  take(fresh, maxPerSeed);
+  if (drawn.length < count) take(repeats, maxPerSeed);
+  if (drawn.length < count) {
+    const used = new Set(drawn.map(keyOf));
+    take([...fresh, ...repeats].filter((c) => !used.has(keyOf(c))), Infinity);
+  }
   return drawn.sort((a, b) => b.pairScore - a.pairScore);
 }
 
-function drawFrom<C extends Drawable>(items: readonly C[], count: number, random: () => number): C[] {
+function drawFrom<C extends Drawable>(
+  items: readonly C[],
+  count: number,
+  random: () => number,
+  seedCounts: Map<string, number>,
+  maxPerSeed: number
+): C[] {
   const left = [...items];
   const out: C[] = [];
   while (out.length < count && left.length > 0) {
-    const weights = left.map((c) => drawWeight(c.pairScore));
+    // A seed at its cap drops out of this draw; titles without a seed are never capped
+    const eligible = left.filter((c) => !c.seedKey || (seedCounts.get(c.seedKey) ?? 0) < maxPerSeed);
+    if (eligible.length === 0) break;
+    const weights = eligible.map((c) => drawWeight(c.pairScore));
     const total = weights.reduce((a, b) => a + b, 0);
     let r = random() * total;
     let i = 0;
-    while (i < left.length - 1 && r >= weights[i]) {
+    while (i < eligible.length - 1 && r >= weights[i]) {
       r -= weights[i];
       i++;
     }
-    out.push(left[i]);
-    left.splice(i, 1);
+    const chosen = eligible[i];
+    out.push(chosen);
+    if (chosen.seedKey) seedCounts.set(chosen.seedKey, (seedCounts.get(chosen.seedKey) ?? 0) + 1);
+    left.splice(left.indexOf(chosen), 1);
   }
   return out;
 }
@@ -112,12 +171,16 @@ export function refillPicks<C extends Drawable>(
 ): C[] {
   const { count = TONIGHT_COUNT, random } = opts;
   const kept = current.filter((c) => !hidden.has(keyOf(c)));
+  // A wider grid keeps more; a narrower one trims from the bottom (the list is best first)
+  if (kept.length > count) return kept.slice(0, count);
   if (kept.length >= count || kept.length === pool.filter((c) => !hidden.has(keyOf(c))).length) {
     return kept.length === current.length ? (current as C[]) : kept;
   }
   const onScreen = new Set(kept.map(keyOf));
   const candidates = pool.filter((c) => !hidden.has(keyOf(c)) && !onScreen.has(keyOf(c)));
-  const extra = drawPairPicks(candidates, { count: count - kept.length, random });
+  const seedCounts = new Map<string, number>();
+  for (const c of kept) if (c.seedKey) seedCounts.set(c.seedKey, (seedCounts.get(c.seedKey) ?? 0) + 1);
+  const extra = drawPairPicks(candidates, { count: count - kept.length, random, seedCounts });
   return [...kept, ...extra].sort((a, b) => b.pairScore - a.pairScore);
 }
 

@@ -64,3 +64,8 @@ export function withMode(raw: string | null | undefined, state: FriendsState): W
   if (friend) return { kind: "pair", friend };
   return raw ? { kind: "stale" } : { kind: "solo" };
 }
+
+/** What to Watch with a friend selected (the one page for picks and shelves). */
+export function whatToWatchWithHref(friendId: string): string {
+  return `/what-to-watch?with=${encodeURIComponent(friendId)}`;
+}
