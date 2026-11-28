@@ -89,7 +89,7 @@ export default function OnboardingModal({ onClose }: OnboardingModalProps) {
       aria-modal="true"
       aria-labelledby="onboarding-title"
       className="fixed inset-0 z-50 flex flex-col"
-      style={{ backgroundColor: "rgba(0,0,0,0.85)", backdropFilter: "blur(4px)" }}
+      style={{ backgroundColor: "var(--background)" }}
     >
       <div
         className="flex-shrink-0 border-b"
