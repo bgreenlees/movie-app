@@ -32,6 +32,54 @@ test("Discover: add a movie to Want to Watch and see it on My Movies", async ({ 
   await expect(page.getByRole("heading", { name: /^Stub Movie \d+$/ }).first()).toBeVisible();
 });
 
+test("Discover: reaching the bottom loads more titles, with no duplicates", async ({ page }) => {
+  await signIn(page, newTestEmail("more"));
+  await page.goto("/search");
+  const posters = page.getByRole("button", { name: /^Add Stub Movie \d+ to a list$/ });
+  await expect(posters.first()).toBeVisible();
+  const before = await posters.count();
+
+  // Scrolling the footer into view fires the observer; the stub has a second page of titles
+  await page.getByText(/^(Load more|Loading more…|That's everything)$/).scrollIntoViewIfNeeded();
+  await expect.poll(() => posters.count()).toBeGreaterThan(before);
+
+  // The next page comes back empty, so Discover says so instead of loading forever.
+  // The new rows push the footer off screen, so scroll to the bottom again.
+  const footer = page.getByText(/^(Load more|Loading more…|That's everything)$/);
+  await expect
+    .poll(async () => {
+      await footer.scrollIntoViewIfNeeded();
+      return footer.textContent();
+    })
+    .toBe("That's everything");
+  const names = await posters.evaluateAll((els) => els.map((el) => el.getAttribute("aria-label")));
+  expect(new Set(names).size).toBe(names.length);
+});
+
+test("Discover: the Load more button works when scrolling doesn't trigger it", async ({ page }) => {
+  // No observer events, as for a browser that never reports the sentinel
+  await page.addInitScript(() => {
+    window.IntersectionObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    } as unknown as typeof IntersectionObserver;
+  });
+  await signIn(page, newTestEmail("morebtn"));
+  await page.goto("/search");
+  const posters = page.getByRole("button", { name: /^Add Stub Movie \d+ to a list$/ });
+  await expect(posters.first()).toBeVisible();
+  const before = await posters.count();
+
+  await page.getByRole("button", { name: "Load more" }).click();
+  await expect.poll(() => posters.count()).toBeGreaterThan(before);
+  await page.getByRole("button", { name: "Load more" }).click();
+  await expect(page.getByText("That's everything")).toBeVisible();
+});
+
 test("What to Watch suggests titles and Shuffle keeps working", async ({ page }) => {
   await signIn(page, newTestEmail("mood"));
   await page.goto("/what-to-watch");

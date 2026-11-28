@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { tmdb } from "@/lib/tmdb";
 import { fuzzySearch } from "@/lib/fuzzySearch";
 import { requireSession } from "@/lib/apiGuard";
+import { parsePage } from "@/lib/discoverPaging";
 
 export async function GET(req: NextRequest) {
   const denied = await requireSession();
@@ -10,7 +11,7 @@ export async function GET(req: NextRequest) {
   try {
     const searchParams = req.nextUrl.searchParams;
     const query = searchParams.get("q");
-    const page = searchParams.get("page") || "1";
+    const page = parsePage(searchParams.get("page"));
 
     if (!query) {
       return NextResponse.json(
@@ -19,10 +20,14 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const results = await tmdb.searchMovies(query, parseInt(page));
+    if (page === null) {
+      return NextResponse.json({ error: "Invalid page" }, { status: 400 });
+    }
+
+    const results = await tmdb.searchMovies(query, page);
 
     // Nothing matched exactly — likely a typo, so try looser variants.
-    if (!results.results?.length && page === "1") {
+    if (!results.results?.length && page === 1) {
       const fuzzy = await fuzzySearch(query, (q) => tmdb.searchMovies(q), (m) => m.title);
       if (fuzzy.results.length) {
         return NextResponse.json({ ...results, results: fuzzy.results, suggestion: fuzzy.suggestion, fuzzy: true });

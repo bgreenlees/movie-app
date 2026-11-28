@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { tmdb } from "@/lib/tmdb";
 import { fuzzySearch } from "@/lib/fuzzySearch";
 import { requireSession } from "@/lib/apiGuard";
+import { parsePage } from "@/lib/discoverPaging";
 
 export async function GET(request: NextRequest) {
   const denied = await requireSession();
@@ -9,10 +10,13 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q");
-  const page = parseInt(searchParams.get("page") || "1");
+  const page = parsePage(searchParams.get("page"));
 
   if (!query) {
     return NextResponse.json({ error: "Query required" }, { status: 400 });
+  }
+  if (page === null) {
+    return NextResponse.json({ error: "Invalid page" }, { status: 400 });
   }
 
   try {

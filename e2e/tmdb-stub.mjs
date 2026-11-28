@@ -52,9 +52,16 @@ export const shows = Array.from({ length: TV_COUNT }, (_, i) => ({
   vote_count: 1500,
 }));
 
-const paged = (items) => ({ page: 1, total_pages: 1, total_results: items.length, results: items.slice(0, PAGE_SIZE) });
-// Pages 2+ are empty so "load three pages" code doesn't see duplicates.
-const pageOf = (items, page) => (page > 1 ? { page, total_pages: 1, total_results: items.length, results: [] } : paged(items));
+// Real paging: page N is the Nth slice of PAGE_SIZE items, and past the end is empty. The stub
+// has 30 movies and 20 shows, so movies get a second page of 10 (the Discover "load more" test
+// relies on it) and shows have just one. Slices never overlap, so code that loads several
+// pages never sees duplicates.
+const pageOf = (items, page) => ({
+  page,
+  total_pages: Math.max(1, Math.ceil(items.length / PAGE_SIZE)),
+  total_results: items.length,
+  results: items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+});
 
 const provider = { provider_id: 8, provider_name: "Stub Stream", logo_path: "/stub-logo.jpg" };
 const providers = { id: 0, results: { US: { flatrate: [provider] } } };

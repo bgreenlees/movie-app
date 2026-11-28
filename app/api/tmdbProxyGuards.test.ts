@@ -24,6 +24,7 @@ vi.mock("@/lib/apiGuard", () => import("../../lib/apiGuard"));
 vi.mock("@/lib/rateLimit", () => import("../../lib/rateLimit"));
 vi.mock("@/lib/fuzzySearch", () => import("../../lib/fuzzySearch"));
 vi.mock("@/lib/countries", () => import("../../lib/countries"));
+vi.mock("@/lib/discoverPaging", () => import("../../lib/discoverPaging"));
 vi.mock("@/lib/onboarding", () => import("../../lib/onboarding"));
 vi.mock("@/lib/providers", () => import("../../lib/providers"));
 // news reads the signed-in user's streaming services.
