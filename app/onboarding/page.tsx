@@ -4,7 +4,13 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { ONBOARDING_CLUSTERS as CLUSTERS } from "@/lib/onboarding";
+import {
+  ONBOARDING_CLUSTERS as CLUSTERS,
+  MIN_PICKS,
+  MAX_PICKS,
+  canContinue,
+  picksCounterText,
+} from "@/lib/onboarding";
 
 // Poster paths curated from TMDB — fetched client-side
 const POSTER_BASE = "https://image.tmdb.org/t/p/w342";
@@ -49,7 +55,7 @@ export default function OnboardingPage() {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
-      } else if (next.size < 5) {
+      } else if (next.size < MAX_PICKS) {
         next.add(id);
       }
       return next;
@@ -73,7 +79,7 @@ export default function OnboardingPage() {
   if (status === "loading" || status === "unauthenticated") return null;
 
   const count = selected.size;
-  const canSubmit = count >= 3 && count <= 5;
+  const canSubmit = canContinue(count);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -85,7 +91,7 @@ export default function OnboardingPage() {
               What films do you love?
             </h1>
             <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-              Pick 3–5 to calibrate your Discover feed
+              Pick at least {MIN_PICKS} films (up to {MAX_PICKS}) you love and we’ll suggest more like them
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -96,7 +102,7 @@ export default function OnboardingPage() {
                 color: canSubmit ? "var(--color-accent-text)" : "var(--text-muted)",
               }}
             >
-              {count} / 5 selected
+              {picksCounterText(count)}
             </span>
             <button
               onClick={() => submit(false)}
@@ -133,11 +139,11 @@ export default function OnboardingPage() {
                   <button
                     key={movie.id}
                     onClick={() => toggle(movie.id)}
-                    disabled={!isSelected && count >= 5}
+                    disabled={!isSelected && count >= MAX_PICKS}
                     className="relative rounded-lg overflow-hidden group transition-all duration-200"
                     style={{
                       boxShadow: isSelected ? `0 0 0 3px var(--accent), 0 0 20px color-mix(in srgb, var(--accent) 40%, transparent)` : "none",
-                      opacity: !isSelected && count >= 5 ? 0.4 : 1,
+                      opacity: !isSelected && count >= MAX_PICKS ? 0.4 : 1,
                     }}
                     title={movie.title}
                   >

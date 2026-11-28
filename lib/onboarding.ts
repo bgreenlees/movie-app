@@ -32,7 +32,7 @@ export const ONBOARDING_CLUSTERS: readonly OnboardingCluster[] = [
       { id: 603,    title: "The Matrix" },
       { id: 157336, title: "Interstellar" },
       { id: 329865, title: "Arrival" },
-      { id: 264644, title: "Ex Machina" },
+      { id: 264660, title: "Ex Machina" },
       { id: 335984, title: "Blade Runner 2049" },
     ],
   },
@@ -109,4 +109,20 @@ export function parseOnboardingIds(input: unknown): number[] | null {
     if (typeof id === "number" && ALLOWED.has(id)) ids.add(id);
   }
   return [...ids];
+}
+
+/** Fewest and most films a person may pick (the recommender needs at least 5 ratings). */
+export const MIN_PICKS = 5;
+export const MAX_PICKS = 10;
+
+/** True when `count` picks is enough to continue (MIN_PICKS to MAX_PICKS). */
+export function canContinue(count: number): boolean {
+  return count >= MIN_PICKS && count <= MAX_PICKS;
+}
+
+/** The counter shown beside Continue in both onboarding pickers. */
+export function picksCounterText(count: number): string {
+  return count < MIN_PICKS
+    ? `${count} of ${MIN_PICKS} · pick ${MIN_PICKS - count} more`
+    : `${count} picked, up to ${MAX_PICKS} for better picks`;
 }
