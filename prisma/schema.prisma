@@ -17,6 +17,9 @@ model User {
 
   streamingServices          Int[]     @default([]) @map("streaming_services")
   hasCompletedOnboarding     Boolean   @default(false) @map("has_completed_onboarding")
+  /// Copied into the session JWT at sign-in. Bumping it ("Sign out everywhere")
+  /// ends every existing session within a few minutes. See lib/sessionVersion.ts.
+  sessionVersion             Int       @default(0) @map("session_version")
   watchlistEntries    WatchlistEntry[]
   tvWatchlistEntries  TVWatchlistEntry[]
   sentConnections     UserConnection[] @relation("ConnectionRequests")

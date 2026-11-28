@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Proves the real NextAuth config in lib/auth.ts only registers dev-login when
 // both gates are open. NextAuth and Prisma are mocked: no network, no database.
@@ -7,7 +7,11 @@ const nextAuth = vi.hoisted(() => vi.fn((config: unknown) => {
   return { handlers: {}, signIn: vi.fn(), signOut: vi.fn(), auth: vi.fn() };
 }));
 vi.mock("next-auth", () => ({ default: nextAuth }));
-vi.mock("./db", () => ({ prisma: {} }));
+const prisma = vi.hoisted(() => ({
+  user: { findUnique: vi.fn(), create: vi.fn() },
+}));
+vi.mock("./db", () => ({ prisma }));
+vi.mock("./invites", () => ({ convertInvites: vi.fn() }));
 // "server-only" throws outside a React Server Components build; Vitest is neither.
 vi.mock("server-only", () => ({}));
 
@@ -78,5 +82,80 @@ describe("lib/auth signIn callback", () => {
   it("leaves dev-login to its own gates", async () => {
     const signIn = await signInCallback();
     expect(await signIn({ account: { provider: "dev-login" } })).toBe(true);
+  });
+});
+
+describe("lib/auth jwt callback (session revocation, F8)", () => {
+  type Token = Record<string, unknown>;
+  type Jwt = (params: { token: Token; user?: { email?: string | null; name?: string | null } }) => Promise<Token | null>;
+  async function jwtCallback() {
+    vi.resetModules();
+    nextAuth.mockClear();
+    await import("./auth");
+    const config = nextAuth.mock.calls[0][0] as { callbacks: { jwt: Jwt } };
+    return config.callbacks.jwt;
+  }
+  const NOW = 1_800_000_000_000;
+
+  beforeEach(() => {
+    prisma.user.findUnique.mockReset();
+    prisma.user.create.mockReset();
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("copies sessionVersion into the token at sign-in", async () => {
+    const jwt = await jwtCallback();
+    prisma.user.findUnique.mockResolvedValue({ id: "u1", sessionVersion: 4 });
+    const token = await jwt({ token: {}, user: { email: "a@example.test" } });
+    expect(token).toMatchObject({ id: "u1", sessionVersion: 4, checkedAt: NOW });
+  });
+
+  it("skips the database while the last check is recent", async () => {
+    const jwt = await jwtCallback();
+    const token = { id: "u1", sessionVersion: 0, checkedAt: NOW - 1000 };
+    expect(await jwt({ token })).toBe(token);
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("keeps a current token and refreshes checkedAt after the window", async () => {
+    const jwt = await jwtCallback();
+    prisma.user.findUnique.mockResolvedValue({ sessionVersion: 0 });
+    const token = await jwt({ token: { id: "u1", sessionVersion: 0, checkedAt: NOW - 10 * 60_000 } });
+    expect(token).toMatchObject({ id: "u1", checkedAt: NOW });
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({
+      where: { id: "u1" },
+      select: { sessionVersion: true },
+    });
+  });
+
+  it("ends the session after sign-out-everywhere", async () => {
+    const jwt = await jwtCallback();
+    prisma.user.findUnique.mockResolvedValue({ sessionVersion: 1 });
+    expect(await jwt({ token: { id: "u1", sessionVersion: 0, checkedAt: NOW - 10 * 60_000 } })).toBeNull();
+  });
+
+  it("ends the session when the account has been deleted", async () => {
+    const jwt = await jwtCallback();
+    prisma.user.findUnique.mockResolvedValue(null);
+    expect(await jwt({ token: { id: "u1", sessionVersion: 0 } })).toBeNull();
+  });
+
+  it("ends a token without a user id", async () => {
+    const jwt = await jwtCallback();
+    expect(await jwt({ token: {} })).toBeNull();
+  });
+
+  it("keeps the token, unrefreshed, if the database check fails", async () => {
+    const jwt = await jwtCallback();
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    prisma.user.findUnique.mockRejectedValue(new Error("down"));
+    const stale = NOW - 10 * 60_000;
+    const token = await jwt({ token: { id: "u1", sessionVersion: 0, checkedAt: stale } });
+    expect(token).toMatchObject({ id: "u1", checkedAt: stale });
+    spy.mockRestore();
   });
 });

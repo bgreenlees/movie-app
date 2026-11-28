@@ -1,8 +1,12 @@
 import type { NextAuthConfig } from "next-auth";
+import { SESSION_MAX_AGE_S, SESSION_UPDATE_AGE_S } from "./sessionVersion";
 
 export const authConfig: NextAuthConfig = {
   trustHost: true,
-  session: { strategy: "jwt" },
+  // Shared with middleware, which only verifies the JWT's signature and expiry:
+  // it can't reach Prisma. The revocation check (sessionVersion) lives in the
+  // jwt callback in lib/auth.ts, which every auth() call in a route or page runs.
+  session: { strategy: "jwt", maxAge: SESSION_MAX_AGE_S, updateAge: SESSION_UPDATE_AGE_S },
   providers: [],
   callbacks: {
     async session({ session, token }) {

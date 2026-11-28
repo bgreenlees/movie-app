@@ -5,6 +5,7 @@ import { prisma } from "./db";
 import { authConfig } from "./auth.config";
 import { devLoginProviders } from "./devLogin";
 import { convertInvites } from "./invites";
+import { isSessionCurrent, needsRecheck } from "./sessionVersion";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
@@ -32,9 +33,32 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           });
         }
         token.id = dbUser.id;
+        token.sessionVersion = dbUser.sessionVersion;
+        token.checkedAt = Date.now();
         // Both Google and dev-login pass through here. Never throws.
         await convertInvites(dbUser.id, user.email);
+        return token;
       }
+
+      // Every later request: make sure the session hasn't been revoked (F8).
+      // Returning null ends the session; Auth.js then clears the cookie.
+      if (typeof token.id !== "string") return null;
+      const now = Date.now();
+      if (!needsRecheck(token.checkedAt, now)) return token;
+      let dbUser: { sessionVersion: number } | null;
+      try {
+        dbUser = await prisma.user.findUnique({
+          where: { id: token.id },
+          select: { sessionVersion: true },
+        });
+      } catch (err) {
+        // A database blip shouldn't sign everyone out. Keep the token without
+        // refreshing checkedAt, so the next request checks again.
+        console.error("Session re-check failed", err);
+        return token;
+      }
+      if (!isSessionCurrent(token.sessionVersion, dbUser)) return null;
+      token.checkedAt = now;
       return token;
     },
     async session({ session, token }) {
