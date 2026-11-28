@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
   ONBOARDING_CLUSTERS as CLUSTERS,
+  MIN_PICKS,
   MAX_PICKS,
   canContinue,
   picksCounterText,
@@ -54,7 +55,7 @@ export default function OnboardingPage() {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
-      } else if (next.size < 5) {
+      } else if (next.size < MAX_PICKS) {
         next.add(id);
       }
       return next;
@@ -90,7 +91,7 @@ export default function OnboardingPage() {
               What films do you love?
             </h1>
             <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-              Pick at least 5 films (up to 10) you love and we’ll suggest more like them
+              Pick at least {MIN_PICKS} films (up to {MAX_PICKS}) you love and we’ll suggest more like them
             </p>
           </div>
           <div className="flex items-center gap-4">
