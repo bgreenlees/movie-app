@@ -175,7 +175,8 @@ export async function GET(req: NextRequest) {
     const okGroups = groups.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
     if (okGroups.length === 0) throw new Error("All TMDB discover calls failed");
     const failedChecks = checks.filter((r) => r.status === "rejected");
-    if (failedChecks.length > 0) {
+    // An aborted request rejects its queued checks on purpose, so that's not worth a warning
+    if (failedChecks.length > 0 && !req.signal.aborted) {
       warnFailed(`${failedChecks.length} of ${checks.length} watchlist checks`, (failedChecks[0] as PromiseRejectedResult).reason);
     }
 
