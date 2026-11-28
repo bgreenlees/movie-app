@@ -16,6 +16,7 @@ import ResultFilters, { type CoStar } from "@/components/ui/ResultFilters";
 import { applyResultFilters, genresInResults, intersectIds, type SortOption } from "@/lib/resultFilters";
 import type { TMDBMovie, TMDBTVShow } from "@/lib/tmdb";
 import { DISCOVER_COUNTRIES, countryName, isValidCountry } from "@/lib/countries";
+import { MAX_DISCOVER_PAGE, discoverEndpoint, mergePage, trimToFullRows } from "@/lib/discoverPaging";
 import toast from "react-hot-toast";
 
 interface PersonData {
@@ -124,6 +125,13 @@ function DiscoverPageInner() {
   // Set when a search had no exact matches and we fell back to close spellings
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [columns, setColumns] = useState(6);
+  // "Load more" paging: how many pages are loaded, whether one is in flight, and whether
+  // the source has run dry (an empty page, the page cap, or fuzzy search results).
+  const [pageNum, setPageNum] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [exhausted, setExhausted] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const loadKeyRef = useRef<string | null>(null);
 
   // Sort / filter bar (search, person and genre pages)
   const [sort, setSort] = useState<SortOption>("relevance");
@@ -200,6 +208,9 @@ function DiscoverPageInner() {
     setPrevLoadKey(loadKey);
     setSuggestion(null);
     setIsLoading(true);
+    setPageNum(1);
+    setIsLoadingMore(false);
+    setExhausted(false);
     setGenreFilter([]); // genre ids differ between movies and TV, and per result set
     if (personId) {
       setPersonData(null);
@@ -303,6 +314,7 @@ function DiscoverPageInner() {
               if (!data.fuzzy) results.sort((a, b) => b.popularity - a.popularity);
               setMovies(results);
               setSuggestion(data.fuzzy ? data.suggestion ?? null : null);
+              if (data.fuzzy) setExhausted(true); // fuzzy matches come as one ranked list
             }),
           "Search failed"
         );
@@ -341,6 +353,7 @@ function DiscoverPageInner() {
               if (!data.fuzzy) results.sort((a, b) => b.popularity - a.popularity);
               setTVShows(results);
               setSuggestion(data.fuzzy ? data.suggestion ?? null : null);
+              if (data.fuzzy) setExhausted(true);
               fetchSeasonBanners(results);
             }),
           "Search failed"
@@ -429,6 +442,70 @@ function DiscoverPageInner() {
     return () => obs.disconnect();
   }, [movies, tvShows]);
 
+  // ── Load more ─────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    loadKeyRef.current = loadKey;
+  }, [loadKey]);
+
+  const loadMore = async () => {
+    if (personId || isLoading || isLoadingMore || exhausted) return;
+    const next = pageNum + 1;
+    if (next > MAX_DISCOVER_PAGE) {
+      setExhausted(true);
+      return;
+    }
+    const key = loadKey;
+    const media = genreId ? genreMedia || "movie" : mediaType;
+    setIsLoadingMore(true);
+    try {
+      const res = await fetch(
+        discoverEndpoint(
+          { mediaType, query: urlQuery, genreId, genreMedia, country, personalized: isPersonalized },
+          next
+        )
+      );
+      if (!res.ok) throw new Error("page failed");
+      const data = await res.json();
+      if (loadKeyRef.current !== key) return; // the view changed while this was in flight
+      const incoming: Array<TMDBMovie | TMDBTVShow> = data.results || [];
+      if (incoming.length === 0) {
+        setExhausted(true);
+      } else if (media === "movie") {
+        setMovies((prev) => mergePage(prev, incoming as TMDBMovie[]));
+      } else {
+        const shows = (incoming as TMDBTVShow[]).filter((s) => !urlQuery || s.poster_path);
+        setTVShows((prev) => mergePage(prev, shows));
+        fetchSeasonBanners(shows);
+      }
+      setPageNum(next);
+    } catch {
+      if (loadKeyRef.current === key) toast.error("Couldn't load more titles");
+    } finally {
+      if (loadKeyRef.current === key) setIsLoadingMore(false);
+    }
+  };
+
+  // Reaching the end of the grid loads the next page. The observer is re-created after each
+  // load, so a sentinel that is still on screen (a short page, a tall window) fires again.
+  const loadMoreRef = useRef(loadMore);
+  useEffect(() => {
+    loadMoreRef.current = loadMore;
+  });
+  const showLoadMoreFooter = !personId && !isLoading && (mediaType === "movie" ? movies.length > 0 : tvShows.length > 0);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !showLoadMoreFooter || exhausted || isLoadingMore) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) loadMoreRef.current();
+      },
+      { rootMargin: "400px 0px" }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [showLoadMoreFooter, exhausted, isLoadingMore, pageNum]);
+
   const handleCountryChange = (code: string) => {
     const params = new URLSearchParams(searchParams.toString());
     if (code) params.set("country", code);
@@ -446,12 +523,12 @@ function DiscoverPageInner() {
   const filteredMovies = movies.filter((m) => (suppressWatchlistFilter ? true : !watchlistEntries[m.id]));
   const displayMovies = suppressWatchlistFilter
     ? filteredMovies
-    : filteredMovies.slice(0, Math.floor(filteredMovies.length / columns) * columns || filteredMovies.length);
+    : trimToFullRows(filteredMovies, columns);
 
   const filteredTV = tvShows.filter((s) => (suppressWatchlistFilter ? true : !tvEntries[s.id]));
   const displayTV = suppressWatchlistFilter
     ? filteredTV
-    : filteredTV.slice(0, Math.floor(filteredTV.length / columns) * columns || filteredTV.length);
+    : trimToFullRows(filteredTV, columns);
 
   const heading = isPersonMode
     ? personData?.name || personNameParam || "Person"
@@ -764,6 +841,31 @@ function DiscoverPageInner() {
         <div ref={gridRef}>{renderTVGrid(shownTV, "tvshows")}</div>
       )}
 
+      {showLoadMoreFooter && (
+        <div ref={sentinelRef} className="flex flex-col items-center gap-2 py-8" aria-live="polite">
+          {exhausted ? (
+            !isEmpty && (
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                That&apos;s everything
+              </p>
+            )
+          ) : isLoadingMore ? (
+            <p className="text-sm" role="status" style={{ color: "var(--text-muted)" }}>
+              Loading more…
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={loadMore}
+              className="px-5 py-2.5 rounded-lg text-sm font-semibold cursor-pointer"
+              style={{ border: "1px solid var(--border)", color: "var(--foreground)" }}
+            >
+              Load more
+            </button>
+          )}
+        </div>
+      )}
+
       {!isLoading && isFilteredEmpty && (
         <div className="text-center py-16 flex flex-col items-center gap-3">
           <p className="text-base" style={{ color: "var(--text-muted)" }}>
@@ -782,7 +884,7 @@ function DiscoverPageInner() {
         </div>
       )}
 
-      {!isLoading && isEmpty && (
+      {!isLoading && isEmpty && (exhausted || !showLoadMoreFooter) && (
         <EmptyState
           icon="🔎"
           title={
@@ -817,7 +919,7 @@ function DiscoverPageInner() {
             setShowOnboarding(false);
             setShowNudge(false);
             fetch("/api/movies/recommended").then((r) => r.json()).then((d) => {
-              if (!country && d.personalized && d.results.length >= 6) { setMovies(d.results); setIsPersonalized(true); }
+              if (!country && d.personalized && d.results.length >= 6) { setMovies(d.results); setIsPersonalized(true); setPageNum(1); setExhausted(false); }
             }).catch(() => {});
           }}
         />
