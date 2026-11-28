@@ -47,6 +47,7 @@ export default function ProfilePage() {
   // Account deletion state
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSigningOutEverywhere, setIsSigningOutEverywhere] = useState(false);
 
   // Friends state
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -187,6 +188,22 @@ export default function ProfilePage() {
       toast.error("Failed to delete account");
       setIsDeleting(false);
       setConfirmDelete(false);
+    }
+  };
+
+  const signOutEverywhere = async () => {
+    setIsSigningOutEverywhere(true);
+    try {
+      const res = await fetch("/api/user/sessions", { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      // Other devices are signed out within a few minutes; sign this one out now.
+      await signOut({ redirect: false });
+      // Full reload to drop all client state, as after deleting the account.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.href = "/login";
+    } catch {
+      toast.error("Failed to sign out everywhere");
+      setIsSigningOutEverywhere(false);
     }
   };
 
@@ -424,6 +441,34 @@ export default function ProfilePage() {
           )}
         </div>
       </div>
+      {/* Sessions */}
+      <div>
+        <h2 className="text-2xl font-bold mb-6" style={{ color: "var(--primary)" }}>
+          Sessions
+        </h2>
+        <div
+          className="p-4 rounded-lg border flex items-start justify-between gap-4"
+          style={{ borderColor: "var(--border)", backgroundColor: "var(--card-bg)" }}
+        >
+          <div>
+            <p className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
+              Sign out everywhere
+            </p>
+            <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+              Signs you out on every device, including this one. Other devices are signed out within 5 minutes.
+            </p>
+          </div>
+          <button
+            onClick={signOutEverywhere}
+            disabled={isSigningOutEverywhere}
+            className="shrink-0 px-4 py-2 text-sm rounded-md border transition-all hover:bg-[var(--hover-bg)] disabled:opacity-50"
+            style={{ color: "var(--foreground)", borderColor: "var(--border)" }}
+          >
+            {isSigningOutEverywhere ? "Signing out…" : "Sign out everywhere"}
+          </button>
+        </div>
+      </div>
+
       {/* Danger Zone */}
       <div>
         <h2 className="text-2xl font-bold mb-6 text-danger">
