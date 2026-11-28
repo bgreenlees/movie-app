@@ -461,7 +461,7 @@ function DiscoverPageInner() {
     try {
       const res = await fetch(
         discoverEndpoint(
-          { mediaType, query: urlQuery, genreId, genreMedia, country, personalized: isPersonalized },
+          { mediaType, query: urlQuery, genreId, genreMedia, country, personalized: isPersonalized, localHour: new Date().getHours() },
           next
         )
       );

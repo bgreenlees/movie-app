@@ -56,6 +56,7 @@ describe("discoverEndpoint", () => {
   it("adds the page for later pages in each mode", () => {
     expect(discoverEndpoint(base, 2)).toBe("/api/movies/recommended?page=2");
     expect(discoverEndpoint({ ...base, personalized: false }, 3)).toBe("/api/movies/contextual?page=3");
+    expect(discoverEndpoint({ ...base, personalized: false, localHour: 21 }, 3)).toBe("/api/movies/contextual?hour=21&page=3");
     expect(discoverEndpoint({ ...base, mediaType: "tv" }, 2)).toBe("/api/tv/recommended?page=2");
     expect(discoverEndpoint({ ...base, mediaType: "tv", query: "x" }, 2)).toBe("/api/tv/search?q=x&page=2");
     expect(discoverEndpoint({ ...base, country: "JP", mediaType: "tv" }, 2)).toBe("/api/discover/tv?country=JP&page=2");

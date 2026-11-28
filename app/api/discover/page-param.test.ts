@@ -8,7 +8,7 @@ const m = vi.hoisted(() => {
   return {
     auth: vi.fn(),
     prisma: {
-      watchlistEntry: { findMany: vi.fn() },
+      watchlistEntry: { findMany: vi.fn(), count: vi.fn() },
       tVWatchlistEntry: { findMany: vi.fn() },
     },
     tmdb: {
@@ -35,6 +35,7 @@ vi.mock("@/lib/tmdb", () => ({ tmdb: m.tmdb }));
 vi.mock("@/lib/fuzzySearch", () => ({ fuzzySearch: vi.fn().mockResolvedValue({ results: [] }) }));
 // The Vitest setup has no "@/" alias, so map the pure helpers to the real modules.
 vi.mock("@/lib/apiGuard", () => import("../../../lib/apiGuard"));
+vi.mock("@/lib/contextualFeed", () => import("../../../lib/contextualFeed"));
 vi.mock("@/lib/countries", () => import("../../../lib/countries"));
 vi.mock("@/lib/discoverPaging", () => import("../../../lib/discoverPaging"));
 vi.mock("@/lib/rateLimit", () => import("../../../lib/rateLimit"));
@@ -59,7 +60,7 @@ const routes: Array<[string, Handler, string, string, keyof typeof m.tmdb, numbe
   ["discover movie (country)", discoverMovie as Handler, "/api/discover/movie", "country=KR", "discoverMoviesByCountry", 2],
   ["discover tv (genre)", discoverTV as Handler, "/api/discover/tv", "genreId=18", "discoverTVByGenreSingle", 1],
   ["discover tv (country)", discoverTV as Handler, "/api/discover/tv", "country=KR", "discoverTVByCountry", 2],
-  ["movies contextual", contextual as Handler, "/api/movies/contextual", "", "getByGenre", 1],
+  ["movies contextual", contextual as Handler, "/api/movies/contextual", "hour=21", "getByGenre", 1],
   ["movies search", moviesSearch as Handler, "/api/movies/search", "q=heat", "searchMovies", 1],
   ["tv search", tvSearch as Handler, "/api/tv/search", "q=heat", "searchTVShows", 1],
   ["movies recommended", moviesRecommended as Handler, "/api/movies/recommended", "", "getMovieRecommendations", 1],
@@ -70,6 +71,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, "error").mockImplementation(() => {});
   m.auth.mockResolvedValue({ user: { id: "u1" } });
+  // A rated user with a valid local hour gets the genre feed (new users get Trending: see contextualFeed.test.ts)
+  m.prisma.watchlistEntry.count.mockResolvedValue(1);
   // One rated entry so the recommended routes take the personalised path that calls TMDB per seed
   m.prisma.watchlistEntry.findMany.mockImplementation(async (args: { where: { rating?: unknown } }) =>
     args.where.rating ? [{ movieId: 5, rating: 3, movie: { genres: [{ id: 18 }] } }] : []
