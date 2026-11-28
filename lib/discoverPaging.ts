@@ -47,6 +47,8 @@ export interface DiscoverMode {
   country: string | null;
   /** Movies only: whether page 1 came from the personalised feed (else the contextual one). */
   personalized: boolean;
+  /** Browser's local hour (0-23), sent to the contextual feed so every page uses the same mood. */
+  localHour?: number;
 }
 
 /** The API URL that serves `page` of the current Discover view. */
@@ -71,5 +73,6 @@ export function discoverEndpoint(mode: DiscoverMode, page: number): string {
     return join(base, `q=${encodeURIComponent(mode.query)}`, p);
   }
   if (mode.mediaType === "tv") return join("/api/tv/recommended", p);
-  return join(mode.personalized ? "/api/movies/recommended" : "/api/movies/contextual", p);
+  if (mode.personalized) return join("/api/movies/recommended", p);
+  return join("/api/movies/contextual", mode.localHour === undefined ? "" : `hour=${mode.localHour}`, p);
 }

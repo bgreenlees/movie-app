@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Logo } from "@/components/brand/Logo";
 import LoginForm from "@/components/auth/LoginForm";
 import { isDevLoginEnabled } from "@/lib/devLogin";
@@ -58,10 +57,10 @@ export default async function LoginPage({
             <Logo variant="horizontal" size={40} />
           </div>
           <h1 className="text-4xl font-bold mb-3 tracking-tight text-text">
-            Welcome back.
+            Sign in to What&apos;s Up Next
           </h1>
           <p className="text-base text-muted">
-            Your personal cinema, personalised.
+            Sign in or create an account with Google. Track movies and TV, and get picks for you.
           </p>
         </div>
 
@@ -84,18 +83,6 @@ export default async function LoginPage({
             </p>
           )}
           <LoginForm devLogin={isDevLoginEnabled()} callbackUrl={callbackUrl} />
-
-          <div className="mt-6 text-center">
-            <p className="text-sm text-muted">
-              New here?{" "}
-              <Link
-                href="/register"
-                className="font-medium hover:underline text-accent-text"
-              >
-                Create an account
-              </Link>
-            </p>
-          </div>
         </div>
 
         <p className="text-center text-xs mt-8 text-muted">

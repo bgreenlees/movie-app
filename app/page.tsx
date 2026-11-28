@@ -52,7 +52,7 @@ export default function Home() {
 
         <div className="flex gap-4 justify-center">
           <Link
-            href="/register"
+            href="/login"
             className="px-6 py-3 rounded-md font-medium transition-opacity hover:opacity-90"
             style={{ background: "var(--gradient-brand)", color: "#fff" }}
           >
