@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SELECTION } from "./moodPicker";
 import {
+  MAX_PER_SEED,
   RATINGS_TARGET,
+  columnsFromTemplate,
+  pickCountForColumns,
   TONIGHT_COUNT,
   drawPairPicks,
   drawWeight,
@@ -201,5 +204,94 @@ describe("ratingsNudge", () => {
   it("shows nothing when the API gave no count", () => {
     expect(ratingsNudge(undefined)).toBeNull();
     expect(ratingsNudge(Number.NaN)).toBeNull();
+  });
+});
+
+describe("pickCountForColumns", () => {
+  it("fills at least two complete rows of at least 12", () => {
+    expect(pickCountForColumns(3)).toBe(12); // phone
+    expect(pickCountForColumns(2)).toBe(12);
+    expect(pickCountForColumns(5)).toBe(15);
+    expect(pickCountForColumns(7)).toBe(14);
+    expect(pickCountForColumns(11)).toBe(22);
+    expect(pickCountForColumns(12)).toBe(24);
+    expect(pickCountForColumns(20)).toBe(40);
+  });
+  it("is always a multiple of the columns, and at least two rows", () => {
+    for (let cols = 1; cols <= 30; cols++) {
+      const n = pickCountForColumns(cols);
+      expect(n % cols).toBe(0);
+      expect(n / cols).toBeGreaterThanOrEqual(2);
+      expect(n).toBeGreaterThanOrEqual(TONIGHT_COUNT);
+    }
+  });
+  it("falls back to 12 for an unmeasured count", () => {
+    expect(pickCountForColumns(0)).toBe(12);
+    expect(pickCountForColumns(Number.NaN)).toBe(12);
+  });
+});
+
+describe("columnsFromTemplate", () => {
+  it("counts the resolved tracks", () => {
+    expect(columnsFromTemplate("150px 150px 150px")).toBe(3);
+    expect(columnsFromTemplate("  141.5px 141.5px ")).toBe(2);
+  });
+  it("is 0 when there is nothing to read", () => {
+    expect(columnsFromTemplate("none")).toBe(0);
+    expect(columnsFromTemplate("")).toBe(0);
+    expect(columnsFromTemplate(null)).toBe(0);
+  });
+});
+
+describe("per-seed cap", () => {
+  const seededPool = (seeds: Record<string, number>, plain = 0) => {
+    const out: { id: number; mediaType: "movie"; pairScore: number; seedKey?: string }[] = [];
+    let id = 1;
+    for (const [seedKey, n] of Object.entries(seeds)) {
+      for (let i = 0; i < n; i++) out.push({ id: id++, mediaType: "movie", pairScore: 1 - id / 1000, seedKey });
+    }
+    for (let i = 0; i < plain; i++) out.push({ id: id++, mediaType: "movie", pairScore: 0.1 });
+    return out;
+  };
+  const perSeed = (picks: { seedKey?: string }[]) => {
+    const m = new Map<string, number>();
+    for (const p of picks) if (p.seedKey) m.set(p.seedKey, (m.get(p.seedKey) ?? 0) + 1);
+    return m;
+  };
+
+  it("lets one seed contribute at most 3 picks while others can fill the draw", () => {
+    const pool = seededPool({ a: 30, b: 4, c: 4, d: 4, e: 4, f: 4 });
+    for (let s = 1; s <= 20; s++) {
+      const picks = drawPairPicks(pool, { count: 14, random: seeded(s) });
+      expect(picks).toHaveLength(14);
+      for (const n of perSeed(picks).values()) expect(n).toBeLessThanOrEqual(MAX_PER_SEED);
+    }
+  });
+
+  it("does not cap titles without a seed", () => {
+    const picks = drawPairPicks(seededPool({ a: 10 }, 20), { count: 12, random: seeded(1) });
+    expect(picks.filter((p) => !p.seedKey).length).toBeGreaterThanOrEqual(9);
+  });
+
+  it("relaxes the cap only when the pool can't otherwise fill the grid", () => {
+    const picks = drawPairPicks(seededPool({ a: 10 }), { count: 6, random: seeded(1) });
+    expect(picks).toHaveLength(6);
+  });
+
+  it("counts picks already on screen when topping up", () => {
+    const pool = seededPool({ a: 10, b: 10 });
+    const current = pool.filter((p) => p.seedKey === "a").slice(0, 3);
+    const refilled = refillPicks(current, pool, new Set(), { count: 6, random: seeded(2) });
+    expect(refilled).toHaveLength(6);
+    expect(perSeed(refilled).get("a")).toBe(3);
+  });
+});
+
+describe("refillPicks with a smaller count", () => {
+  it("trims to the new count, keeping the best", () => {
+    const pool = Array.from({ length: 20 }, (_, i) => c(i + 1, 1 - i / 20));
+    const current = pool.slice(0, 14);
+    const trimmed = refillPicks(current, pool, new Set(), { count: 12 });
+    expect(trimmed).toEqual(current.slice(0, 12));
   });
 });

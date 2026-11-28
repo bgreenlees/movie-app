@@ -1,5 +1,6 @@
 "use client";
 
+import { whatToWatchWithHref } from "@/lib/watchWith";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -401,7 +402,7 @@ export default function ProfilePage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Link
-                      href={`/watch-together/${friend.id}`}
+                      href={whatToWatchWithHref(friend.id)}
                       className="px-3 py-1 text-xs text-white rounded-md hover:opacity-80 transition-all"
                       style={{ backgroundColor: "var(--accent)" }}
                     >

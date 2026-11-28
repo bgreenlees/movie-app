@@ -1,5 +1,6 @@
 "use client";
 
+import { whatToWatchWithHref } from "@/lib/watchWith";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { Vote } from "@/lib/decide";
@@ -333,7 +334,7 @@ export default function DecideSession({ sessionId }: { sessionId: string }) {
 
   const partner = partnerLabel(data?.partner.name);
   const partnerHref = data
-    ? `/watch-together/${encodeURIComponent(data.partner.id)}`
+    ? whatToWatchWithHref(data.partner.id)
     : "/profile";
   const reconnecting = failures >= RECONNECT_AFTER_FAILURES;
   const active = screen === "vote" || screen === "wait";

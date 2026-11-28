@@ -54,7 +54,7 @@ export interface TonightMeta {
 }
 
 /**
- * "Tonight for you both" (spec §5.3, §7): 12 picks drawn from the pair pool
+ * "Tonight for you both" (spec §5.3, §7): `count` picks (12 or more) drawn from the pair pool
  * with a weighted shuffle, and a reason under each. The page owns the mood
  * controls, the media filter and the Shuffle button (What to Watch's header),
  * so this renders the picks area only: pass `selection`, and bump `shuffleKey`
@@ -75,6 +75,7 @@ export default function TonightForYouBoth({
   hidden,
   onAdd,
   onTrailer,
+  count = TONIGHT_COUNT,
 }: {
   partnerId: string;
   /** The partner's name once known, else null (the page may not have it yet) */
@@ -100,6 +101,8 @@ export default function TonightForYouBoth({
   hidden: ReadonlySet<string>;
   onAdd: (t: PairCardTitle) => void;
   onTrailer: (t: PairCardTitle) => void;
+  /** Picks to show: the page sizes this to fill complete grid rows (default 12) */
+  count?: number;
 }) {
   const query = pairPicksQuery(selection, sharedOnly);
 
@@ -111,6 +114,11 @@ export default function TonightForYouBoth({
   // Keys shown since the pool loaded, so Shuffle gives new titles while the pool lasts
   const seen = useRef<Set<string>>(new Set());
   const [attempt, setAttempt] = useState(0);
+  // The latest count, for the load effect (a resize must not refetch)
+  const countRef = useRef(count);
+  useEffect(() => {
+    countRef.current = count;
+  }, [count]);
   // Text for the screen-reader live line; `n` makes a repeat announcement count as new
   const [announcement, setAnnouncement] = useState<{ n: number; text: string }>({ n: 0, text: "" });
   const announce = (count: number) =>
@@ -134,7 +142,7 @@ export default function TonightForYouBoth({
         if (controller.signal.aborted) return;
         setFailed(null);
         setLoaded({ partnerId, query, data });
-        const drawn = drawPairPicks(data.pool);
+        const drawn = drawPairPicks(data.pool, { count: countRef.current });
         seen.current = new Set(drawn.map(keyOf));
         setPicks(drawn);
         // The first load isn't news; later loads (a mood change) are
@@ -160,14 +168,15 @@ export default function TonightForYouBoth({
 
   // Hiding a pick (watched, not interested) tops the row back up from the pool
   // (Adjusting state while rendering, not in an effect: React re-renders at once, with no stale frame.)
-  const [refillBasis, setRefillBasis] = useState<{ pool: unknown; hidden: unknown } | null>(null);
-  if (current && (refillBasis?.pool !== pool || refillBasis?.hidden !== hidden)) {
-    setRefillBasis({ pool, hidden });
-    setPicks(refillPicks(picks, pool, hidden));
+  // The same goes for a new count (the window was resized): top up or trim to complete rows.
+  const [refillBasis, setRefillBasis] = useState<{ pool: unknown; hidden: unknown; count: number } | null>(null);
+  if (current && (refillBasis?.pool !== pool || refillBasis?.hidden !== hidden || refillBasis?.count !== count)) {
+    setRefillBasis({ pool, hidden, count });
+    setPicks(refillPicks(picks, pool, hidden, { count }));
   }
 
   const shuffle = () => {
-    const next = nextShuffle(pool, new Set([...seen.current, ...shown.map(keyOf)]));
+    const next = nextShuffle(pool, new Set([...seen.current, ...shown.map(keyOf)]), { count });
     seen.current = next.seen;
     setPicks(next.picks);
     announce(next.picks.length);
@@ -239,7 +248,7 @@ export default function TonightForYouBoth({
         {hasError ? (
           <ErrorState title="Couldn't load picks for you both" onRetry={retry} />
         ) : isLoading && !data ? (
-          <Skeleton count={TONIGHT_COUNT} label="Loading picks for you both" />
+          <Skeleton count={count} label="Loading picks for you both" />
         ) : pool.length === 0 && !isLoading ? (
           <div className="rounded-lg border px-6 py-10 text-center" style={{ borderColor: "var(--border)" }}>
             <p className="font-bold mb-1" style={{ color: "var(--foreground)" }}>

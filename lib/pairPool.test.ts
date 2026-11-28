@@ -4,6 +4,7 @@ import {
   FACTS_BUDGET,
   JOINT_SEEDS,
   REC_CALLS_MAX,
+  DISCOVER_PAGES,
   PAIR_POOL_SIZE,
   buildPairPool,
   excludedKeys,
@@ -628,9 +629,10 @@ describe("budget and seeds stay fair (review on #100)", () => {
     const movies = limited.r.pool.filter((c) => c.mediaType === "movie");
     expect(movies.length).toBeGreaterThan(0);
     expect(movies.filter((c) => runtime(c) > 120)).toEqual([]);
-    // The mix stays comparable to no time limit
+    // The mix stays comparable to no time limit. (The pool now holds the whole discover fake, so the
+    // movies really dropped for running over, a third of them, show up as a gap; a type skew would be far larger.)
     const share = (pool: { mediaType: MediaType }[]) => pool.filter((c) => c.mediaType === "movie").length / pool.length;
-    expect(Math.abs(share(limited.r.pool) - share(any.r.pool))).toBeLessThan(0.2);
+    expect(Math.abs(share(limited.r.pool) - share(any.r.pool))).toBeLessThan(0.3);
     // Each title is looked up at most once
     const looked = limited.fetchers.facts.mock.calls.map(([m, id]) => `${m}-${id}`);
     expect(new Set(looked).size).toBe(looked.length);
@@ -705,7 +707,7 @@ describe("posters and partial results", () => {
 });
 
 describe("TMDB caps (§5.2, §6)", () => {
-  it("stays within 4 discover calls, 6 rec calls and the details budget", async () => {
+  it("stays within 8 discover calls, 8 rec calls and the details budget", async () => {
     const many = (status: PoolEntry["status"], from: number, n: number, rating: number | null = null) =>
       Array.from({ length: n }, (_, i) => entry(i % 2 ? "tv" : "movie", from + i, { status, rating }));
     const me: PoolPerson = { entries: [...many("WANT_TO_WATCH", 1000, 40), ...many("WATCHED", 3000, 10, 3)], providerIds: [] };
@@ -724,7 +726,7 @@ describe("TMDB caps (§5.2, §6)", () => {
 
     const r = await buildPairPool(input({ me, partner, fetchers, selection: { ...ANY, time: "120" } }));
 
-    expect(fetchers.discover).toHaveBeenCalledTimes(4);
+    expect(fetchers.discover).toHaveBeenCalledTimes(2 * DISCOVER_PAGES.length);
     expect(fetchers.recommendations.mock.calls.length).toBeLessThanOrEqual(6);
     // Candidate stage within FACTS_BUDGET, plus the final-pool runtime check
     // (at most 2 × pool size, nearly all cache hits); never the same title twice.
@@ -732,7 +734,7 @@ describe("TMDB caps (§5.2, §6)", () => {
     expect(looked.length).toBeLessThanOrEqual(FACTS_BUDGET + 2 * PAIR_POOL_SIZE);
     expect(new Set(looked).size).toBe(looked.length);
     expect(r.pool.length).toBeGreaterThan(0);
-    expect(r.pool.length).toBeLessThanOrEqual(60);
+    expect(r.pool.length).toBeLessThanOrEqual(PAIR_POOL_SIZE);
   });
 
   it("makes no details calls when neither time nor services is on", async () => {
@@ -751,7 +753,7 @@ describe("TMDB caps (§5.2, §6)", () => {
     const r = await buildPairPool(input({ me, fetchers, onError }));
     expect(r.discoverFailed).toBe(true);
     expect(keys(r.pool)).toEqual(["tv-1"]);
-    expect(onError).toHaveBeenCalledTimes(4);
+    expect(onError).toHaveBeenCalledTimes(2 * DISCOVER_PAGES.length);
   });
 });
 

@@ -19,8 +19,8 @@ import {
 
 // Discover pages (20 results each) fetched per media type, and the size of the
 // blended pool the picker draws from.
-const PAGES = [1, 2, 3];
-const POOL_SIZE = 60;
+const PAGES = [1, 2, 3, 4];
+const POOL_SIZE = 80;
 // Most-recently-added watchlist titles to check against the moods, per media type.
 // Each is one (24h-cached) TMDB details call, so this is capped.
 const WATCHLIST_CHECK = 20;

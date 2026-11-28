@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Skeleton from "@/components/ui/Skeleton";
@@ -16,6 +16,9 @@ import AddTVModal from "@/components/tv/AddTVModal";
 import { DecideEntry } from "@/components/decide/DecideEntry";
 import TonightForYouBoth, { type TonightMeta } from "@/components/watch-together/TonightForYouBoth";
 import WatchWithPicker from "@/components/watch-together/WatchWithPicker";
+import WatchTogetherShelves from "@/components/watch-together/WatchTogetherShelves";
+import { useGridColumns } from "@/lib/useGridColumns";
+import { pickCountForColumns } from "@/lib/pairPicks";
 import { loadMyEntries, type MyEntry } from "@/lib/myEntries";
 import { parseFriends, withMode, type FriendsState } from "@/lib/watchWith";
 import {
@@ -48,17 +51,15 @@ interface PoolData {
   hasServices: boolean;
 }
 
-const PICK_COUNT = 5;
-
 type Selected = { id: number; title: string };
 
-function pick(data: PoolData, selection: MoodSelection, avoid?: MoodPick[]): MoodPick[] {
+function pick(data: PoolData, selection: MoodSelection, count: number, avoid?: MoodPick[]): MoodPick[] {
   return pickRecommendations(data.pool, {
     selection,
     watchlist: new Set(Object.keys(data.watchlist)),
     exclude: new Set(data.exclude),
     avoid: new Set((avoid ?? []).map(candidateKey)),
-    count: PICK_COUNT,
+    count,
   });
 }
 
@@ -105,6 +106,14 @@ function WhatToWatch() {
   const resolving = mode.kind === "resolving";
   const friendsFailedOnLink = mode.kind === "error" && mode.hasWith;
   const pair = !!friend;
+  // The grid is auto-fill, so measure its columns (an invisible probe with the same grid
+  // classes) and show whole rows: at least two, and at least 12 picks
+  const { ref: probeRef, columns } = useGridColumns();
+  const pickCount = pickCountForColumns(columns);
+  const countRef = useRef(pickCount);
+  useEffect(() => {
+    countRef.current = pickCount;
+  }, [pickCount]);
   const solo = !pair && !resolving && !friendsFailedOnLink;
 
   const setWith = useCallback(
@@ -182,9 +191,9 @@ function WhatToWatch() {
                 selection: sel,
                 watchlist: new Set(Object.keys(data.watchlist)),
                 exclude: new Set(data.exclude),
-                count: PICK_COUNT,
+                count: countRef.current,
               })
-            : pick(data, sel)
+            : pick(data, sel, countRef.current)
         );
       } catch {
         if (controller.signal.aborted) return;
@@ -196,6 +205,27 @@ function WhatToWatch() {
     })();
     return () => controller.abort();
   }, [query, reload, attempt, solo]);
+
+  // A resize changes the column count: top up from the pool, or trim, to keep whole rows.
+  // (Adjusting state while rendering, not in an effect: React re-renders at once, with no stale frame.)
+  const [sizedFor, setSizedFor] = useState(pickCount);
+  if (sizedFor !== pickCount) {
+    setSizedFor(pickCount);
+    const d = loaded?.data;
+    if (d && picks.length > 0) {
+      if (picks.length > pickCount) setPicks(picks.slice(0, pickCount));
+      else if (picks.length < pickCount) {
+        const have = new Set(picks.map(candidateKey));
+        const more = pickRecommendations(d.pool, {
+          selection: parseMoodSelection(new URLSearchParams(loaded.query)),
+          watchlist: new Set(Object.keys(d.watchlist)),
+          exclude: new Set([...d.exclude, ...have]),
+          count: pickCount - picks.length,
+        });
+        setPicks([...picks, ...more]);
+      }
+    }
+  }
 
   const hasError = solo && failed === query;
   const isLoading = solo && loaded?.query !== query && !hasError;
@@ -213,7 +243,7 @@ function WhatToWatch() {
 
   const shuffle = () => {
     if (pair) setShuffleKey((n) => n + 1);
-    else if (data) setPicks(pick(data, selection, picks));
+    else if (data) setPicks(pick(data, selection, pickCount, picks));
   };
 
   // After adding/updating, refresh watchlist info but keep the cards on screen
@@ -265,15 +295,8 @@ function WhatToWatch() {
       )}
 
       {pair && friend && (
-        <div className="flex flex-wrap items-center justify-between gap-3 mt-6">
+        <div className="flex flex-wrap items-center gap-3 mt-6">
           <DecideEntry partnerId={friend.id} partnerName={friend.name} />
-          <Link
-            href={`/watch-together/${encodeURIComponent(friend.id)}`}
-            className="text-sm underline"
-            style={{ color: "var(--accent)" }}
-          >
-            More with {friend.name}
-          </Link>
         </div>
       )}
 
@@ -298,10 +321,11 @@ function WhatToWatch() {
       </div>
 
       {resolving ? (
-        <Skeleton count={PICK_COUNT} label="Loading suggestions" />
+        <Skeleton count={pickCount} label="Loading suggestions" />
       ) : friendsFailedOnLink ? (
         <ErrorState title="Couldn't load your friends" onRetry={retryFriends} />
       ) : pair && friend ? (
+        <>
         <TonightForYouBoth
           key={friend.id}
           partnerId={friend.id}
@@ -311,6 +335,7 @@ function WhatToWatch() {
           onSelectionChange={update}
           onSharedOnlyChange={setSharedOnly}
           shuffleKey={shuffleKey}
+          count={pickCount}
           onMeta={setTonightMeta}
           // The connection is gone (404): back to "Just me", no message
           onNotFound={() => setWith(null)}
@@ -319,10 +344,20 @@ function WhatToWatch() {
           onAdd={addPair}
           onTrailer={(t) => setTrailer({ id: t.id, title: t.title, mediaType: t.mediaType })}
         />
+        <WatchTogetherShelves
+          key={friend.id}
+          partnerId={friend.id}
+          partnerName={friend.name}
+          media={selection.media}
+          hasEntry={(t) => !!myEntries[candidateKey(t)]}
+          onAdd={addPair}
+          onTrailer={(t) => setTrailer({ id: t.id, title: t.title, mediaType: t.mediaType })}
+        />
+        </>
       ) : hasError ? (
         <ErrorState title="Couldn't load suggestions" onRetry={retry} />
       ) : isLoading && !data ? (
-        <Skeleton count={PICK_COUNT} label="Loading suggestions" />
+        <Skeleton count={pickCount} label="Loading suggestions" />
       ) : picks.length === 0 && !isLoading ? (
         <EmptyState
           icon="🎲"
@@ -354,6 +389,11 @@ function WhatToWatch() {
           })}
         </div>
       )}
+
+      {/* Invisible: measures how many poster columns fit, to size the picks */}
+      <div ref={probeRef} aria-hidden="true" className={`${POSTER_GRID} h-0 overflow-hidden invisible`}>
+        <div />
+      </div>
 
       <TrailerModal
         movieId={trailer?.id ?? null}

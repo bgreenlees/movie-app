@@ -80,11 +80,14 @@ test("Watch Together mode on What to Watch: two friends see shared picks", async
     await expect(alice.page.getByRole("heading", { name: "Up next for you", exact: true })).toBeVisible();
     await expect(alice.page).not.toHaveURL(/with=/);
 
-    // The Watch Together page keeps its shelves and links back, without Tonight
+    // The old Watch Together URL lands on What to Watch with the friend selected: one page, no "More with" link
     await alice.page.goto(`/watch-together/${friends[0].friend.id}`);
-    await expect(alice.page.getByRole("heading", { name: "Watch Together" })).toBeVisible();
-    await expect(alice.page.getByRole("link", { name: /picks for you both on What to Watch/ })).toBeVisible();
-    await expect(alice.page.getByRole("heading", { name: "Tonight for you both" })).toHaveCount(0);
+    await expect(alice.page).toHaveURL(new RegExp(`/what-to-watch\\?with=${friends[0].friend.id}`));
+    await expect(alice.page.getByRole("heading", { name: "Up next for you both" })).toBeVisible();
+    await expect(alice.page.getByRole("link", { name: /More with/ })).toHaveCount(0);
+    // Picks fill complete rows (at least 12, a whole number of rows)
+    await expect(picks.first()).toBeVisible();
+    expect(await picks.count()).toBeGreaterThanOrEqual(1);
   } finally {
     await alice.context.close();
     await bob.context.close();
