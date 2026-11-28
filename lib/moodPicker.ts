@@ -287,7 +287,7 @@ export function refreshPicks(
     ...opts,
     // Never re-add a card that was just removed or is still showing
     exclude: new Set([...opts.exclude, ...onScreen]),
-    count: count - (current.length - removed),
+    count: Math.min(count - (current.length - removed), removed),
   });
   let next = 0;
   return current.flatMap((p) => {
