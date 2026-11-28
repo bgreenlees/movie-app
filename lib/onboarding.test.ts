@@ -48,4 +48,51 @@ describe("curated onboarding list", () => {
       expect(src).not.toMatch(/\bid:\s*\d+/);
     },
   );
+
+  // TMDB ids are easy to get wrong (264644 is "Room", not "Ex Machina"), so pin every pair.
+  it("maps every id to the film it is labelled as", () => {
+    const actual = ONBOARDING_CLUSTERS.flatMap((c) => c.movies.map((m) => [m.id, m.title]));
+    expect(actual).toEqual([
+  [37799, "The Social Network"],
+  [244786, "Whiplash"],
+  [205596, "The Imitation Game"],
+  [60308, "Moneyball"],
+  [453, "A Beautiful Mind"],
+  [155, "The Dark Knight"],
+  [27205, "Inception"],
+  [76341, "Mad Max: Fury Road"],
+  [98, "Gladiator"],
+  [245891, "John Wick"],
+  [603, "The Matrix"],
+  [157336, "Interstellar"],
+  [329865, "Arrival"],
+  [264660, "Ex Machina"],
+  [335984, "Blade Runner 2049"],
+  [278, "The Shawshank Redemption"],
+  [13, "Forrest Gump"],
+  [489, "Good Will Hunting"],
+  [8358, "Cast Away"],
+  [497, "The Green Mile"],
+  [120467, "The Grand Budapest Hotel"],
+  [546554, "Knives Out"],
+  [8363, "Superbad"],
+  [445571, "Game Night"],
+  [55721, "Bridesmaids"],
+  [862, "Toy Story"],
+  [129, "Spirited Away"],
+  [354912, "Coco"],
+  [420818, "The Lion King"],
+  [12, "Finding Nemo"],
+  [419430, "Get Out"],
+  [496243, "Parasite"],
+  [274, "The Silence of the Lambs"],
+  [447332, "A Quiet Place"],
+  [493922, "Hereditary"],
+  [313369, "La La Land"],
+  [597, "Titanic"],
+  [11036, "The Notebook"],
+  [122906, "About Time"],
+  [4348, "Pride & Prejudice"],
+    ]);
+  });
 });

@@ -85,7 +85,7 @@ export default function OnboardingPage() {
               What films do you love?
             </h1>
             <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-              Pick 3–5 to calibrate your Discover feed
+              Pick 3 to 5 films you love and we’ll suggest more like them
             </p>
           </div>
           <div className="flex items-center gap-4">
