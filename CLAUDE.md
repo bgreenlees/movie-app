@@ -42,7 +42,7 @@ Sign-in is Google-only in every deployed environment. For local testing, add `DE
 Each worktree is a fresh checkout: no `node_modules`, no `.env.local`. Setup per worktree: `npm install`, then the `vercel env pull` command above, then `DATABASE_URL=postgresql://x@localhost/x npx prisma generate` if the Prisma client is missing (Prisma reads `.env`, not `.env.local`, hence the placeholder). If several worktrees run dev servers at once, give each its own port (`npm run dev -- -p <port>`); they all share the one Neon `dev-clean` database.
 
 ## CI
-GitHub Actions (`.github/workflows/ci.yml`) runs on every PR and push to `main`: `npm ci` → `prisma generate` (placeholder `DATABASE_URL`, no real database or secrets) → type-check → lint → test. The job is named `ci`; it's the status check PRs must pass. It never runs `npm run build` or touches the database. Still run the checks locally before pushing — CI is the safety net, not the first line.
+GitHub Actions (`.github/workflows/ci.yml`) runs on every PR and push to `main`: `npm ci` → `prisma generate` (placeholder `DATABASE_URL`, no real database or secrets) → type-check → lint → test. The job is named `ci`; `e2e` (Playwright smoke tests, see `docs/factory.md`) is a second job. Both are required status checks PRs must pass. It never runs `npm run build` or touches the database. Still run the checks locally before pushing — CI is the safety net, not the first line.
 
 ## Testing
 Vitest; test files sit next to the code as `*.test.ts` (e.g. `lib/fuzzySearch.test.ts`).
